@@ -67,11 +67,14 @@ python src/main.py
 ## Usage
 
 ```bash
-# Launch the TUI (coming soon)
-paygen
+# From project root
+python3 paygen.py
 
-# Or with Python
-python src/main.py
+# Or use the convenience script
+./run.sh
+
+# Or run the module directly
+python3 -m src.main
 ```
 
 ## Recipe Structure
