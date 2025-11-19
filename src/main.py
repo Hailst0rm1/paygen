@@ -11,15 +11,25 @@ from pathlib import Path
 
 def main():
     """Main entry point for Paygen."""
-    print("Paygen - Payload Generation Framework")
-    print("=" * 40)
-    print("\n[!] TUI interface not yet implemented")
-    print("[*] Phase 1: Core Infrastructure in progress...")
-    print("\nComing soon:")
-    print("  - Recipe loading and validation")
-    print("  - Interactive TUI menu")
-    print("  - Payload generation")
-    return 0
+    try:
+        # Import TUI app
+        from src.tui.app import run_app
+        
+        # Run the application
+        run_app()
+        return 0
+    except ImportError as e:
+        print("Paygen - Payload Generation Framework")
+        print("=" * 40)
+        print(f"\n[!] Missing dependency: {e}")
+        print("[*] Install dependencies: pip install -r requirements.txt")
+        print("[*] Or use Nix: nix develop")
+        return 1
+    except Exception as e:
+        print(f"\n[!] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
 
 if __name__ == "__main__":
