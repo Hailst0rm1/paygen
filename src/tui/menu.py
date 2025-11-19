@@ -89,13 +89,17 @@ class MenuPanel(Vertical):
         
         # Create tactics list
         self.tactics_list = ListView(id="tactics-list")
-        self.populate_tactics()
         yield self.tactics_list
         
         # Create recipes list (initially hidden)
         self.recipes_list = ListView(id="recipes-list")
         self.recipes_list.display = False
         yield self.recipes_list
+    
+    def on_mount(self):
+        """Called when the widget is mounted."""
+        self.populate_tactics()
+        self.tactics_list.focus()
     
     def populate_tactics(self):
         """Populate the tactics list."""

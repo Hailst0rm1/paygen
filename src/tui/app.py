@@ -99,32 +99,23 @@ class PaygenApp(App):
     
     def __init__(self):
         super().__init__()
-        self.recipe_loader = None
-        self.recipes = []
         self.menu_panel = None
         self.detail_panel = None
+        
+        # Load recipes immediately
+        recipes_dir = Path(__file__).parent.parent.parent / "recipes"
+        self.recipe_loader = RecipeLoader(recipes_dir)
+        self.recipes = self.recipe_loader.load_all_recipes()
     
     def on_mount(self) -> None:
         """Initialize the application when mounted."""
-        self.load_recipes()
-    
-    def load_recipes(self) -> None:
-        """Load all recipes from the recipes directory."""
-        try:
-            recipes_dir = Path(__file__).parent.parent.parent / "recipes"
-            self.recipe_loader = RecipeLoader(recipes_dir)
-            self.recipes = self.recipe_loader.load_all_recipes()
-            
-            # Update stats
-            self.update_stats()
-            
-            self.notify(
-                f"Loaded {len(self.recipes)} recipes successfully!",
-                severity="information",
-                timeout=3
-            )
-        except Exception as e:
-            self.notify(f"Error loading recipes: {e}", severity="error", timeout=10)
+        # Update stats and show notification
+        self.update_stats()
+        self.notify(
+            f"Loaded {len(self.recipes)} recipes successfully!",
+            severity="information",
+            timeout=3
+        )
     
     def compose(self) -> ComposeResult:
         """Compose the application layout."""
@@ -144,9 +135,8 @@ class PaygenApp(App):
         # Main content area
         with Horizontal(classes="main-container"):
             # Left panel - Menu
-            self.menu_panel = MenuPanel(self.recipe_loader) if self.recipe_loader else None
-            if self.menu_panel:
-                yield self.menu_panel
+            self.menu_panel = MenuPanel(self.recipe_loader)
+            yield self.menu_panel
             
             # Right panel - Details
             self.detail_panel = RecipeDetailPanel()
