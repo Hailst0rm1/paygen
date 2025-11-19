@@ -1,240 +1,252 @@
-"""
-Recipe Loader - Load and parse YAML recipe files
+"""Recipe loader for Paygen"""
 
-Handles both template-based and command-based recipes.
-"""
-
-import os
-from pathlib import Path
-from typing import Dict, List, Optional, Union
 import yaml
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, field
+
+from .validator import RecipeValidator, ValidationError
+from .config import get_config
 
 
-class RecipeLoadError(Exception):
-    """Exception raised when recipe loading fails."""
-    pass
-
-
+@dataclass
 class Recipe:
-    """Represents a loaded recipe with all its metadata and configuration."""
+    """Represents a loaded recipe"""
     
-    def __init__(self, data: Dict, file_path: Path):
-        """
-        Initialize a Recipe from parsed YAML data.
+    # Recipe metadata
+    name: str
+    category: str
+    description: str
+    effectiveness: str  # low, medium, high
+    mitre_tactic: Optional[str] = None
+    mitre_technique: Optional[str] = None
+    artifacts: List[str] = field(default_factory=list)
+    
+    # Recipe configuration
+    parameters: List[Dict[str, Any]] = field(default_factory=list)
+    preprocessing: List[Dict[str, Any]] = field(default_factory=list)
+    output: Dict[str, Any] = field(default_factory=dict)
+    
+    # File metadata
+    file_path: Optional[Path] = None
+    
+    @property
+    def effectiveness_level(self) -> int:
+        """Get numeric effectiveness level for sorting"""
+        levels = {'high': 3, 'medium': 2, 'low': 1}
+        return levels.get(self.effectiveness.lower(), 0)
+    
+    @property
+    def is_template_based(self) -> bool:
+        """Check if recipe uses templates"""
+        return self.output.get('type') == 'template'
+    
+    @property
+    def is_command_based(self) -> bool:
+        """Check if recipe uses commands"""
+        return self.output.get('type') == 'command'
+    
+    def get_parameter(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get parameter definition by name
         
         Args:
-            data: Parsed YAML dictionary
-            file_path: Path to the recipe YAML file
+            name: Parameter name
+            
+        Returns:
+            Parameter definition or None
         """
-        self.file_path = file_path
-        self.data = data
-        
-        # Required fields for all recipe types
-        self.recipe_type = data.get('recipe_type', 'template')
-        self.name = data['name']
-        self.description = data.get('description', '')
-        self.effectiveness = data.get('effectiveness', 'medium')
-        
-        # MITRE ATT&CK mapping
-        mitre = data.get('mitre', {})
-        self.mitre_tactic = mitre.get('tactic', '')
-        self.mitre_technique = mitre.get('technique', '')
-        
-        # Artifacts and parameters
-        self.artifacts = data.get('artifacts', [])
-        self.parameters = data.get('parameters', [])
-        self.sub_recipes = data.get('sub_recipes', [])
-        self.output = data.get('output', {})
-        self.launch_instructions = data.get('launch_instructions', '')
-        
-        # Type-specific fields
-        if self.recipe_type == 'template':
-            self.compile_command = self.output.get('compile_command')
-        elif self.recipe_type == 'command':
-            self.dependencies = data.get('dependencies', [])
-            self.generation_command = data.get('generation_command', '')
+        for param in self.parameters:
+            if param.get('name') == name:
+                return param
+        return None
     
-    def get_tactic_id(self) -> str:
-        """Extract MITRE tactic ID (e.g., 'TA0005') from tactic string."""
-        if ' - ' in self.mitre_tactic:
-            return self.mitre_tactic.split(' - ')[0].strip()
-        return self.mitre_tactic
-    
-    def get_tactic_name(self) -> str:
-        """Extract MITRE tactic name from tactic string."""
-        if ' - ' in self.mitre_tactic:
-            return self.mitre_tactic.split(' - ')[1].strip()
-        return self.mitre_tactic
-    
-    def get_required_parameters(self) -> List[Dict]:
-        """Get list of required parameters."""
+    def get_required_parameters(self) -> List[Dict[str, Any]]:
+        """Get list of required parameters"""
         return [p for p in self.parameters if p.get('required', False)]
     
-    def get_optional_parameters(self) -> List[Dict]:
-        """Get list of optional parameters."""
+    def get_optional_parameters(self) -> List[Dict[str, Any]]:
+        """Get list of optional parameters"""
         return [p for p in self.parameters if not p.get('required', False)]
-    
-    def is_template_based(self) -> bool:
-        """Check if this is a template-based recipe."""
-        return self.recipe_type == 'template'
-    
-    def is_command_based(self) -> bool:
-        """Check if this is a command-based recipe."""
-        return self.recipe_type == 'command'
-    
-    def __repr__(self) -> str:
-        return f"Recipe(name='{self.name}', type='{self.recipe_type}', effectiveness='{self.effectiveness}')"
 
 
 class RecipeLoader:
-    """Loads and manages recipes from YAML files."""
+    """Loads and manages recipes from YAML files"""
     
-    def __init__(self, recipes_dir: Union[str, Path]):
-        """
-        Initialize the recipe loader.
+    def __init__(self, config=None):
+        """Initialize recipe loader
         
         Args:
-            recipes_dir: Path to the recipes directory
+            config: Optional ConfigManager instance
         """
-        self.recipes_dir = Path(recipes_dir)
-        if not self.recipes_dir.exists():
-            raise RecipeLoadError(f"Recipes directory not found: {self.recipes_dir}")
-        
+        self.config = config or get_config()
         self.recipes: List[Recipe] = []
-        self._recipes_by_tactic: Dict[str, List[Recipe]] = {}
+        self.recipes_by_category: Dict[str, List[Recipe]] = {}
     
     def load_all_recipes(self) -> List[Recipe]:
-        """
-        Load all recipes from the recipes directory.
+        """Load all recipes from recipes directory
         
         Returns:
             List of loaded Recipe objects
-        
-        Raises:
-            RecipeLoadError: If recipe loading fails
         """
+        recipes_dir = self.config.recipes_dir
+        
+        if not recipes_dir.exists():
+            print(f"Warning: Recipes directory not found: {recipes_dir}")
+            return []
+        
         self.recipes = []
         
-        # Walk through all MITRE tactic directories
-        for tactic_dir in self.recipes_dir.iterdir():
-            if not tactic_dir.is_dir():
-                continue
-            
-            # Load all YAML files in this tactic directory
-            for recipe_file in tactic_dir.glob('*.yaml'):
-                try:
-                    recipe = self.load_recipe(recipe_file)
-                    self.recipes.append(recipe)
-                except Exception as e:
-                    print(f"Warning: Failed to load {recipe_file}: {e}")
+        # Find all YAML files recursively
+        yaml_files = list(recipes_dir.rglob('*.yaml')) + list(recipes_dir.rglob('*.yml'))
         
-        # Build index by tactic
-        self._index_by_tactic()
+        for yaml_file in yaml_files:
+            try:
+                recipe = self.load_recipe(yaml_file)
+                if recipe:
+                    self.recipes.append(recipe)
+            except Exception as e:
+                print(f"Warning: Failed to load recipe {yaml_file}: {e}")
+        
+        # Build category index
+        self._build_category_index()
         
         return self.recipes
     
-    def load_recipe(self, file_path: Union[str, Path]) -> Recipe:
-        """
-        Load a single recipe from a YAML file.
+    def load_recipe(self, file_path: Path) -> Optional[Recipe]:
+        """Load a single recipe from YAML file
         
         Args:
-            file_path: Path to the recipe YAML file
-        
+            file_path: Path to recipe YAML file
+            
         Returns:
-            Recipe object
-        
-        Raises:
-            RecipeLoadError: If recipe loading or validation fails
+            Recipe object or None if validation fails
         """
-        file_path = Path(file_path)
-        
-        if not file_path.exists():
-            raise RecipeLoadError(f"Recipe file not found: {file_path}")
-        
         try:
             with open(file_path, 'r') as f:
                 data = yaml.safe_load(f)
+            
+            if not data:
+                print(f"Warning: Empty recipe file: {file_path}")
+                return None
+            
+            # Validate recipe structure
+            RecipeValidator.validate_recipe(data)
+            
+            # Extract meta information
+            meta = data['meta']
+            mitre = meta.get('mitre', {})
+            
+            # Create Recipe object
+            recipe = Recipe(
+                name=meta['name'],
+                category=meta.get('category', 'Misc'),
+                description=meta['description'],
+                effectiveness=meta['effectiveness'],
+                mitre_tactic=mitre.get('tactic'),
+                mitre_technique=mitre.get('technique'),
+                artifacts=meta.get('artifacts', []),
+                parameters=data.get('parameters', []),
+                preprocessing=data.get('preprocessing', []),
+                output=data.get('output', {}),
+                file_path=file_path
+            )
+            
+            return recipe
+            
+        except ValidationError as e:
+            print(f"Validation error in {file_path}: {e}")
+            return None
         except yaml.YAMLError as e:
-            raise RecipeLoadError(f"Invalid YAML in {file_path}: {e}")
-        
-        # Validate required fields
-        if not data:
-            raise RecipeLoadError(f"Empty recipe file: {file_path}")
-        
-        if 'name' not in data:
-            raise RecipeLoadError(f"Recipe missing 'name' field: {file_path}")
-        
-        return Recipe(data, file_path)
+            print(f"YAML parsing error in {file_path}: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error loading {file_path}: {e}")
+            return None
     
-    def _index_by_tactic(self) -> None:
-        """Build an index of recipes organized by MITRE tactic."""
-        self._recipes_by_tactic = {}
+    def _build_category_index(self) -> None:
+        """Build index of recipes by category"""
+        self.recipes_by_category = {}
         
         for recipe in self.recipes:
-            tactic_id = recipe.get_tactic_id()
-            if tactic_id not in self._recipes_by_tactic:
-                self._recipes_by_tactic[tactic_id] = []
-            self._recipes_by_tactic[tactic_id].append(recipe)
-    
-    def get_recipes_by_tactic(self, tactic_id: Optional[str] = None) -> Dict[str, List[Recipe]]:
-        """
-        Get recipes organized by MITRE tactic.
+            category = recipe.category
+            if category not in self.recipes_by_category:
+                self.recipes_by_category[category] = []
+            self.recipes_by_category[category].append(recipe)
         
-        Args:
-            tactic_id: Optional tactic ID to filter by (e.g., 'TA0005')
-        
-        Returns:
-            Dictionary mapping tactic IDs to lists of recipes
-        """
-        if tactic_id:
-            return {tactic_id: self._recipes_by_tactic.get(tactic_id, [])}
-        return self._recipes_by_tactic
-    
-    def get_sorted_recipes(self, recipes: List[Recipe]) -> List[Recipe]:
-        """
-        Sort recipes by effectiveness (high -> medium -> low) then alphabetically.
-        
-        Args:
-            recipes: List of recipes to sort
-        
-        Returns:
-            Sorted list of recipes
-        """
-        effectiveness_order = {'high': 0, 'medium': 1, 'low': 2}
-        
-        return sorted(
-            recipes,
-            key=lambda r: (
-                effectiveness_order.get(r.effectiveness.lower(), 3),
-                r.name.lower()
+        # Sort recipes within each category by effectiveness (high to low) then name
+        for category in self.recipes_by_category:
+            self.recipes_by_category[category].sort(
+                key=lambda r: (-r.effectiveness_level, r.name.lower())
             )
-        )
+    
+    def get_categories(self) -> List[str]:
+        """Get list of all categories, sorted alphabetically
+        
+        Returns:
+            Sorted list of category names
+        """
+        return sorted(self.recipes_by_category.keys())
+    
+    def get_recipes_by_category(self, category: str) -> List[Recipe]:
+        """Get all recipes in a category
+        
+        Args:
+            category: Category name
+            
+        Returns:
+            List of recipes in category
+        """
+        return self.recipes_by_category.get(category, [])
+    
+    def get_recipe_by_name(self, name: str) -> Optional[Recipe]:
+        """Get recipe by name
+        
+        Args:
+            name: Recipe name
+            
+        Returns:
+            Recipe object or None
+        """
+        for recipe in self.recipes:
+            if recipe.name == name:
+                return recipe
+        return None
     
     def search_recipes(self, query: str) -> List[Recipe]:
-        """
-        Search recipes by name, description, or MITRE technique.
+        """Search recipes by name, description, or category
         
         Args:
-            query: Search query string
-        
+            query: Search query
+            
         Returns:
             List of matching recipes
         """
         query_lower = query.lower()
-        matches = []
+        results = []
         
         for recipe in self.recipes:
             if (query_lower in recipe.name.lower() or
                 query_lower in recipe.description.lower() or
-                query_lower in recipe.mitre_technique.lower()):
-                matches.append(recipe)
+                query_lower in recipe.category.lower()):
+                results.append(recipe)
         
-        return matches
+        # Sort by effectiveness then name
+        results.sort(key=lambda r: (-r.effectiveness_level, r.name.lower()))
+        
+        return results
     
     def get_recipe_count(self) -> int:
-        """Get total number of loaded recipes."""
+        """Get total number of loaded recipes
+        
+        Returns:
+            Recipe count
+        """
         return len(self.recipes)
     
-    def get_tactic_list(self) -> List[str]:
-        """Get list of all MITRE tactics present in loaded recipes."""
-        return sorted(self._recipes_by_tactic.keys())
+    def get_category_count(self) -> int:
+        """Get total number of categories
+        
+        Returns:
+            Category count
+        """
+        return len(self.recipes_by_category)

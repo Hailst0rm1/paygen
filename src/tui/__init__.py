@@ -1,1 +1,1 @@
-"""TUI interface components for Paygen."""
+"""TUI components for Paygen"""

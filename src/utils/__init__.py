@@ -1,1 +1,1 @@
-"""Utility functions for cryptography and templating."""
+"""Utility functions for Paygen"""

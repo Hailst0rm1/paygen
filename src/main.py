@@ -1,40 +1,66 @@
-#!/usr/bin/env python3
-"""
-Paygen - Main Entry Point
+"""Paygen - Payload Generation Framework
 
-Launches the TUI application for payload generation.
+Entry point for the application.
 """
 
 import sys
 from pathlib import Path
 
-# Add project root to Python path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from .core.config import get_config
+from .core.recipe_loader import RecipeLoader
 
 
 def main():
-    """Main entry point for Paygen."""
+    """Main entry point"""
+    print("╔═══════════════════════════════════════════════════╗")
+    print("║  PAYGEN - Payload Generation Framework v2.0      ║")
+    print("║  Template-based payload generation with TUI       ║")
+    print("╚═══════════════════════════════════════════════════╝")
+    print()
+    
+    # Initialize configuration
     try:
-        # Import TUI app
-        from src.tui.app import run_app
-        
-        # Run the application
-        run_app()
-        return 0
-    except ImportError as e:
-        print("Paygen - Payload Generation Framework")
-        print("=" * 40)
-        print(f"\n[!] Missing dependency: {e}")
-        print("[*] Install dependencies: pip install -r requirements.txt")
-        print("[*] Or use Nix: nix develop")
-        return 1
+        config = get_config()
+        print(f"✓ Configuration loaded from {config.config_path}")
+        print(f"  - Recipes directory: {config.recipes_dir}")
+        print(f"  - Payloads directory: {config.payloads_dir}")
+        print(f"  - Preprocessors directory: {config.preprocessors_dir}")
+        print(f"  - Output directory: {config.output_dir}")
+        print(f"  - Theme: {config.theme}")
+        print()
     except Exception as e:
-        print(f"\n[!] Error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"✗ Failed to load configuration: {e}")
         return 1
+    
+    # Load recipes
+    try:
+        loader = RecipeLoader(config)
+        recipes = loader.load_all_recipes()
+        
+        print(f"✓ Loaded {loader.get_recipe_count()} recipes from {loader.get_category_count()} categories")
+        
+        if recipes:
+            print("\nCategories:")
+            for category in loader.get_categories():
+                category_recipes = loader.get_recipes_by_category(category)
+                print(f"  • {category} ({len(category_recipes)} recipes)")
+        else:
+            print("\n⚠ No recipes found. Add recipe YAML files to the recipes directory.")
+        print()
+        
+    except Exception as e:
+        print(f"✗ Failed to load recipes: {e}")
+        return 1
+    
+    print("Phase 1 core infrastructure is complete!")
+    print("\nNext steps:")
+    print("  1. Add recipe YAML files to the recipes directory")
+    print("  2. Add payload templates to the payloads directory")
+    print("  3. Implement TUI (Phase 3)")
+    print("  4. Implement preprocessing system (Phase 2)")
+    
+    return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())

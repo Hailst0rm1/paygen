@@ -1,1 +1,1 @@
-"""Core functionality for recipe loading and payload generation."""
+"""Core functionality for Paygen"""

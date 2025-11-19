@@ -19,14 +19,11 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # Virtual environments
 venv/
 env/
 ENV/
-env.bak/
-venv.bak/
 
 # IDE
 .vscode/
@@ -34,31 +31,22 @@ venv.bak/
 *.swp
 *.swo
 *~
-.DS_Store
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
 
 # Paygen specific
 output/
 *.exe
 *.dll
 *.bin
-*.ps1.encrypted
-*.shellcode
+*.so
 
-# Sensitive data
-*.key
-*.pem
-*.pfx
-config.local.yaml
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Logs
 *.log
-
-# OS
-Thumbs.db
