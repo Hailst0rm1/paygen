@@ -14,6 +14,7 @@ from .category_panel import CategoryPanel, RecipeSelected
 from .recipe_panel import RecipePanel
 from .code_panel import CodePanel
 from .help_screen import HelpScreen
+from .param_config_screen import ParameterConfigScreen
 
 
 class PaygenApp(App):
@@ -192,9 +193,24 @@ class PaygenApp(App):
     def action_generate(self) -> None:
         """Generate payload from selected recipe."""
         if self.selected_recipe:
-            # TODO: Open parameter configuration screen
-            self.notify(f"Generating: {self.selected_recipe.name}", 
-                       title="Generate", severity="information")
+            # Open parameter configuration screen
+            def handle_params(params):
+                """Handle parameters returned from config screen."""
+                if params is not None:
+                    # Show configured parameters for verification
+                    param_summary = "\n".join([f"  • {k}: {v}" for k, v in params.items()])
+                    self.notify(
+                        f"Parameters configured for [bold]{self.selected_recipe.name}[/bold]:\n{param_summary}\n\n"
+                        f"[dim]Build system will be implemented in Phase 5[/dim]",
+                        title="✓ Configuration Complete",
+                        severity="information",
+                        timeout=8
+                    )
+            
+            self.push_screen(
+                ParameterConfigScreen(self.selected_recipe, config=self.config),
+                handle_params
+            )
         else:
             self.notify("No recipe selected", title="Generate", severity="warning")
     

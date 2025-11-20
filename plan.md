@@ -749,26 +749,43 @@ COLORS = {
 - [x] Auto-focus on startup
 - [x] Fast scrolling (5 lines per keypress)
 
-### Phase 4: Parameter Configuration & UI Transitions
+### Phase 4: Parameter Configuration & UI Transitions ✅ COMPLETE
 
 **Layout Design:**
-- When user presses 'g', the layout shifts:
-  - Left panel (Categories): Stays visible (30% width)
-  - Middle panel: Recipe Details → Parameter Configuration (35% width)
-  - Right panel: Code Preview → Build Output/Logs (35% width)
+- When user presses 'g', a modal parameter configuration screen appears
+- Left panel (Categories): Remains in background
+- Modal overlays center of screen with parameter inputs
+- Returns to main view on Cancel or after Generate
 
-**Parameter Configuration UI (Middle Panel):**
-- [ ] Create base parameter configuration screen
-- [ ] Implement parameter input widgets by type:
-  - [ ] Text input for string, ip, port, path, hex
-  - [ ] Dropdown/select for choice type
-  - [ ] Checkbox for boolean type
-  - [ ] Number input for integer type with range validation
-- [ ] Pre-fill defaults from recipe and config
-- [ ] Real-time validation with error messages
-- [ ] Required field indicators (*)
-- [ ] "Generate" and "Cancel" buttons at bottom
-- [ ] Panel layout switching system (recipe details ↔ parameter config)
+**Parameter Configuration UI (Modal Screen):**
+- [x] Create base parameter configuration screen
+- [x] Implement parameter input widgets by type:
+  - [x] Text input for string, ip, port, path, hex
+  - [x] Dropdown/select for choice type
+  - [x] Checkbox for boolean type
+  - [x] Number input for integer type with range validation
+- [x] Pre-fill defaults from recipe and config
+- [x] Real-time validation with error messages (IP, port, path, hex, integer)
+- [x] Required field indicators (*)
+- [x] "Generate" and "Cancel" buttons at bottom
+- [x] Modal screen system with ParameterConfigScreen
+- [x] Keyboard shortcuts: Esc (cancel), Ctrl+G (generate), Tab/Shift+Tab (navigation)
+- [x] Catppuccin Mocha styling with proper borders and focus states
+- [x] Scrolling support for long parameter lists (max-height: 30 lines)
+- [x] Integration with app.py via push_screen and callback
+- [x] Parameter summary notification on successful configuration
+
+**Testing:**
+- [x] Validation tests for IP, port, hex, path types
+- [x] Integration test with recipe loading and parameter resolution
+- [x] Config placeholder resolution ({config.output_dir} → actual path)
+
+**Files Created/Modified:**
+- `src/tui/param_config_screen.py` - Modal parameter configuration screen
+- `src/tui/app.py` - Added action_generate() with parameter handling
+- `src/core/validator.py` - Complete validation for all parameter types
+- `test_validation.py` - Validation test suite
+- `test_phase4_integration.py` - Integration test for Phase 4
 
 ### Phase 5: Build System & Payload Generation
 
