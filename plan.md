@@ -101,6 +101,10 @@ output_dir: "~/Documents/Tools/paygen/output"
 # TUI preferences
 theme: "catppuccin_mocha"  # Color scheme
 transparent_background: true
+
+# Build preferences
+keep_source_files: false  # If true, save rendered source code alongside compiled binaries
+show_build_debug: false   # If true, show real-time command output in build popup
 ```
 
 ### Configuration Initialization
@@ -673,6 +677,7 @@ COLORS = {
    - MITRE ATT&CK mapping
    - Artifacts list
    - Parameters with types and defaults
+   - Launch instructions preview
 
 4. **View Source Code** (Right Panel)
    - For template recipes: Shows the actual template code
@@ -736,6 +741,7 @@ COLORS = {
   - [x] Show MITRE ATT&CK info
   - [x] List artifacts
   - [x] Show parameters with defaults
+  - [ ] Display launch instructions preview
 - [x] Build right panel (code view)
   - [x] Template source display
   - [x] Command display
@@ -815,34 +821,92 @@ COLORS = {
   - [ ] C# compilation (mcs, csc)
   - [ ] Other compilers as needed
 - [ ] Command execution for command-based recipes
-- [ ] Output file management
+- [ ] Output file management:
+  - [ ] Save compiled binary to output directory
+  - [ ] Optionally save rendered source code (if `keep_source_files: true` in config)
+  - [ ] For command-based recipes: just execute the command
 
-**Build Output UI:**
-- [ ] After pressing "Generate" in popup, popup closes and build begins
-- [ ] Create notification/toast system for build progress
-- [ ] Show build status in footer or as overlay notifications:
-  - [ ] "Running: msfvenom..." with spinner
-  - [ ] "Encrypting with AES..." with progress
-  - [ ] "Compiling with mcs..." with status
-- [ ] Color-coded success/error notifications
-- [ ] Final success notification with:
-  - [ ] Output file path
-  - [ ] File size
-  - [ ] Quick action to open output directory
-- [ ] Launch instructions modal/popup on successful generation
-  - [ ] Show full launch instructions with filled-in values
-  - [ ] "Copy Instructions" button
-  - [ ] "Close" or 'q' to dismiss
-- [ ] Error handling: show detailed error popup on build failure
-  - [ ] Display which step failed
-  - [ ] Show error logs/output
-  - [ ] "Close" to return to recipe browsing
+**Build Progress Popup (Widget Overlay):**
+- [ ] Create BuildProgressPopup widget (similar to ParameterConfigPopup)
+- [ ] After pressing "Generate" in parameter popup:
+  - [ ] Parameter popup closes
+  - [ ] BuildProgressPopup appears (centered, overlay on background panels)
+- [ ] Display real-time build progress:
+  - [ ] Step indicators: "🔄 Step 1/3: Generating shellcode..."
+  - [ ] Spinner animation during execution
+  - [ ] If `show_build_debug: true` in config:
+    - [ ] Show real-time command output (stdout/stderr)
+    - [ ] Scrollable debug log area
+  - [ ] If `show_build_debug: false`:
+    - [ ] Only show step name and spinner (cleaner view)
+- [ ] Color-coded step completion:
+  - [ ] "✅ Step 1/3: Shellcode generated" (green)
+  - [ ] "🔄 Step 2/3: Encrypting..." (blue/teal)
+  - [ ] "❌ Step 2/3: Encryption failed" (red)
+- [ ] On successful build:
+  - [ ] Show success message with output file info
+  - [ ] Display file path and size
+  - [ ] Show filled-in launch instructions from recipe
+  - [ ] Prompt: "Press Enter to close"
+- [ ] On build failure:
+  - [ ] Show error message with failed step
+  - [ ] Display error output/logs
+  - [ ] Prompt: "Press Enter to close"
+- [ ] Keyboard:
+  - [ ] Enter: Close popup and return to browsing
+  - [ ] Cannot dismiss with 'q' or 'Esc' during build (must wait)
+  - [ ] Can dismiss with 'q' or 'Esc' after build completes
 
-**Notes:**
-- Build happens in background, user can continue browsing
-- Or block UI during build with progress overlay (decision needed)
-- Consider streaming build logs to notification area
-- Launch instructions popup similar to parameter config popup (centered widget)
+**Build Popup UI Design:**
+```
+┌──────────────────────────────────────────────┐
+│ Building: C# Process Injection              │
+├──────────────────────────────────────────────┤
+│                                              │
+│ ✅ Step 1/3: Generating shellcode           │
+│    msfvenom -p windows/x64/...              │
+│                                              │
+│ 🔄 Step 2/3: Encrypting shellcode...        │
+│    [spinner]                                 │
+│    [debug output if enabled]                 │
+│                                              │
+│ ⏳ Step 3/3: Compiling C# code...           │
+│                                              │
+│ ──────────────────────────────────────────  │
+│ [After success:]                             │
+│                                              │
+│ ✅ Build Successful!                        │
+│                                              │
+│ Output: /output/injector.exe (45.2 KB)      │
+│ Source: /output/injector.cs (saved)         │
+│                                              │
+│ Launch Instructions:                         │
+│ ┌────────────────────────────────────────┐  │
+│ │ Start Metasploit listener:             │  │
+│ │ msfconsole -q -x "use exploit/..."     │  │
+│ │                                        │  │
+│ │ Execute on target:                     │  │
+│ │ injector.exe explorer.exe              │  │
+│ └────────────────────────────────────────┘  │
+│                                              │
+│          [Press Enter to close]              │
+└──────────────────────────────────────────────┘
+```
+
+**Technical Implementation:**
+- [ ] BuildProgressPopup as Widget (not Screen) for overlay
+- [ ] Dynamic centering like ParameterConfigPopup
+- [ ] Streaming output capture from commands/scripts
+- [ ] Progress tracking state machine:
+  - [ ] pending → running → success/failed for each step
+- [ ] Launch instructions Jinja2 rendering with final parameters
+- [ ] File size calculation for output files
+- [ ] Error log formatting and display
+
+**Files to Create:**
+- `src/tui/build_progress_popup.py` - Build progress widget
+- `src/core/payload_builder.py` - Build orchestrator
+- `src/core/compiler.py` - Compilation utilities
 
 ### Phase 6: History & Session Management
 
