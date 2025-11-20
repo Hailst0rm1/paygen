@@ -1,7 +1,7 @@
 """
-Parameter Configuration Panel
+Parameter Configuration Popup
 
-Panel for configuring recipe parameters before generation (replaces middle panel).
+Popup widget for configuring recipe parameters before generation.
 """
 
 from textual.app import ComposeResult
@@ -15,22 +15,25 @@ from .colors import MOCHA, get_effectiveness_badge
 from ..core.validator import ParameterValidator, ValidationError
 
 
-class ParameterConfigPanel(Widget):
-    """Panel for configuring recipe parameters."""
+class ParameterConfigPopup(Widget):
+    """Popup widget for configuring recipe parameters."""
+    
+    BINDINGS = [
+        Binding("escape", "dismiss", "Cancel", show=False),
+        Binding("q", "dismiss", "Cancel", show=False),
+    ]
     
     DEFAULT_CSS = """
-    ParameterConfigPanel {
-        width: 35%;
-        height: 100%;
-        border: solid """ + MOCHA['surface1'] + """;
-        background: #1e1e2e;
+    ParameterConfigPopup {
+        width: 80;
+        height: auto;
+        max-height: 90%;
+        border: thick """ + MOCHA['blue'] + """;
+        background: """ + MOCHA['base'] + """;
+        layer: overlay;
     }
     
-    ParameterConfigPanel:focus-within {
-        border: double """ + MOCHA['blue'] + """;
-    }
-    
-    ParameterConfigPanel .panel-title {
+    ParameterConfigPopup .panel-title {
         color: """ + MOCHA['mauve'] + """;
         text-style: bold;
         background: #1e1e2e;
@@ -39,60 +42,61 @@ class ParameterConfigPanel(Widget):
         dock: top;
     }
     
-    ParameterConfigPanel #params-scroll {
-        height: 1fr;
+    ParameterConfigPopup #params-scroll {
+        height: auto;
+        max-height: 30;
         border: none;
         background: #1e1e2e;
         padding: 1;
     }
     
-    ParameterConfigPanel .param-label {
+    ParameterConfigPopup .param-label {
         color: """ + MOCHA['text'] + """;
         padding: 0 1;
         margin-top: 1;
     }
     
-    ParameterConfigPanel .param-required {
+    ParameterConfigPopup .param-required {
         color: """ + MOCHA['red'] + """;
     }
     
-    ParameterConfigPanel .param-description {
+    ParameterConfigPopup .param-description {
         color: """ + MOCHA['subtext0'] + """;
         padding: 0 1;
         text-style: italic;
     }
     
-    ParameterConfigPanel Input {
+    ParameterConfigPopup Input {
         margin: 0 1;
         background: #1e1e2e;
         border: solid """ + MOCHA['surface2'] + """;
     }
     
-    ParameterConfigPanel Input:focus {
+    ParameterConfigPopup Input:focus {
         border: solid """ + MOCHA['blue'] + """;
     }
     
-    ParameterConfigPanel Select {
+    ParameterConfigPopup Select {
         margin: 0 1;
         background: #1e1e2e;
         border: solid """ + MOCHA['surface2'] + """;
     }
     
-    ParameterConfigPanel Select:focus {
+    ParameterConfigPopup Select:focus {
         border: solid """ + MOCHA['blue'] + """;
     }
     
-    ParameterConfigPanel Checkbox {
+    ParameterConfigPopup Checkbox {
         margin: 0 1;
         background: #1e1e2e;
     }
     
-    ParameterConfigPanel .error-message {
+    ParameterConfigPopup .error-message {
         color: """ + MOCHA['red'] + """;
         padding: 0 1;
     }
     
-    ParameterConfigPanel .button-container {
+    ParameterConfigPopup .button-container {
         height: auto;
         align: center middle;
         padding: 1;
@@ -100,35 +104,36 @@ class ParameterConfigPanel(Widget):
         dock: bottom;
     }
     
-    ParameterConfigPanel Button {
+    ParameterConfigPopup Button {
         margin: 0 2;
         min-width: 15;
+        height: 3;
+        text-style: bold;
+        border: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
     }
     
-    ParameterConfigPanel Button.primary {
-        background: """ + MOCHA['green'] + """;
-        color: """ + MOCHA['base'] + """;
+    ParameterConfigPopup Button#generate-btn {
+        background: #a6e3a1 !important;
+        color: #1e1e2e !important;
     }
     
-    ParameterConfigPanel Button.primary:hover {
-        background: """ + MOCHA['green'] + """;
+    ParameterConfigPopup Button#generate-btn:focus {
+        background: #94e2d5 !important;
+        color: #1e1e2e !important;
+        background-tint: transparent 0% !important;
     }
     
-    ParameterConfigPanel Button.primary:focus {
-        background: """ + MOCHA['green'] + """;
+    ParameterConfigPopup Button#generate-btn:hover {
+        background: #94e2d5 !important;
+        color: #1e1e2e !important;
     }
     
-    ParameterConfigPanel Button.default {
-        background: """ + MOCHA['surface2'] + """;
-        color: """ + MOCHA['text'] + """;
-    }
-    
-    ParameterConfigPanel Button.default:hover {
-        background: """ + MOCHA['surface2'] + """;
-    }
-    
-    ParameterConfigPanel Button.default:focus {
-        background: """ + MOCHA['surface2'] + """;
+    ParameterConfigPopup Button#generate-btn.-active {
+        background: #94e2d5 !important;
+        color: #1e1e2e !important;
+        tint: transparent 0% !important;
     }
     """
     
@@ -158,7 +163,7 @@ class ParameterConfigPanel(Widget):
         self.param_errors = {}
     
     def compose(self) -> ComposeResult:
-        """Compose the configuration panel."""
+        """Compose the configuration popup."""
         if not self.recipe:
             yield Static("No recipe selected", classes="panel-title")
             return
@@ -173,7 +178,6 @@ class ParameterConfigPanel(Widget):
         
         with Horizontal(classes="button-container"):
             yield Button("Generate", variant="primary", id="generate-btn")
-            yield Button("Cancel", variant="default", id="cancel-btn")
     
     def _create_parameter_widgets(self, param):
         """
@@ -336,8 +340,6 @@ class ParameterConfigPanel(Widget):
         """Handle button presses."""
         if event.button.id == "generate-btn":
             self._handle_generate()
-        elif event.button.id == "cancel-btn":
-            self.post_message(self.CancelRequested())
     
     def _handle_generate(self) -> None:
         """Handle generate button press."""
@@ -355,8 +357,22 @@ class ParameterConfigPanel(Widget):
                 self.app.notify("Please fill in all required fields", severity="error")
                 return
         
-        # All validation passed, send generate message
+        # All validation passed, send message and dismiss
         self.post_message(self.GenerateRequested(self.param_values))
+    
+    def action_dismiss(self) -> None:
+        """Dismiss the popup without generating."""
+        self.remove()
+    
+    def on_mount(self) -> None:
+        """Called when popup is mounted - focus the first input."""
+        try:
+            # Try to focus the first input field
+            inputs = self.query(Input)
+            if inputs:
+                inputs.first().focus()
+        except:
+            pass
     
     def update_recipe(self, recipe):
         """Update the panel with a new recipe."""

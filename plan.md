@@ -752,13 +752,14 @@ COLORS = {
 ### Phase 4: Parameter Configuration & UI Transitions ✅ COMPLETE
 
 **Layout Design:**
-- When user presses 'g', a modal parameter configuration screen appears
-- Left panel (Categories): Remains in background
-- Modal overlays center of screen with parameter inputs
-- Returns to main view on Cancel or after Generate
+- When user presses 'g', a centered popup widget appears overlaying the main 3-panel view
+- Background panels remain visible with semi-transparent overlay effect
+- Popup is dynamically centered based on screen dimensions
+- Pressing 'q' or 'Esc' dismisses the popup and returns to main view
+- Popup automatically focuses first input field on open
 
-**Parameter Configuration UI (Modal Screen):**
-- [x] Create base parameter configuration screen
+**Parameter Configuration UI (Popup Widget):**
+- [x] Create parameter configuration popup widget (Widget-based, not Screen)
 - [x] Implement parameter input widgets by type:
   - [x] Text input for string, ip, port, path, hex
   - [x] Dropdown/select for choice type
@@ -767,22 +768,35 @@ COLORS = {
 - [x] Pre-fill defaults from recipe and config
 - [x] Real-time validation with error messages (IP, port, path, hex, integer)
 - [x] Required field indicators (*)
-- [x] "Generate" and "Cancel" buttons at bottom
-- [x] Modal screen system with ParameterConfigScreen
-- [x] Keyboard shortcuts: Esc (cancel), Ctrl+G (generate), Tab/Shift+Tab (navigation)
-- [x] Catppuccin Mocha styling with proper borders and focus states
+- [x] "Generate" button with Catppuccin green styling (#a6e3a1)
+- [x] Removed Cancel button - using keyboard shortcuts instead
+- [x] Widget overlay system with ParameterConfigPopup
+- [x] Keyboard shortcuts: 'q' or 'Esc' (dismiss), Tab/Shift+Tab (navigation)
+- [x] Catppuccin Mocha styling (#1e1e2e background) with blue borders
 - [x] Scrolling support for long parameter lists (max-height: 30 lines)
-- [x] Integration with app.py via push_screen and callback
-- [x] Parameter summary notification on successful configuration
+- [x] Dynamic centering: calculates position based on screen width (80 cells + 4 for thick border)
+- [x] Integration with app.py via widget mount/remove (not push_screen)
+- [x] Auto-focus first input field on mount
+- [x] Background transparency: main panels visible behind popup
+- [x] Layer: overlay for proper z-ordering
 
 **Testing:**
 - [x] Validation tests for IP, port, hex, path types
 - [x] Integration test with recipe loading and parameter resolution
 - [x] Config placeholder resolution ({config.output_dir} → actual path)
 
+**Technical Implementation Notes:**
+- Popup is a Widget (not Screen/ModalScreen) to allow background visibility
+- Position calculated dynamically: `left_offset = (screen_width - popup_width) // 2`
+- Vertical centering via CSS: `offset-y: 50%; margin-top: -15;`
+- Horizontal centering via Python: `popup.styles.offset = (left_offset, "50%")`
+- Focus management: `on_mount()` focuses first Input widget automatically
+- Dismiss action: `action_dismiss()` calls `self.remove()` to unmount widget
+- Generate handler: Posts `GenerateRequested` message with params, then removes widget
+
 **Files Created/Modified:**
-- `src/tui/param_config_screen.py` - Modal parameter configuration screen
-- `src/tui/app.py` - Added action_generate() with parameter handling
+- `src/tui/param_config_panel.py` - Popup widget for parameter configuration
+- `src/tui/app.py` - Added action_generate() with dynamic centering and widget mounting
 - `src/core/validator.py` - Complete validation for all parameter types
 - `test_validation.py` - Validation test suite
 - `test_phase4_integration.py` - Integration test for Phase 4
@@ -803,18 +817,32 @@ COLORS = {
 - [ ] Command execution for command-based recipes
 - [ ] Output file management
 
-**Build Output UI (Right Panel):**
-- [ ] Create real-time log viewer widget
-- [ ] Show build logs as preprocessing executes
-- [ ] Display each step with status:
-  - [ ] "Running: msfvenom..." with output
+**Build Output UI:**
+- [ ] After pressing "Generate" in popup, popup closes and build begins
+- [ ] Create notification/toast system for build progress
+- [ ] Show build status in footer or as overlay notifications:
+  - [ ] "Running: msfvenom..." with spinner
   - [ ] "Encrypting with AES..." with progress
-  - [ ] "Compiling with mcs..." with compiler output
-- [ ] Color-coded success/error messages
-- [ ] Display final output file path and size
-- [ ] Show launch instructions with actual values filled in
-- [ ] "Copy Instructions" button
-- [ ] "Close" button to return to recipe browsing
+  - [ ] "Compiling with mcs..." with status
+- [ ] Color-coded success/error notifications
+- [ ] Final success notification with:
+  - [ ] Output file path
+  - [ ] File size
+  - [ ] Quick action to open output directory
+- [ ] Launch instructions modal/popup on successful generation
+  - [ ] Show full launch instructions with filled-in values
+  - [ ] "Copy Instructions" button
+  - [ ] "Close" or 'q' to dismiss
+- [ ] Error handling: show detailed error popup on build failure
+  - [ ] Display which step failed
+  - [ ] Show error logs/output
+  - [ ] "Close" to return to recipe browsing
+
+**Notes:**
+- Build happens in background, user can continue browsing
+- Or block UI during build with progress overlay (decision needed)
+- Consider streaming build logs to notification area
+- Launch instructions popup similar to parameter config popup (centered widget)
 
 ### Phase 6: History & Session Management
 
@@ -831,8 +859,8 @@ COLORS = {
 - [ ] Load history on startup
 
 **History UI:**
-- [ ] New keybinding 'H' to open history panel
-- [ ] History panel replaces middle panel temporarily
+- [ ] New keybinding 'H' to open history popup/modal
+- [ ] History popup overlays main view (similar to parameter config)
 - [ ] Display history entries (newest first):
   - [ ] Date/time
   - [ ] Recipe name
@@ -843,11 +871,17 @@ COLORS = {
   - [ ] Build logs
   - [ ] Launch instructions
 - [ ] Actions on history entries:
-  - [ ] Regenerate with same parameters
+  - [ ] Regenerate with same parameters (opens param popup pre-filled)
   - [ ] Copy launch instructions
   - [ ] Delete entry
   - [ ] Open output directory
 - [ ] Search/filter history by recipe name, date, status
+- [ ] 'q' or 'Esc' to close history popup
+
+**Notes:**
+- History popup similar to parameter config popup (centered widget overlay)
+- Keep consistent UI/UX with overlay approach
+- Background panels remain visible
 
 ### Phase 7: Recipe Development (Together)
 

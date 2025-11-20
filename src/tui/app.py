@@ -14,7 +14,7 @@ from .category_panel import CategoryPanel, RecipeSelected
 from .recipe_panel import RecipePanel
 from .code_panel import CodePanel
 from .help_screen import HelpScreen
-from .param_config_panel import ParameterConfigPanel
+from .param_config_panel import ParameterConfigPopup
 
 
 class PaygenApp(App):
@@ -53,6 +53,11 @@ class PaygenApp(App):
     Button.default:focus {
         background: """ + MOCHA['surface2'] + """;
     }
+    
+    ParameterConfigPopup {
+        offset-y: 50%;
+        margin-top: -15;
+    }
     """
     
     BINDINGS = [
@@ -80,7 +85,6 @@ class PaygenApp(App):
         self.config = config
         self.recipes = recipes or []
         self.selected_recipe = None
-        self.in_generation_mode = False  # Track if we're in parameter config mode
     
     def compose(self) -> ComposeResult:
         """Create the application layout."""
@@ -136,6 +140,19 @@ class PaygenApp(App):
         category_count = len(categories)
         self.sub_title = f"Recipes: {recipe_count} | Categories: {category_count}"
     
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Check if an action should be enabled/visible."""
+        return True
+    
+    def _get_bindings(self):
+        """Get bindings with dynamic descriptions based on mode."""
+        return self.BINDINGS
+    
+    @property
+    def active_bindings(self):
+        """Get the active bindings for the current state."""
+        return self._get_bindings()
+    
     def action_help(self) -> None:
         """Show help dialog."""
         self.push_screen(HelpScreen())
@@ -154,21 +171,32 @@ class PaygenApp(App):
     
     def action_focus_left(self) -> None:
         """Focus the panel to the left."""
-        # Cycle through panels: code -> recipe -> category -> code
-        focused_id = self.focused.id if self.focused else None
+        focused = self.focused
+        focused_id = focused.id if focused else None
         
-        if focused_id == "code-panel":
+        # Get the parent panel if focused widget is a child
+        parent_panel_id = None
+        if focused:
+            for ancestor in focused.ancestors:
+                if ancestor.id in ["code-panel", "recipe-panel", "category-panel"]:
+                    parent_panel_id = ancestor.id
+                    break
+        
+        # Use parent panel ID if found, otherwise use focused_id
+        panel_id = parent_panel_id or focused_id
+        
+        # Browse mode: category-panel, recipe-panel, code-panel
+        if panel_id == "code-panel":
             self.query_one("#recipe-panel").focus()
-        elif focused_id == "recipe-panel":
+        elif panel_id == "recipe-panel":
             category_panel = self.query_one("#category-panel", CategoryPanel)
             category_panel.focus()
-            # Also focus the tree within the category panel
             try:
                 tree = category_panel.query_one("#recipe-tree")
                 tree.focus()
             except:
                 pass
-        elif focused_id == "category-panel" or focused_id == "recipe-tree":
+        elif panel_id == "category-panel" or panel_id == "recipe-tree":
             self.query_one("#code-panel").focus()
         else:
             category_panel = self.query_one("#category-panel", CategoryPanel)
@@ -181,17 +209,28 @@ class PaygenApp(App):
     
     def action_focus_right(self) -> None:
         """Focus the panel to the right."""
-        # Cycle through panels: category -> recipe -> code -> category
-        focused_id = self.focused.id if self.focused else None
+        focused = self.focused
+        focused_id = focused.id if focused else None
         
-        if focused_id == "category-panel" or focused_id == "recipe-tree":
+        # Get the parent panel if focused widget is a child
+        parent_panel_id = None
+        if focused:
+            for ancestor in focused.ancestors:
+                if ancestor.id in ["code-panel", "recipe-panel", "category-panel"]:
+                    parent_panel_id = ancestor.id
+                    break
+        
+        # Use parent panel ID if found, otherwise use focused_id
+        panel_id = parent_panel_id or focused_id
+        
+        # Browse mode: category-panel, recipe-panel, code-panel
+        if panel_id == "category-panel" or panel_id == "recipe-tree":
             self.query_one("#recipe-panel").focus()
-        elif focused_id == "recipe-panel":
+        elif panel_id == "recipe-panel":
             self.query_one("#code-panel").focus()
-        elif focused_id == "code-panel":
+        elif panel_id == "code-panel":
             category_panel = self.query_one("#category-panel", CategoryPanel)
             category_panel.focus()
-            # Also focus the tree within the category panel
             try:
                 tree = category_panel.query_one("#recipe-tree")
                 tree.focus()
@@ -207,117 +246,36 @@ class PaygenApp(App):
                 pass
     
     def action_generate(self) -> None:
-        """Generate payload from selected recipe - switches to generation mode."""
+        """Generate payload from selected recipe - show parameter configuration popup."""
         if not self.selected_recipe:
             self.notify("No recipe selected", title="Generate", severity="warning")
             return
         
-        if self.in_generation_mode:
-            # Already in generation mode, ignore
-            return
+        # Create popup widget
+        popup = ParameterConfigPopup(recipe=self.selected_recipe, config=self.config)
         
-        # Switch to generation mode layout
-        self._switch_to_generation_mode()
+        # Calculate center position before mounting
+        screen_width = self.size.width
+        popup_width = 80 + 4  # 80 + thick border (2 on each side)
+        left_offset = (screen_width - popup_width) // 2
+        
+        # Set position before mounting
+        popup.styles.offset = (left_offset, "50%")
+        
+        # Now mount (on_mount will handle focusing)
+        self.mount(popup)
     
-    def _switch_to_generation_mode(self) -> None:
-        """Switch layout to generation mode."""
-        self.in_generation_mode = True
+    def on_parameter_config_popup_generate_requested(self, message: ParameterConfigPopup.GenerateRequested) -> None:
+        """Handle generate request from parameter popup."""
+        # Get the popup widget from the message
+        popup = message._sender
         
-        # Get container
-        container = self.query_one("#main-container")
+        # Remove popup
+        if popup:
+            popup.remove()
         
-        # Remove existing middle panel (recipe-panel) and replace with param config
-        recipe_panel = self.query_one("#recipe-panel", RecipePanel)
-        recipe_panel.remove()
-        
-        # Hide category panel and show recipe details in left position
-        category_panel = self.query_one("#category-panel", CategoryPanel)
-        category_panel.display = False
-        
-        # Add recipe panel to left position (where categories were)
-        recipe_panel_new = RecipePanel(id="recipe-panel-left")
-        container.mount(recipe_panel_new, before=0)
-        
-        # Add parameter config panel in middle position
-        param_panel = ParameterConfigPanel(
-            recipe=self.selected_recipe,
-            config=self.config,
-            id="param-config-panel"
-        )
-        container.mount(param_panel, before=1)
-        
-        # Use call_after_refresh to set recipe after widget is fully mounted
-        def set_recipe():
-            recipe_panel_new.selected_recipe = self.selected_recipe
-            param_panel.focus()
-        
-        self.call_after_refresh(set_recipe)
-    
-    def _switch_to_browse_mode(self) -> None:
-        """Switch layout back to browse mode."""
-        self.in_generation_mode = False
-        
-        # Get container
-        container = self.query_one("#main-container")
-        
-        # Remove parameter config panel
-        try:
-            param_panel = self.query_one("#param-config-panel", ParameterConfigPanel)
-            param_panel.remove()
-        except:
-            pass
-        
-        # Remove left recipe panel
-        try:
-            recipe_panel_left = self.query_one("#recipe-panel-left", RecipePanel)
-            recipe_panel_left.remove()
-        except:
-            pass
-        
-        # Show category panel again
-        category_panel = self.query_one("#category-panel", CategoryPanel)
-        category_panel.display = True
-        
-        # Add back the middle recipe panel
-        recipe_panel = RecipePanel(id="recipe-panel")
-        container.mount(recipe_panel, before=1)
-        
-        # Set recipe and focus after refresh
-        def set_recipe_and_focus():
-            recipe_panel.selected_recipe = self.selected_recipe
-            category_panel.focus()
-            try:
-                tree = category_panel.query_one("#recipe-tree")
-                tree.focus()
-            except:
-                pass
-        
-        self.call_after_refresh(set_recipe_and_focus)
-    
-    def on_parameter_config_panel_generate_requested(
-        self, message: ParameterConfigPanel.GenerateRequested
-    ) -> None:
-        """Handle generate request from parameter panel."""
-        # Show configured parameters for verification
-        param_summary = "\n".join([f"  • {k}: {v}" for k, v in message.params.items()])
-        self.notify(
-            f"Parameters configured for [bold]{self.selected_recipe.name}[/bold]:\n{param_summary}\n\n"
-            f"[dim]Build system will be implemented in Phase 5[/dim]",
-            title="✓ Configuration Complete",
-            severity="information",
-            timeout=8
-        )
-        
-        # TODO: Phase 5 - Start build process with message.params
-        
-        # For now, switch back to browse mode
-        self._switch_to_browse_mode()
-    
-    def on_parameter_config_panel_cancel_requested(
-        self, message: ParameterConfigPanel.CancelRequested
-    ) -> None:
-        """Handle cancel request from parameter panel."""
-        self._switch_to_browse_mode()
+        # TODO: Actually generate the payload here
+        self.notify(f"Generating payload with parameters: {message.params}", title="Success")
     
     def action_quit(self) -> None:
         """Quit the application."""
