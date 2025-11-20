@@ -1,145 +1,156 @@
 """
-Parameter Configuration Screen
+Parameter Configuration Panel
 
-Modal screen for configuring recipe parameters before generation.
+Panel for configuring recipe parameters before generation (replaces middle panel).
 """
 
 from textual.app import ComposeResult
-from textual.containers import Container, VerticalScroll, Horizontal
+from textual.containers import Container, VerticalScroll, Horizontal, Vertical
 from textual.widgets import Static, Input, Button, Select, Checkbox
-from textual.screen import ModalScreen
+from textual.widget import Widget
 from textual.binding import Binding
-from textual.validation import Function, Integer
+from textual.message import Message
 
-from .colors import MOCHA
+from .colors import MOCHA, get_effectiveness_badge
 from ..core.validator import ParameterValidator, ValidationError
 
 
-class ParameterConfigScreen(ModalScreen):
-    """Screen for configuring recipe parameters."""
+class ParameterConfigPanel(Widget):
+    """Panel for configuring recipe parameters."""
     
     DEFAULT_CSS = """
-    ParameterConfigScreen {
-        align: center middle;
+    ParameterConfigPanel {
+        width: 35%;
+        height: 100%;
+        border: solid """ + MOCHA['surface1'] + """;
+        background: #1e1e2e;
     }
     
-    ParameterConfigScreen > Container {
-        width: 80;
-        height: auto;
-        max-height: 90%;
-        background: """ + MOCHA['base'] + """;
+    ParameterConfigPanel:focus-within {
         border: double """ + MOCHA['blue'] + """;
     }
     
-    ParameterConfigScreen .config-title {
+    ParameterConfigPanel .panel-title {
         color: """ + MOCHA['mauve'] + """;
         text-style: bold;
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
         padding: 1;
         text-align: center;
+        dock: top;
     }
     
-    ParameterConfigScreen #params-scroll {
-        height: auto;
-        max-height: 30;
-        border: solid """ + MOCHA['surface1'] + """;
-        background: """ + MOCHA['base'] + """;
+    ParameterConfigPanel #params-scroll {
+        height: 1fr;
+        border: none;
+        background: #1e1e2e;
         padding: 1;
     }
     
-    ParameterConfigScreen .param-label {
+    ParameterConfigPanel .param-label {
         color: """ + MOCHA['text'] + """;
         padding: 0 1;
         margin-top: 1;
     }
     
-    ParameterConfigScreen .param-required {
+    ParameterConfigPanel .param-required {
         color: """ + MOCHA['red'] + """;
     }
     
-    ParameterConfigScreen .param-description {
+    ParameterConfigPanel .param-description {
         color: """ + MOCHA['subtext0'] + """;
         padding: 0 1;
         text-style: italic;
     }
     
-    ParameterConfigScreen Input {
+    ParameterConfigPanel Input {
         margin: 0 1;
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
         border: solid """ + MOCHA['surface2'] + """;
     }
     
-    ParameterConfigScreen Input:focus {
+    ParameterConfigPanel Input:focus {
         border: solid """ + MOCHA['blue'] + """;
     }
     
-    ParameterConfigScreen Select {
+    ParameterConfigPanel Select {
         margin: 0 1;
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
         border: solid """ + MOCHA['surface2'] + """;
     }
     
-    ParameterConfigScreen Select:focus {
+    ParameterConfigPanel Select:focus {
         border: solid """ + MOCHA['blue'] + """;
     }
     
-    ParameterConfigScreen Checkbox {
+    ParameterConfigPanel Checkbox {
         margin: 0 1;
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
     }
     
-    ParameterConfigScreen .error-message {
+    ParameterConfigPanel .error-message {
         color: """ + MOCHA['red'] + """;
         padding: 0 1;
     }
     
-    ParameterConfigScreen .button-container {
+    ParameterConfigPanel .button-container {
         height: auto;
         align: center middle;
         padding: 1;
         margin-top: 1;
+        dock: bottom;
     }
     
-    ParameterConfigScreen Button {
+    ParameterConfigPanel Button {
         margin: 0 2;
         min-width: 15;
     }
     
-    ParameterConfigScreen Button.primary {
+    ParameterConfigPanel Button.primary {
         background: """ + MOCHA['green'] + """;
         color: """ + MOCHA['base'] + """;
     }
     
-    ParameterConfigScreen Button.primary:hover {
-        background: """ + MOCHA['teal'] + """;
+    ParameterConfigPanel Button.primary:hover {
+        background: """ + MOCHA['green'] + """;
     }
     
-    ParameterConfigScreen Button.default {
+    ParameterConfigPanel Button.primary:focus {
+        background: """ + MOCHA['green'] + """;
+    }
+    
+    ParameterConfigPanel Button.default {
         background: """ + MOCHA['surface2'] + """;
         color: """ + MOCHA['text'] + """;
     }
     
-    ParameterConfigScreen Button.default:hover {
-        background: """ + MOCHA['overlay0'] + """;
+    ParameterConfigPanel Button.default:hover {
+        background: """ + MOCHA['surface2'] + """;
+    }
+    
+    ParameterConfigPanel Button.default:focus {
+        background: """ + MOCHA['surface2'] + """;
     }
     """
     
-    BINDINGS = [
-        Binding("escape", "cancel", "Cancel", show=True),
-        Binding("ctrl+g", "generate", "Generate", show=True),
-        Binding("tab", "focus_next", "Next Field", show=False),
-        Binding("shift+tab", "focus_previous", "Previous Field", show=False),
-    ]
+    class GenerateRequested(Message):
+        """Message sent when user requests to generate payload."""
+        def __init__(self, params: dict) -> None:
+            super().__init__()
+            self.params = params
     
-    def __init__(self, recipe, config=None):
+    class CancelRequested(Message):
+        """Message sent when user cancels parameter configuration."""
+        pass
+    
+    def __init__(self, recipe=None, config=None, **kwargs):
         """
-        Initialize parameter configuration screen.
+        Initialize parameter configuration panel.
         
         Args:
             recipe: Recipe object to configure
             config: Configuration object for resolving defaults
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.recipe = recipe
         self.config = config
         self.validator = ParameterValidator()
@@ -147,20 +158,22 @@ class ParameterConfigScreen(ModalScreen):
         self.param_errors = {}
     
     def compose(self) -> ComposeResult:
-        """Compose the configuration screen."""
-        with Container():
-            yield Static(f"Configure: {self.recipe.name}", classes="config-title")
-            
-            with VerticalScroll(id="params-scroll"):
-                # Generate parameter inputs based on recipe parameters
-                for param in self.recipe.parameters:
-                    # Compose parameter widgets inline
-                    for widget in self._create_parameter_widgets(param):
-                        yield widget
-            
-            with Horizontal(classes="button-container"):
-                yield Button("Generate", variant="primary", id="generate-btn")
-                yield Button("Cancel", variant="default", id="cancel-btn")
+        """Compose the configuration panel."""
+        if not self.recipe:
+            yield Static("No recipe selected", classes="panel-title")
+            return
+        
+        yield Static(f"Configure: {self.recipe.name}", classes="panel-title")
+        
+        with VerticalScroll(id="params-scroll"):
+            # Generate parameter inputs based on recipe parameters
+            for param in self.recipe.parameters:
+                for widget in self._create_parameter_widgets(param):
+                    yield widget
+        
+        with Horizontal(classes="button-container"):
+            yield Button("Generate", variant="primary", id="generate-btn")
+            yield Button("Cancel", variant="default", id="cancel-btn")
     
     def _create_parameter_widgets(self, param):
         """
@@ -201,7 +214,6 @@ class ParameterConfigScreen(ModalScreen):
         # Create input widget based on type
         if param_type == 'choice':
             choices = param.get('choices', [])
-            # Select widget expects tuples of (label, value)
             options = [(choice, choice) for choice in choices]
             select = Select(options, value=default, id=f"param-{name}")
             widgets.append(select)
@@ -211,7 +223,6 @@ class ParameterConfigScreen(ModalScreen):
             widgets.append(checkbox)
         
         elif param_type == 'integer':
-            # Integer input with validation
             input_widget = Input(
                 value=str(default),
                 placeholder=f"Enter {param_type}",
@@ -235,15 +246,13 @@ class ParameterConfigScreen(ModalScreen):
     
     def on_input_changed(self, event: Input.Changed) -> None:
         """Handle input changes for real-time validation."""
-        # Extract parameter name from widget ID
         widget_id = event.input.id
         if not widget_id or not widget_id.startswith("param-"):
             return
         
-        param_name = widget_id[6:]  # Remove "param-" prefix
+        param_name = widget_id[6:]
         value = event.value
         
-        # Store value
         self.param_values[param_name] = value
         
         # Find parameter definition
@@ -288,7 +297,6 @@ class ParameterConfigScreen(ModalScreen):
             elif param_type == 'integer':
                 if value:
                     int_val = int(value)
-                    # Check range if specified
                     if 'min' in param_def and int_val < param_def['min']:
                         error = f"Must be at least {param_def['min']}"
                     if 'max' in param_def and int_val > param_def['max']:
@@ -329,13 +337,13 @@ class ParameterConfigScreen(ModalScreen):
         if event.button.id == "generate-btn":
             self._handle_generate()
         elif event.button.id == "cancel-btn":
-            self.dismiss(None)
+            self.post_message(self.CancelRequested())
     
     def _handle_generate(self) -> None:
         """Handle generate button press."""
         # Check for validation errors
         if self.param_errors:
-            self.notify("Please fix validation errors", severity="error")
+            self.app.notify("Please fix validation errors", severity="error")
             return
         
         # Check required parameters
@@ -344,16 +352,17 @@ class ParameterConfigScreen(ModalScreen):
                 param_name = param['name']
                 error_widget = self.query_one(f"#error-{param_name}", Static)
                 error_widget.update("⚠ This field is required")
-                self.notify("Please fill in all required fields", severity="error")
+                self.app.notify("Please fill in all required fields", severity="error")
                 return
         
-        # All validation passed, return parameters
-        self.dismiss(self.param_values)
+        # All validation passed, send generate message
+        self.post_message(self.GenerateRequested(self.param_values))
     
-    def action_cancel(self) -> None:
-        """Cancel parameter configuration."""
-        self.dismiss(None)
-    
-    def action_generate(self) -> None:
-        """Generate action via keybinding."""
-        self._handle_generate()
+    def update_recipe(self, recipe):
+        """Update the panel with a new recipe."""
+        self.recipe = recipe
+        self.param_values = {}
+        self.param_errors = {}
+        
+        # Trigger recompose
+        self.refresh(layout=True)

@@ -39,7 +39,7 @@ class CodePanel(VerticalScroll):
     CodePanel {
         width: 35%;
         border: solid """ + MOCHA['surface1'] + """;
-        background: transparent;
+        background: #1e1e2e;
         padding: 0;
     }
     
@@ -50,7 +50,7 @@ class CodePanel(VerticalScroll):
     CodePanel .panel-title {
         color: """ + MOCHA['mauve'] + """;
         text-style: bold;
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
         padding: 1;
         dock: top;
     }
@@ -123,7 +123,7 @@ class CodePanel(VerticalScroll):
                             theme="monokai",  # Close to Catppuccin Mocha
                             line_numbers=True,
                             word_wrap=False,
-                            background_color="default"
+                            background_color="#1e1e2e"
                         )
                         
                         content_widget.update(syntax)
@@ -145,7 +145,7 @@ class CodePanel(VerticalScroll):
                     theme="monokai",
                     line_numbers=False,
                     word_wrap=True,
-                    background_color="default"
+                    background_color="#1e1e2e"
                 )
                 content_widget.update(syntax)
             else:

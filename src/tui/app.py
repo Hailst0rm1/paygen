@@ -14,7 +14,7 @@ from .category_panel import CategoryPanel, RecipeSelected
 from .recipe_panel import RecipePanel
 from .code_panel import CodePanel
 from .help_screen import HelpScreen
-from .param_config_screen import ParameterConfigScreen
+from .param_config_panel import ParameterConfigPanel
 
 
 class PaygenApp(App):
@@ -23,20 +23,35 @@ class PaygenApp(App):
     # Enable transparency
     ENABLE_COMMAND_PALETTE = False
     
+    # Disable default focus tint
+    design = None  # Use default design but we'll override focus colors
+    
     CSS = """
     Screen {
-        background: transparent;
+        background: #1e1e2e;
     }
     
     Header {
-        background: transparent;
+        background: #1e1e2e;
         color: """ + MOCHA['mauve'] + """;
         text-style: bold;
     }
     
     Footer {
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
         color: """ + MOCHA['text'] + """;
+    }
+    
+    *:focus {
+        background-tint: transparent 0%;
+    }
+    
+    Button:focus {
+        background: """ + MOCHA['green'] + """;
+    }
+    
+    Button.default:focus {
+        background: """ + MOCHA['surface2'] + """;
     }
     """
     
@@ -65,19 +80,20 @@ class PaygenApp(App):
         self.config = config
         self.recipes = recipes or []
         self.selected_recipe = None
+        self.in_generation_mode = False  # Track if we're in parameter config mode
     
     def compose(self) -> ComposeResult:
         """Create the application layout."""
         yield Header()
         
-        with Horizontal():
-            # Left panel: Categories & Recipes
+        with Horizontal(id="main-container"):
+            # Left panel: Categories & Recipes (or Recipe Details in generation mode)
             yield CategoryPanel(recipes=self.recipes, id="category-panel")
             
-            # Middle panel: Recipe Metadata
+            # Middle panel: Recipe Metadata (or Parameter Config in generation mode)
             yield RecipePanel(id="recipe-panel")
             
-            # Right panel: Code Preview
+            # Right panel: Code Preview (or Build Output in generation mode)
             yield CodePanel(config=self.config, id="code-panel")
         
         yield Footer()
@@ -191,28 +207,117 @@ class PaygenApp(App):
                 pass
     
     def action_generate(self) -> None:
-        """Generate payload from selected recipe."""
-        if self.selected_recipe:
-            # Open parameter configuration screen
-            def handle_params(params):
-                """Handle parameters returned from config screen."""
-                if params is not None:
-                    # Show configured parameters for verification
-                    param_summary = "\n".join([f"  • {k}: {v}" for k, v in params.items()])
-                    self.notify(
-                        f"Parameters configured for [bold]{self.selected_recipe.name}[/bold]:\n{param_summary}\n\n"
-                        f"[dim]Build system will be implemented in Phase 5[/dim]",
-                        title="✓ Configuration Complete",
-                        severity="information",
-                        timeout=8
-                    )
-            
-            self.push_screen(
-                ParameterConfigScreen(self.selected_recipe, config=self.config),
-                handle_params
-            )
-        else:
+        """Generate payload from selected recipe - switches to generation mode."""
+        if not self.selected_recipe:
             self.notify("No recipe selected", title="Generate", severity="warning")
+            return
+        
+        if self.in_generation_mode:
+            # Already in generation mode, ignore
+            return
+        
+        # Switch to generation mode layout
+        self._switch_to_generation_mode()
+    
+    def _switch_to_generation_mode(self) -> None:
+        """Switch layout to generation mode."""
+        self.in_generation_mode = True
+        
+        # Get container
+        container = self.query_one("#main-container")
+        
+        # Remove existing middle panel (recipe-panel) and replace with param config
+        recipe_panel = self.query_one("#recipe-panel", RecipePanel)
+        recipe_panel.remove()
+        
+        # Hide category panel and show recipe details in left position
+        category_panel = self.query_one("#category-panel", CategoryPanel)
+        category_panel.display = False
+        
+        # Add recipe panel to left position (where categories were)
+        recipe_panel_new = RecipePanel(id="recipe-panel-left")
+        container.mount(recipe_panel_new, before=0)
+        
+        # Add parameter config panel in middle position
+        param_panel = ParameterConfigPanel(
+            recipe=self.selected_recipe,
+            config=self.config,
+            id="param-config-panel"
+        )
+        container.mount(param_panel, before=1)
+        
+        # Use call_after_refresh to set recipe after widget is fully mounted
+        def set_recipe():
+            recipe_panel_new.selected_recipe = self.selected_recipe
+            param_panel.focus()
+        
+        self.call_after_refresh(set_recipe)
+    
+    def _switch_to_browse_mode(self) -> None:
+        """Switch layout back to browse mode."""
+        self.in_generation_mode = False
+        
+        # Get container
+        container = self.query_one("#main-container")
+        
+        # Remove parameter config panel
+        try:
+            param_panel = self.query_one("#param-config-panel", ParameterConfigPanel)
+            param_panel.remove()
+        except:
+            pass
+        
+        # Remove left recipe panel
+        try:
+            recipe_panel_left = self.query_one("#recipe-panel-left", RecipePanel)
+            recipe_panel_left.remove()
+        except:
+            pass
+        
+        # Show category panel again
+        category_panel = self.query_one("#category-panel", CategoryPanel)
+        category_panel.display = True
+        
+        # Add back the middle recipe panel
+        recipe_panel = RecipePanel(id="recipe-panel")
+        container.mount(recipe_panel, before=1)
+        
+        # Set recipe and focus after refresh
+        def set_recipe_and_focus():
+            recipe_panel.selected_recipe = self.selected_recipe
+            category_panel.focus()
+            try:
+                tree = category_panel.query_one("#recipe-tree")
+                tree.focus()
+            except:
+                pass
+        
+        self.call_after_refresh(set_recipe_and_focus)
+    
+    def on_parameter_config_panel_generate_requested(
+        self, message: ParameterConfigPanel.GenerateRequested
+    ) -> None:
+        """Handle generate request from parameter panel."""
+        # Show configured parameters for verification
+        param_summary = "\n".join([f"  • {k}: {v}" for k, v in message.params.items()])
+        self.notify(
+            f"Parameters configured for [bold]{self.selected_recipe.name}[/bold]:\n{param_summary}\n\n"
+            f"[dim]Build system will be implemented in Phase 5[/dim]",
+            title="✓ Configuration Complete",
+            severity="information",
+            timeout=8
+        )
+        
+        # TODO: Phase 5 - Start build process with message.params
+        
+        # For now, switch back to browse mode
+        self._switch_to_browse_mode()
+    
+    def on_parameter_config_panel_cancel_requested(
+        self, message: ParameterConfigPanel.CancelRequested
+    ) -> None:
+        """Handle cancel request from parameter panel."""
+        self._switch_to_browse_mode()
     
     def action_quit(self) -> None:
         """Quit the application."""

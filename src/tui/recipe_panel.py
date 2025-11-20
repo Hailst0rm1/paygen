@@ -37,7 +37,7 @@ class RecipePanel(VerticalScroll):
     RecipePanel {
         width: 35%;
         border: solid """ + MOCHA['surface1'] + """;
-        background: transparent;
+        background: #1e1e2e;
         padding: 0;
     }
     
@@ -48,7 +48,7 @@ class RecipePanel(VerticalScroll):
     RecipePanel .panel-title {
         color: """ + MOCHA['mauve'] + """;
         text-style: bold;
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
         padding: 1;
         dock: top;
     }

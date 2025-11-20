@@ -20,7 +20,7 @@ class CategoryPanel(ScrollableContainer):
     CategoryPanel {
         width: 30%;
         border: solid """ + MOCHA['surface1'] + """;
-        background: transparent;
+        background: #1e1e2e;
         padding: 0;
     }
     
@@ -31,13 +31,13 @@ class CategoryPanel(ScrollableContainer):
     CategoryPanel .panel-title {
         color: """ + MOCHA['mauve'] + """;
         text-style: bold;
-        background: """ + MOCHA['surface0'] + """;
+        background: #1e1e2e;
         padding: 1;
         dock: top;
     }
     
     CategoryPanel Tree {
-        background: transparent;
+        background: #1e1e2e;
         padding: 1;
     }
     
@@ -45,12 +45,7 @@ class CategoryPanel(ScrollableContainer):
         color: """ + MOCHA['text'] + """;
     }
     
-    CategoryPanel Tree > .tree--label:hover {
-        background: """ + MOCHA['surface1'] + """;
-    }
-    
     CategoryPanel Tree > .tree--cursor {
-        background: """ + MOCHA['blue'] + """ 30%;
         color: """ + MOCHA['text'] + """;
     }
     """
