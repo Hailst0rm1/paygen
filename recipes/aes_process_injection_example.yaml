@@ -113,7 +113,7 @@ preprocessing:
 
 output:
   type: "template"
-  template: "payloads/process_injection/aes_injector.cs"
+  template: "process_injection/aes_injector.cs"
   
   compile:
     enabled: true

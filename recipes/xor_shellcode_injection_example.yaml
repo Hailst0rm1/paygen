@@ -89,7 +89,7 @@ preprocessing:
 
 output:
   type: "template"
-  template: "payloads/shellcode_injection/xor_injector.cs"
+  template: "shellcode_injection/xor_injector.cs"
   
   compile:
     enabled: true

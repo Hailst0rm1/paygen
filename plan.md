@@ -722,42 +722,117 @@ COLORS = {
 - [x] Add script execution for preprocessing
 - [x] Implement output variable management
 
-### Phase 3: TUI Development
+### Phase 3: TUI Development ✅
 
-- [ ] Set up Textual application with Catppuccin Mocha theme
-- [ ] Implement transparent background
-- [ ] Create 3-panel layout
-- [ ] Build left panel (categories & recipes)
-  - [ ] Category navigation
-  - [ ] Recipe listing with effectiveness badges
-  - [ ] Sorting (effectiveness → alphabetical)
-- [ ] Build middle panel (recipe metadata)
-  - [ ] Display name, description, effectiveness
-  - [ ] Show MITRE ATT&CK info
-  - [ ] List artifacts
-  - [ ] Show parameters with defaults
-- [ ] Build right panel (code view)
-  - [ ] Template source display
-  - [ ] Command display
-  - [ ] Syntax highlighting
-  - [ ] Scroll functionality
-- [ ] Implement navigation and keybindings
-- [ ] Create parameter configuration screen
-- [ ] Create results/output screen
+- [x] Set up Textual application with Catppuccin Mocha theme
+- [x] Implement transparent background (uses terminal background)
+- [x] Create 3-panel layout
+- [x] Build left panel (categories & recipes)
+  - [x] Category navigation
+  - [x] Recipe listing with effectiveness badges
+  - [x] Sorting (effectiveness → alphabetical)
+- [x] Build middle panel (recipe metadata)
+  - [x] Display name, description, effectiveness
+  - [x] Show MITRE ATT&CK info
+  - [x] List artifacts
+  - [x] Show parameters with defaults
+- [x] Build right panel (code view)
+  - [x] Template source display
+  - [x] Command display
+  - [x] Syntax highlighting
+  - [x] Scroll functionality
+- [x] Implement navigation and keybindings
+  - [x] Vim-style navigation (j/k/h/l)
+  - [x] Panel focus indicators (double border)
+  - [x] Help screen with full documentation
+- [x] Enable text selection and copying (mouse=False mode)
+- [x] Auto-focus on startup
+- [x] Fast scrolling (5 lines per keypress)
 
-### Phase 4: Payload Generation
+### Phase 4: Parameter Configuration & UI Transitions
 
+**Layout Design:**
+- When user presses 'g', the layout shifts:
+  - Left panel (Categories): Stays visible (30% width)
+  - Middle panel: Recipe Details → Parameter Configuration (35% width)
+  - Right panel: Code Preview → Build Output/Logs (35% width)
+
+**Parameter Configuration UI (Middle Panel):**
+- [ ] Create base parameter configuration screen
+- [ ] Implement parameter input widgets by type:
+  - [ ] Text input for string, ip, port, path, hex
+  - [ ] Dropdown/select for choice type
+  - [ ] Checkbox for boolean type
+  - [ ] Number input for integer type with range validation
+- [ ] Pre-fill defaults from recipe and config
+- [ ] Real-time validation with error messages
+- [ ] Required field indicators (*)
+- [ ] "Generate" and "Cancel" buttons at bottom
+- [ ] Panel layout switching system (recipe details ↔ parameter config)
+
+### Phase 5: Build System & Payload Generation
+
+**Build Orchestrator:**
 - [ ] Implement payload builder orchestrator
-- [ ] Add template rendering with preprocessing variables
-- [ ] Implement compilation support
+- [ ] Execute preprocessing steps in sequence
+  - [ ] Command execution (e.g., msfvenom)
+  - [ ] Script execution (e.g., xor_encrypt.py, aes_encrypt.py)
+  - [ ] Variable management across steps
+- [ ] Template rendering with all variables (parameters + preprocessing outputs)
+- [ ] Implement compilation support:
   - [ ] C/C++ compilation (gcc, mingw-w64)
   - [ ] C# compilation (mcs, csc)
   - [ ] Other compilers as needed
-- [ ] Add command execution for command-based recipes
-- [ ] Implement output file management
-- [ ] Generate launch instructions with variable substitution
+- [ ] Command execution for command-based recipes
+- [ ] Output file management
 
-### Phase 5: Recipe Development (Together)
+**Build Output UI (Right Panel):**
+- [ ] Create real-time log viewer widget
+- [ ] Show build logs as preprocessing executes
+- [ ] Display each step with status:
+  - [ ] "Running: msfvenom..." with output
+  - [ ] "Encrypting with AES..." with progress
+  - [ ] "Compiling with mcs..." with compiler output
+- [ ] Color-coded success/error messages
+- [ ] Display final output file path and size
+- [ ] Show launch instructions with actual values filled in
+- [ ] "Copy Instructions" button
+- [ ] "Close" button to return to recipe browsing
+
+### Phase 6: History & Session Management
+
+**History System:**
+- [ ] Create history data structure
+- [ ] Track all generated payloads:
+  - [ ] Recipe name
+  - [ ] Timestamp
+  - [ ] Parameters used
+  - [ ] Output file path
+  - [ ] Build success/failure status
+  - [ ] Launch instructions
+- [ ] Persist history to ~/.config/paygen/history.json
+- [ ] Load history on startup
+
+**History UI:**
+- [ ] New keybinding 'H' to open history panel
+- [ ] History panel replaces middle panel temporarily
+- [ ] Display history entries (newest first):
+  - [ ] Date/time
+  - [ ] Recipe name
+  - [ ] Status (✓ success / ✗ failed)
+  - [ ] Output file
+- [ ] Select entry to view full details:
+  - [ ] All parameters used
+  - [ ] Build logs
+  - [ ] Launch instructions
+- [ ] Actions on history entries:
+  - [ ] Regenerate with same parameters
+  - [ ] Copy launch instructions
+  - [ ] Delete entry
+  - [ ] Open output directory
+- [ ] Search/filter history by recipe name, date, status
+
+### Phase 7: Recipe Development (Together)
 
 - [ ] Create process injection recipe (C#)
 - [ ] Create process injection recipe (PowerShell)
@@ -765,7 +840,7 @@ COLORS = {
 - [ ] Create additional recipes based on user needs
 - [ ] Test all recipes end-to-end
 
-### Phase 6: Polish & Distribution
+### Phase 8: Polish & Distribution
 
 - [ ] Add comprehensive error handling
 - [ ] Improve user feedback and progress indicators
