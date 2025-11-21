@@ -914,47 +914,93 @@ COLORS = {
   - Recipe details and code preview update on arrow key navigation (no Enter needed)
   - More responsive and modern UX
 
-### Phase 6: History & Session Management
+### Phase 6: History & Session Management ✅ COMPLETE
 
 **History System:**
 
-- [ ] Create history data structure
-- [ ] Track all generated payloads:
-  - [ ] Recipe name
-  - [ ] Timestamp
-  - [ ] Parameters used
-  - [ ] Output file path
-  - [ ] Build success/failure status
-  - [ ] Launch instructions
-- [ ] Persist history to ~/.config/paygen/history.json
-- [ ] Load history on startup
+- [x] Create history data structure
+  - [x] HistoryEntry dataclass with recipe name, timestamp, parameters, output file, success status, launch instructions, and build steps
+  - [x] Formatted timestamp property (YYYY-MM-DD HH:MM:SS)
+  - [x] Status icon property (✓/✗)
+  - [x] Output filename property
+- [x] Persist history to ~/.config/paygen/history.json
+  - [x] HistoryManager class for CRUD operations
+  - [x] JSON serialization/deserialization
+  - [x] Auto-save on entry addition
+  - [x] Load history on startup
+- [x] Track all generated payloads:
+  - [x] Recipe name
+  - [x] Timestamp (ISO 8601 format)
+  - [x] Parameters used
+  - [x] Output file path
+  - [x] Build success/failure status
+  - [x] Launch instructions (rendered)
+  - [x] Build steps (truncated to 500 chars each)
 
 **History UI:**
 
-- [ ] New keybinding 'H' to open history popup/modal
-- [ ] History popup overlays main view (similar to parameter config)
-- [ ] Display history entries (newest first):
-  - [ ] Date/time
-  - [ ] Recipe name
-  - [ ] Status (✓ success / ✗ failed)
-  - [ ] Output file
-- [ ] Select entry to view full details:
-  - [ ] All parameters used
-  - [ ] Build logs
-  - [ ] Launch instructions
-- [ ] Actions on history entries:
-  - [ ] Regenerate with same parameters (opens param popup pre-filled)
-  - [ ] Copy launch instructions
-  - [ ] Delete entry
-  - [ ] Open output directory
-- [ ] Search/filter history by recipe name, date, status
-- [ ] 'q' or 'Esc' to close history popup
+- [x] Keybinding: Shift+H to open history popup
+- [x] History popup overlays main view (90 width, 80% height, centered)
+- [x] Display history entries (newest first):
+  - [x] Date/time (formatted)
+  - [x] Recipe name
+  - [x] Status (✓ success / ✗ failed) with color coding
+  - [x] Output filename
+- [x] Stats bar showing:
+  - [x] Total entries
+  - [x] Successful builds
+  - [x] Failed builds
+- [x] Select entry to view full details:
+  - [x] All parameters used
+  - [x] Build steps with status icons
+  - [x] Launch instructions
+  - [x] Output file path
+- [x] Actions on history entries:
+  - [x] View details (Enter) - Shows full entry in detail view
+  - [x] Regenerate with same parameters (r) - Opens param popup pre-filled
+  - [x] Copy launch instructions (c) - Uses xclip on Linux
+  - [x] Delete entry (d) - Removes from history and refreshes view
+  - [x] Open output directory (o) - Uses xdg-open on Linux
+- [x] Navigation:
+  - [x] j/k or arrow keys to navigate entries
+  - [x] g to jump to top
+  - [x] G to jump to bottom
+  - [x] Esc/q to close (or exit detail view if in detail mode)
+- [x] Detail view:
+  - [x] Full entry display with sections
+  - [x] Color-coded success/failure
+  - [x] Build step details with status icons
+  - [x] Esc to go back to list
+
+**Implementation Details:**
+
+- [x] HistoryEntry as dataclass for clean serialization
+- [x] HistoryManager with filtering support (by recipe name, success status)
+- [x] Integration with app build process - auto-save after each build
+- [x] ParameterConfigPopup prefill support for regeneration
+- [x] Clipboard integration (xclip for Linux)
+- [x] File manager integration (xdg-open for Linux)
+- [x] Truncation of build logs (500 chars max per step) to keep JSON manageable
+- [x] Vim-style navigation (j/k/g/G)
+- [x] Two-panel mode: list view and detail view
+- [x] Auto-refresh after deletion
+
+**Files Created:**
+
+- `src/core/history.py` - HistoryEntry and HistoryManager classes
+- `src/tui/history_popup.py` - History popup widget (425+ lines)
+
+**Files Modified:**
+
+- `src/tui/app.py` - Added history initialization, save on build, action handlers, and Shift+H keybinding
+- `src/tui/param_config_panel.py` - Added prefill_params support for regeneration
 
 **Notes:**
 
-- History popup similar to parameter config popup (centered widget overlay)
-- Keep consistent UI/UX with overlay approach
-- Background panels remain visible
+- History popup similar to other popups (centered widget overlay)
+- Consistent UI/UX with rest of application
+- Background panels remain visible behind popup
+- Fallback messages when clipboard/file manager not available
 
 ### Phase 7: Recipe Development (Together)
 

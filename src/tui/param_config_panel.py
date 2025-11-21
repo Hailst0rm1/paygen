@@ -147,17 +147,19 @@ class ParameterConfigPopup(Widget):
         """Message sent when user cancels parameter configuration."""
         pass
     
-    def __init__(self, recipe=None, config=None, **kwargs):
+    def __init__(self, recipe=None, config=None, prefill_params=None, **kwargs):
         """
         Initialize parameter configuration panel.
         
         Args:
             recipe: Recipe object to configure
             config: Configuration object for resolving defaults
+            prefill_params: Optional dict of parameter values to pre-fill
         """
         super().__init__(**kwargs)
         self.recipe = recipe
         self.config = config
+        self.prefill_params = prefill_params or {}
         self.validator = ParameterValidator()
         self.param_values = {}
         self.param_errors = {}
@@ -197,11 +199,15 @@ class ParameterConfigPopup(Widget):
         required = param.get('required', False)
         default = param.get('default', '')
         
-        # Resolve {config.*} placeholders in defaults
-        if isinstance(default, str) and default.startswith('{config.'):
-            config_key = default[8:-1]  # Extract key from {config.key}
-            if self.config:
-                default = str(getattr(self.config, config_key, default))
+        # Check if we have a prefilled value
+        if name in self.prefill_params:
+            default = self.prefill_params[name]
+        else:
+            # Resolve {config.*} placeholders in defaults
+            if isinstance(default, str) and default.startswith('{config.'):
+                config_key = default[8:-1]  # Extract key from {config.key}
+                if self.config:
+                    default = str(getattr(self.config, config_key, default))
         
         # Store default value
         self.param_values[name] = default
