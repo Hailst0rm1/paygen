@@ -21,8 +21,11 @@ def main():
         if not data_input:
             raise ValueError("Missing required argument: 'data', 'input', or 'shellcode'")
         
-        # Convert input to bytes
-        if isinstance(data_input, str):
+        # Check if data is already base64-encoded (from payload_builder)
+        if args.get('data_is_base64', False):
+            # Data is base64-encoded bytes, decode it first
+            data = base64.b64decode(data_input)
+        elif isinstance(data_input, str):
             # Check if already base64
             try:
                 # Try to decode - if it works, it's already base64

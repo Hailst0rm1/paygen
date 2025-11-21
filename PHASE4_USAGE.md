@@ -3,6 +3,7 @@
 ## Quick Start
 
 ### Running the TUI
+
 ```bash
 python -m src.main
 ```
@@ -10,6 +11,7 @@ python -m src.main
 ### Testing Parameter Configuration
 
 1. **Select a Recipe**
+
    - Use `j/k` to navigate up/down in the recipe tree
    - Press Enter to expand categories
    - Select either:
@@ -17,12 +19,14 @@ python -m src.main
      - "C# XOR-Encrypted Shellcode Injector" (5 parameters)
 
 2. **Open Parameter Configuration**
+
    - Press `g` to generate
    - Modal parameter screen appears
 
 3. **Configure Parameters**
+
    - **Pre-filled defaults**: All parameters have defaults (some from config)
-   - **Navigation**: 
+   - **Navigation**:
      - Tab / Shift+Tab to move between fields
      - Arrow keys within text inputs
    - **Parameter Types**:
@@ -32,6 +36,7 @@ python -m src.main
      - Number inputs: integer type
 
 4. **Validation**
+
    - **Real-time**: Errors appear as you type
    - **IP validation**: Must be valid IPv4 or IPv6
      - ✓ Valid: `192.168.1.1`, `10.0.0.1`, `::1`
@@ -42,7 +47,7 @@ python -m src.main
    - **Hex validation**: Only hex characters (0-9, a-f, A-F)
      - ✓ Valid: `deadbeef`, `CAFEBABE`, `0123456789abcdef`
      - ✗ Invalid: `xyz`, `12 34`, `0x1234`
-   - **Required fields**: Marked with red *
+   - **Required fields**: Marked with red \*
      - Cannot generate until all required fields filled
 
 5. **Generate or Cancel**
@@ -90,13 +95,14 @@ python -m src.main
        • lport: 8080
        • output_file: custom_injector.exe
        • output_path: /home/user/Documents/Tools/paygen/output
-     
+
      Build system will be implemented in Phase 5
 ```
 
 ## Testing Validation
 
 ### Test Invalid IP
+
 ```
 1. Open parameter screen (press 'g')
 2. Tab to lhost field
@@ -106,6 +112,7 @@ python -m src.main
 ```
 
 ### Test Invalid Port
+
 ```
 1. Tab to lport field
 2. Type: 99999
@@ -115,6 +122,7 @@ python -m src.main
 ```
 
 ### Test Required Fields
+
 ```
 1. Clear lhost field (it's required)
 2. Try to generate (Ctrl+G)
@@ -127,6 +135,7 @@ python -m src.main
 ## Keyboard Shortcuts
 
 ### In Parameter Screen
+
 - `Tab` - Next field
 - `Shift+Tab` - Previous field
 - `Ctrl+G` - Generate with current parameters
@@ -135,6 +144,7 @@ python -m src.main
 - Arrow keys - Navigate within text inputs
 
 ### In Main TUI (still available)
+
 - `j/k` - Navigate recipes
 - `h/l` - Switch between panels
 - `g` - Open parameter configuration
@@ -143,16 +153,16 @@ python -m src.main
 
 ## Parameter Types Reference
 
-| Type    | Widget   | Validation                | Example Valid Values          |
-|---------|----------|---------------------------|-------------------------------|
-| string  | Input    | None                      | Any text                      |
-| ip      | Input    | IPv4/IPv6                 | 192.168.1.1, ::1              |
-| port    | Input    | 1-65535                   | 80, 443, 4444                 |
-| path    | Input    | Path format               | /home/user, ~/Documents       |
-| hex     | Input    | Hex characters only       | deadbeef, CAFEBABE            |
-| integer | Input    | Number, optional range    | 1, 100, 9999                  |
-| choice  | Select   | One of allowed choices    | Dropdown selection            |
-| bool    | Checkbox | true/false                | Checked/Unchecked             |
+| Type    | Widget   | Validation             | Example Valid Values    |
+| ------- | -------- | ---------------------- | ----------------------- |
+| string  | Input    | None                   | Any text                |
+| ip      | Input    | IPv4/IPv6              | 192.168.1.1, ::1        |
+| port    | Input    | 1-65535                | 80, 443, 4444           |
+| path    | Input    | Path format            | /home/user, ~/Documents |
+| hex     | Input    | Hex characters only    | deadbeef, CAFEBABE      |
+| integer | Input    | Number, optional range | 1, 100, 9999            |
+| choice  | Select   | One of allowed choices | Dropdown selection      |
+| bool    | Checkbox | true/false             | Checked/Unchecked       |
 
 ## Config Placeholders
 
@@ -162,10 +172,11 @@ Parameters can reference config values:
 parameters:
   - name: "output_path"
     type: "path"
-    default: "{config.output_dir}"  # Automatically filled from config
+    default: "{config.output_dir}" # Automatically filled from config
 ```
 
 Supported placeholders:
+
 - `{config.output_dir}` → `/home/user/Documents/Tools/paygen/output`
 - `{config.recipes_dir}` → `/home/user/Documents/Tools/paygen/recipes`
 - `{config.payloads_dir}` → `/home/user/Documents/Tools/paygen/payloads`
@@ -174,22 +185,26 @@ Supported placeholders:
 ## Troubleshooting
 
 ### "No recipe selected" notification
+
 - You must select a recipe first before pressing 'g'
 - Navigate to a recipe in the left panel
 - Then press 'g'
 
 ### Validation errors won't clear
+
 - Make sure value is truly valid
 - For IP: Must be valid IPv4 (192.168.1.1) or IPv6 (::1)
 - For port: Must be numeric and 1-65535
 - For hex: Only 0-9, a-f, A-F (no spaces, no 0x prefix)
 
 ### Cannot click Generate button
+
 - Make sure there are no validation errors
-- Make sure all required fields (*) are filled
+- Make sure all required fields (\*) are filled
 - Red error messages prevent generation
 
 ### Parameter screen doesn't appear
+
 - Make sure you pressed 'g' while a recipe is selected
 - Check that src/tui/param_config_screen.py exists
 - Try restarting the TUI
@@ -197,11 +212,13 @@ Supported placeholders:
 ## What's Next?
 
 Phase 4 is complete! The parameter configuration system:
+
 - ✅ Collects user input
 - ✅ Validates parameters
 - ✅ Returns configured parameters
 
 **Phase 5** will:
+
 - Execute preprocessing steps (msfvenom, encryption)
 - Render templates with parameters
 - Compile code

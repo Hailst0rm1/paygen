@@ -122,8 +122,8 @@ class CategoryPanel(ScrollableContainer):
         # Expand all categories by default
         self.recipe_tree.root.expand_all()
     
-    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
-        """Handle tree node selection."""
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        """Handle tree node highlight (arrow key navigation)."""
         node_data = event.node.data
         
         if node_data and node_data.get("type") == "recipe":

@@ -15,6 +15,8 @@ from .recipe_panel import RecipePanel
 from .code_panel import CodePanel
 from .help_screen import HelpScreen
 from .param_config_panel import ParameterConfigPopup
+from .build_progress_popup import BuildProgressPopup
+from ..core.payload_builder import PayloadBuilder
 
 
 class PaygenApp(App):
@@ -55,8 +57,9 @@ class PaygenApp(App):
     }
     
     ParameterConfigPopup {
-        offset-y: 50%;
-        margin-top: -15;
+    }
+    
+    BuildProgressPopup {
     }
     """
     
@@ -254,15 +257,18 @@ class PaygenApp(App):
         # Create popup widget
         popup = ParameterConfigPopup(recipe=self.selected_recipe, config=self.config)
         
-        # Calculate center position before mounting
+        # Calculate center position
+        popup_width = 70 + 4  # width + thick border
+        popup_height = 30  # estimate for auto-height popup
         screen_width = self.size.width
-        popup_width = 80 + 4  # 80 + thick border (2 on each side)
+        screen_height = self.size.height
+        
         left_offset = (screen_width - popup_width) // 2
+        top_offset = (screen_height - popup_height) // 2
         
-        # Set position before mounting
-        popup.styles.offset = (left_offset, "50%")
+        popup.styles.offset = (left_offset, top_offset)
         
-        # Now mount (on_mount will handle focusing)
+        # Mount popup
         self.mount(popup)
     
     def on_parameter_config_popup_generate_requested(self, message: ParameterConfigPopup.GenerateRequested) -> None:
@@ -274,8 +280,100 @@ class PaygenApp(App):
         if popup:
             popup.remove()
         
-        # TODO: Actually generate the payload here
-        self.notify(f"Generating payload with parameters: {message.params}", title="Success")
+        # Start build process
+        self._start_build(message.params)
+    
+    def _start_build(self, params: dict) -> None:
+        """
+        Start the payload build process.
+        
+        Args:
+            params: Build parameters from user
+        """
+        if not self.selected_recipe:
+            return
+        
+        # Create build progress popup
+        progress_popup = BuildProgressPopup(
+            recipe_name=self.selected_recipe.name,
+            show_debug=self.config.show_build_debug
+        )
+        
+        # Calculate center position
+        popup_width = 70 + 4  # width + thick border
+        popup_height = 30 + 4  # height + thick border
+        screen_width = self.size.width
+        screen_height = self.size.height
+        
+        left_offset = (screen_width - popup_width) // 2
+        top_offset = (screen_height - popup_height) // 2
+        
+        progress_popup.styles.offset = (left_offset, top_offset)
+        
+        # Mount popup
+        self.mount(progress_popup)
+        
+        # Create payload builder
+        builder = PayloadBuilder(self.config)
+        
+        # Set progress callback to update popup
+        def on_progress(step):
+            self.call_from_thread(progress_popup.update_step, step)
+        
+        builder.set_progress_callback(on_progress)
+        
+        # Run build in background
+        recipe_dict = self.selected_recipe.to_dict()
+        
+        def build_task():
+            """Worker function for build process"""
+            # Run build (this is blocking but runs in a thread)
+            success, output_file, steps = builder.build(recipe_dict, params)
+            
+            # Render launch instructions with build variables
+            launch_instructions = recipe_dict.get('launch_instructions', '')
+            if launch_instructions and success:
+                from jinja2 import Template
+                # Get all variables used in the build
+                all_vars = params.copy()
+                all_vars['output_file'] = output_file
+                # Render the launch instructions
+                try:
+                    template = Template(launch_instructions)
+                    launch_instructions = template.render(**all_vars)
+                except Exception as e:
+                    launch_instructions = f"Error rendering launch instructions: {e}\n\n{launch_instructions}"
+            
+            # Update popup with completion status (call from thread)
+            self.call_from_thread(
+                progress_popup.set_complete,
+                success,
+                output_file,
+                launch_instructions
+            )
+            
+            return success, output_file
+        
+        # Run the task in a thread worker
+        self.run_worker(build_task, thread=True, exclusive=False)
+    
+    def on_build_progress_popup_build_complete(
+        self,
+        message: BuildProgressPopup.BuildComplete
+    ) -> None:
+        """Handle build completion from progress popup."""
+        if message.success:
+            self.notify(
+                f"Payload generated: {message.output_file}",
+                title="Build Success",
+                severity="information"
+            )
+        else:
+            self.notify(
+                "Build failed. See popup for details.",
+                title="Build Failed",
+                severity="error"
+            )
     
     def action_quit(self) -> None:
         """Quit the application."""

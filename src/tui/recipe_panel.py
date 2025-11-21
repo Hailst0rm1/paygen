@@ -165,6 +165,13 @@ class RecipePanel(VerticalScroll):
                 compiler = compile_info.get('compiler', 'unknown')
                 content.append(f"[bold {MOCHA['lavender']}]Compiler:[/] [{MOCHA['green']}]{compiler}[/{MOCHA['green']}]")
         
+        # Launch instructions
+        if recipe.launch_instructions:
+            content.append("")
+            content.append(f"[bold {MOCHA['lavender']}]Launch Instructions:[/]")
+            for line in recipe.launch_instructions.strip().split('\n'):
+                content.append(f"  [{MOCHA['subtext0']}]{line}[/{MOCHA['subtext0']}]")
+        
         # Join and update
         display_text = "\n".join(content)
         content_widget = self.query_one("#recipe-content", Static)

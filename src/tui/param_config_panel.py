@@ -25,9 +25,9 @@ class ParameterConfigPopup(Widget):
     
     DEFAULT_CSS = """
     ParameterConfigPopup {
-        width: 80;
+        width: 70;
         height: auto;
-        max-height: 90%;
+        max-height: 80%;
         border: thick """ + MOCHA['blue'] + """;
         background: """ + MOCHA['base'] + """;
         layer: overlay;
@@ -37,23 +37,23 @@ class ParameterConfigPopup(Widget):
         color: """ + MOCHA['mauve'] + """;
         text-style: bold;
         background: #1e1e2e;
-        padding: 1;
+        padding: 0 1;
         text-align: center;
         dock: top;
     }
     
     ParameterConfigPopup #params-scroll {
         height: auto;
-        max-height: 30;
+        max-height: 25;
         border: none;
         background: #1e1e2e;
-        padding: 1;
+        padding: 0 1;
     }
     
     ParameterConfigPopup .param-label {
         color: """ + MOCHA['text'] + """;
         padding: 0 1;
-        margin-top: 1;
+        margin-top: 0;
     }
     
     ParameterConfigPopup .param-required {
@@ -99,15 +99,15 @@ class ParameterConfigPopup(Widget):
     ParameterConfigPopup .button-container {
         height: auto;
         align: center middle;
-        padding: 1;
-        margin-top: 1;
+        padding: 0 1;
+        margin-top: 0;
         dock: bottom;
     }
     
     ParameterConfigPopup Button {
-        margin: 0 2;
-        min-width: 15;
-        height: 3;
+        margin: 0 1;
+        min-width: 12;
+        height: 1;
         text-style: bold;
         border: none !important;
         border-top: none !important;

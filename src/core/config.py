@@ -15,7 +15,9 @@ class ConfigManager:
         'preprocessors_dir': '~/Documents/Tools/paygen/preprocessors',
         'output_dir': '~/Documents/Tools/paygen/output',
         'theme': 'catppuccin_mocha',
-        'transparent_background': True
+        'transparent_background': True,
+        'keep_source_files': False,
+        'show_build_debug': False
     }
     
     def __init__(self, config_path: Optional[str] = None):
@@ -135,6 +137,16 @@ class ConfigManager:
     def transparent_background(self) -> bool:
         """Get transparent background setting"""
         return self.get('transparent_background', True)
+    
+    @property
+    def keep_source_files(self) -> bool:
+        """Get keep source files setting"""
+        return self.get('keep_source_files', False)
+    
+    @property
+    def show_build_debug(self) -> bool:
+        """Get show build debug setting"""
+        return self.get('show_build_debug', False)
 
 
 # Global config instance

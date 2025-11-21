@@ -3,7 +3,7 @@
 import yaml
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 
 from .validator import RecipeValidator, ValidationError
 from .config import get_config
@@ -21,6 +21,7 @@ class Recipe:
     mitre_tactic: Optional[str] = None
     mitre_technique: Optional[str] = None
     artifacts: List[str] = field(default_factory=list)
+    launch_instructions: Optional[str] = None
     
     # Recipe configuration
     parameters: List[Dict[str, Any]] = field(default_factory=list)
@@ -67,6 +68,18 @@ class Recipe:
     def get_optional_parameters(self) -> List[Dict[str, Any]]:
         """Get list of optional parameters"""
         return [p for p in self.parameters if not p.get('required', False)]
+    
+    def to_dict(self) -> dict:
+        """Convert recipe to dictionary
+        
+        Returns:
+            Dictionary representation of recipe
+        """
+        data = asdict(self)
+        # Remove file_path as it's not needed in dict form
+        if 'file_path' in data:
+            del data['file_path']
+        return data
 
 
 class RecipeLoader:
@@ -145,6 +158,7 @@ class RecipeLoader:
                 mitre_tactic=mitre.get('tactic'),
                 mitre_technique=mitre.get('technique'),
                 artifacts=meta.get('artifacts', []),
+                launch_instructions=data.get('output', {}).get('launch_instructions'),
                 parameters=data.get('parameters', []),
                 preprocessing=data.get('preprocessing', []),
                 output=data.get('output', {}),
