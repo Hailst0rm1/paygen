@@ -937,7 +937,7 @@ COLORS = {
 
 **History UI:**
 
-- [x] Keybinding: Ctrl+H to open history popup
+- [x] Keybinding: Ctrl+H to open history popup (changed from Shift+H)
 - [x] History popup overlays main view (90 width, 80% height, centered)
 - [x] Display history entries (newest first):
   - [x] Date/time (formatted)
@@ -985,13 +985,36 @@ COLORS = {
 
 **Files Created:**
 
-- `src/core/history.py` - HistoryEntry and HistoryManager classes
+- `src/core/history.py` - HistoryEntry and HistoryManager classes (217 lines)
 - `src/tui/history_popup.py` - History popup widget (425+ lines)
 
 **Files Modified:**
 
-- `src/tui/app.py` - Added history initialization, save on build, action handlers, and Shift+H keybinding
+- `src/tui/app.py` - Added history initialization, save on build, action handlers, and Ctrl+H keybinding
 - `src/tui/param_config_panel.py` - Added prefill_params support for regeneration
+
+**UI/UX Improvements (Post-Phase 6):**
+
+- [x] Keybinding updates:
+  - [x] Changed q to Ctrl+Q (quit application)
+  - [x] Changed g to Ctrl+G (generate - now works from any panel)
+  - [x] Ctrl+H for history (updated from Shift+H)
+  - [x] Ctrl+F for code panel fullscreen toggle
+- [x] Code panel fullscreen feature:
+  - [x] Ctrl+F toggles fullscreen mode
+  - [x] Hides other panels when active
+  - [x] Code panel expands to 100% width
+  - [x] Esc to exit fullscreen
+  - [x] Maintains focus and scroll position
+- [x] Text display improvements:
+  - [x] Word wrap enabled in code preview (Syntax word_wrap=True)
+  - [x] Long recipe names truncated with ellipsis (max 35 chars)
+  - [x] Text-overflow handling for tree labels
+  - [x] Improved readability for long lines
+- [x] Help screen updates:
+  - [x] Updated with all new keybindings (Ctrl modifiers)
+  - [x] Added fullscreen and history shortcuts
+  - [x] Clarified navigation behavior (auto-update on highlight)
 
 **Notes:**
 
@@ -999,6 +1022,8 @@ COLORS = {
 - Consistent UI/UX with rest of application
 - Background panels remain visible behind popup
 - Fallback messages when clipboard/file manager not available
+- Global keybindings use Ctrl modifiers to avoid conflicts
+- Generate action (Ctrl+G) works from any panel for convenience
 
 ### Phase 7: Recipe Development (Together)
 
