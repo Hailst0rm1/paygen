@@ -97,8 +97,13 @@ class CategoryPanel(ScrollableContainer):
                 categories[category] = []
             categories[category].append(recipe)
         
-        # Sort categories alphabetically
-        for category in sorted(categories.keys()):
+        # Sort categories alphabetically, but always put "Misc" at the end
+        category_names = sorted(categories.keys())
+        if "Misc" in category_names:
+            category_names.remove("Misc")
+            category_names.append("Misc")
+        
+        for category in category_names:
             # Add category node
             category_recipes = categories[category]
             category_node = self.recipe_tree.root.add(

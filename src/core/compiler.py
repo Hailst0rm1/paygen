@@ -21,18 +21,17 @@ class Compiler:
     def compile(
         self,
         source_file: Path,
-        compiler: str,
-        flags: List[str],
+        command: str,
         variables: Dict[str, any] = None
     ) -> Tuple[bool, str, str]:
         """
-        Compile source code to binary
+        Compile source code to binary using a command string
         
         Args:
             source_file: Path to source code file
-            compiler: Compiler command (e.g., 'mcs', 'gcc')
-            flags: List of compiler flags (may contain Jinja2 templates)
-            variables: Variables for Jinja2 template rendering in flags
+            command: Full compilation command (may contain Jinja2 templates)
+                    Use {{ source_file }} to reference the source file path
+            variables: Variables for Jinja2 template rendering
             
         Returns:
             Tuple of (success: bool, stdout: str, stderr: str)
@@ -40,20 +39,18 @@ class Compiler:
         if variables is None:
             variables = {}
         
-        # Render compiler flags with Jinja2
-        rendered_flags = []
-        for flag in flags:
-            template = Template(flag)
-            rendered_flag = template.render(**variables)
-            rendered_flags.append(rendered_flag)
+        # Add source_file to variables
+        variables['source_file'] = str(source_file)
         
-        # Build command
-        command = [compiler] + rendered_flags + [str(source_file)]
+        # Render command with Jinja2
+        template = Template(command)
+        rendered_command = template.render(**variables)
         
         try:
             # Execute compilation
             result = subprocess.run(
-                command,
+                rendered_command,
+                shell=True,
                 capture_output=True,
                 text=True,
                 timeout=300  # 5 minute timeout
@@ -64,8 +61,6 @@ class Compiler:
             
         except subprocess.TimeoutExpired:
             return False, "", "Compilation timed out after 5 minutes"
-        except FileNotFoundError:
-            return False, "", f"Compiler '{compiler}' not found. Please install it."
         except Exception as e:
             return False, "", f"Compilation error: {str(e)}"
     

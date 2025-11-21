@@ -1025,22 +1025,69 @@ COLORS = {
 - Global keybindings use Ctrl modifiers to avoid conflicts
 - Generate action (Ctrl+G) works from any panel for convenience
 
-### Phase 7: Recipe Development (Together)
+### Phase 7: Recipe Development (Together) - SKIPPED
 
-- [ ] Create process injection recipe (C#)
-- [ ] Create process injection recipe (PowerShell)
-- [ ] Create msfvenom shellcode recipe
-- [ ] Create additional recipes based on user needs
-- [ ] Test all recipes end-to-end
+User requested to skip this phase and move directly to Phase 8 tooling.
 
-### Phase 8: Polish & Distribution
+### Phase 8: Recipe Management & Tooling - REMOVED
 
-- [ ] Add comprehensive error handling
-- [ ] Improve user feedback and progress indicators
-- [ ] Create README with usage instructions
-- [ ] Add .gitignore for output directory
-- [ ] Set up Nix packaging (optional)
-- [ ] Create demo/tutorial
+Interactive recipe creator was implemented but later removed due to complexity.
+Users should manually create recipe YAML files following the documented schema.
+
+**Recipe Schema Changes:**
+
+- [x] Updated compilation configuration to use single `command` field
+  - Changed from: `compiler` + `flags` (array)
+  - Changed to: `command` (string with Jinja2 support)
+  - Example: `command: "mcs -out:{{ output_path }}/{{ output_file }} -platform:x64 -unsafe {{ source_file }}"`
+  - The `{{ source_file }}` variable is automatically provided to reference the rendered template
+  - All other parameters and variables available for templating
+- [x] Updated compiler.py to accept command string instead of compiler + flags
+- [x] Updated payload_builder.py to use new compiler interface
+- [x] Updated existing recipes to use new format:
+  - xor_shellcode_injection_example.yaml
+  - aes_process_injection_example.yaml
+
+**Benefits:**
+- Simpler recipe format (one field instead of two)
+- More flexible (can use any compilation command structure)
+- Still supports Jinja2 templating for dynamic values
+- Easier to maintain and understand
+
+### Phase 9: Polish & Distribution ✅ COMPLETE
+
+- [x] Add comprehensive error handling
+  - Error handling already comprehensive with:
+    - ValidationError exceptions in validator.py
+    - Clear error messages in TUI (red text, error icons)
+    - Build step failure tracking with detailed output
+    - Timeout handling for long operations
+- [x] Improve user feedback and progress indicators
+  - Build progress popup with:
+    - Real-time step tracking with spinner animation
+    - Color-coded status indicators (⏳ pending, 🔄 running, ✅ success, ❌ failed)
+    - File size display on completion
+    - Launch instructions rendering
+  - Parameter validation with inline error messages
+  - History tracking with success/failure states
+- [x] Create README with usage instructions
+  - Comprehensive README.md created with:
+    - Installation instructions
+    - Quick start guide
+    - Complete recipe format documentation
+    - Keybinding reference
+    - Creating custom recipes/preprocessors
+    - Example workflows
+    - Troubleshooting section
+    - Security considerations
+- [x] Enhance .gitignore
+  - Added detailed comments explaining:
+    - output/ directory (never commit payloads)
+    - config.yaml (contains user paths)
+    - history.json (build history with security info)
+- [x] Copy files to NixOS home-manager
+  - Successfully copied to: ~/.nixos/users/hailst0rm/homeManagerModules/cyber/files/paygen/
+  - Directories copied: recipes/, preprocessors/, payloads/
 
 ---
 

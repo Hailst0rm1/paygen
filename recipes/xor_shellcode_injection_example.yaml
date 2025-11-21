@@ -93,11 +93,7 @@ output:
 
   compile:
     enabled: true
-    compiler: "mcs"
-    flags:
-      - "-out:{{ output_path }}/{{ output_file }}"
-      - "-platform:x64"
-      - "-unsafe"
+    command: "mcs -out:{{ output_path }}/{{ output_file }} -platform:x64 -unsafe {{ source_file }}"
 
   launch_instructions: |
     # Start Metasploit listener

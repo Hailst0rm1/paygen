@@ -33,11 +33,16 @@ ENV/
 *~
 
 # Paygen specific
-output/
-*.exe
-*.dll
-*.bin
-*.so
+output/                 # Generated payloads - NEVER commit
+*.exe                   # Compiled binaries
+*.dll                   # DLL files
+*.bin                   # Binary files
+*.so                    # Shared objects
+
+# User data (stored in ~/.config/paygen/)
+# Note: These shouldn't be in repo anyway, but listed for clarity
+config.yaml             # User-specific configuration
+history.json            # Build history with parameters
 
 # OS
 .DS_Store

@@ -3,3 +3,4 @@ PyYAML>=6.0
 Jinja2>=3.1.0
 pycryptodome>=3.19.0
 rich>=13.0.0
+pytest>=7.0.0

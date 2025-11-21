@@ -14,6 +14,7 @@ pkgs.mkShell {
     python311Packages.textual
     python311Packages.rich
     python311Packages.pycryptodome
+    python311Packages.pytest
 
     # Development tools
     git
@@ -40,13 +41,13 @@ pkgs.mkShell {
     echo ""
     echo "Installed packages:"
     echo "  - PyYAML, Jinja2, Textual, Rich, PyCryptodome"
+    echo "  - pytest (testing framework)"
     echo ""
     echo "Payload tools:"
     echo "  - Metasploit Framework (msfvenom)"
     echo "  - Mono C# compiler (mcs)"
     echo "  - GCC & Make"
     echo ""
-    echo "Ready to develop! Phase 2 complete ✅"
-    echo "Next: Phase 3 (TUI Development)"
+    echo "Ready to develop! Run 'pytest' to run tests."
   '';
 }

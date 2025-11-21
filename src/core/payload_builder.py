@@ -319,13 +319,16 @@ class PayloadBuilder:
                 compile_step.status = "running"
                 self._update_step(compile_step)
                 
-                compiler = compile_config.get('compiler')
-                flags = compile_config.get('flags', [])
+                command = compile_config.get('command')
+                if not command:
+                    compile_step.status = "failed"
+                    compile_step.error = "No compilation command specified"
+                    self._update_step(compile_step)
+                    return False, "", self.steps
                 
                 success, stdout, stderr = self.compiler.compile(
                     source_file,
-                    compiler,
-                    flags,
+                    command,
                     self.variables
                 )
                 
@@ -344,8 +347,7 @@ class PayloadBuilder:
                 if not self.config.keep_source_files:
                     source_file.unlink()
                 
-                # The compiled output file path (from compiler flags)
-                # Flags should include -out:path or similar
+                # The compiled output file path (from output_path and output_file parameters)
                 final_output = output_path / output_file
                 
                 # Verify the output file exists

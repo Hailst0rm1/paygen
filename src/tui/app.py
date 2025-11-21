@@ -460,6 +460,24 @@ class PaygenApp(App):
         # Mount popup
         self.mount(popup)
     
+    def _reload_recipes(self) -> None:
+        """Reload recipes from disk"""
+        try:
+            from ..core.recipe_loader import RecipeLoader
+            loader = RecipeLoader(self.config)
+            self.recipes = loader.load_all_recipes()
+            
+            # Update category panel
+            category_panel = self.query_one("#category-panel", CategoryPanel)
+            category_panel.recipes = self.recipes
+            category_panel.populate_tree()
+            
+            # Update recipe count
+            self.update_recipe_count()
+            
+        except Exception as e:
+            self.notify(f"Error reloading recipes: {e}", severity="error")
+    
     def on_history_popup_history_action(self, message: HistoryPopup.HistoryAction) -> None:
         """Handle history actions"""
         action = message.action
