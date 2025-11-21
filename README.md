@@ -3,7 +3,7 @@
 > Modern TUI framework for offensive payload generation
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![License](https://img.shields.io/badge/license-Private-red.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Tests](https://img.shields.io/badge/tests-37%20passing-success.svg)
 
 Paygen is a terminal-based payload generation framework for security researchers and penetration testers. It provides an intuitive interface for creating and customizing offensive payloads with built-in MITRE ATT&CK mappings, effectiveness ratings, and advanced preprocessing pipelines.
@@ -402,9 +402,9 @@ pytest tests/ -v
 
 ## License
 
-Private repository - All rights reserved.
+MIT License - See [LICENSE](LICENSE) file for details.
 
-For authorized users only. Do not distribute.
+Free and open source for security research and educational purposes.
 
 ---
 
@@ -419,4 +419,4 @@ For authorized users only. Do not distribute.
 **Remember**: With great power comes great responsibility. Use ethically. 🛡️
 
 **Author**: Hailst0rm  
-**Repository**: https://github.com/Hailst0rm1/paygen (Private)
+**Repository**: https://github.com/Hailst0rm1/paygen
