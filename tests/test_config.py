@@ -81,6 +81,22 @@ class TestConfigManager:
         # Should have a value (True or False)
         show_debug = config.show_build_debug
         assert isinstance(show_debug, bool)
+    
+    def test_remove_comments_setting(self):
+        """Test remove_comments configuration."""
+        config = ConfigManager()
+        
+        # Should have a value (True or False)
+        remove_comments = config.remove_comments
+        assert isinstance(remove_comments, bool)
+    
+    def test_strip_binaries_setting(self):
+        """Test strip_binaries configuration."""
+        config = ConfigManager()
+        
+        # Should have a value (True or False)
+        strip_binaries = config.strip_binaries
+        assert isinstance(strip_binaries, bool)
 
 
 if __name__ == "__main__":

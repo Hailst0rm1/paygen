@@ -17,7 +17,9 @@ class ConfigManager:
         'theme': 'catppuccin_mocha',
         'transparent_background': True,
         'keep_source_files': False,
-        'show_build_debug': False
+        'show_build_debug': False,
+        'remove_comments': True,
+        'strip_binaries': True
     }
     
     def __init__(self, config_path: Optional[str] = None):
@@ -147,6 +149,16 @@ class ConfigManager:
     def show_build_debug(self) -> bool:
         """Get show build debug setting"""
         return self.get('show_build_debug', False)
+    
+    @property
+    def remove_comments(self) -> bool:
+        """Get remove comments setting"""
+        return self.get('remove_comments', True)
+    
+    @property
+    def strip_binaries(self) -> bool:
+        """Get strip binaries setting"""
+        return self.get('strip_binaries', True)
 
 
 # Global config instance

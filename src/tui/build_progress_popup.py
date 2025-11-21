@@ -295,6 +295,10 @@ class BuildProgressPopup(Widget):
                 f"[{MOCHA['text']}]{launch_instructions}[/{MOCHA['text']}]"
             )
             output_widget.update(new_content)
+            
+            # Auto-scroll to bottom to show launch instructions
+            scroll_view = self.query_one("#output-container", VerticalScroll)
+            scroll_view.scroll_end(animate=False)
     
     def action_close(self) -> None:
         """Handle close action"""

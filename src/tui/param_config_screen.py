@@ -145,6 +145,10 @@ class ParameterConfigScreen(ModalScreen):
         self.validator = ParameterValidator()
         self.param_values = {}
         self.param_errors = {}
+        
+        # Build options with defaults from config
+        self.remove_comments = config.remove_comments if config else True
+        self.strip_binaries = config.strip_binaries if config else True
     
     def compose(self) -> ComposeResult:
         """Compose the configuration screen."""
@@ -157,8 +161,33 @@ class ParameterConfigScreen(ModalScreen):
                     # Compose parameter widgets inline
                     for widget in self._create_parameter_widgets(param):
                         yield widget
+                
+            # Add build options section
+            yield Static("")  # Spacer
+            yield Static("")  # Extra spacer
+            yield Static("[bold]Build Options[/bold]", classes="param-label", markup=True)
+            yield Static("")  # Spacer below title
             
-            with Horizontal(classes="button-container"):
+            # Only show "remove comments" option for template-based recipes
+            output_type = self.recipe.output.get('type', 'template')
+            if output_type == 'template':
+                yield Static("Strip comments and empty lines before compilation", classes="param-description")
+                yield Checkbox(
+                    "Remove comments from source code",
+                    value=self.remove_comments,
+                    id="build-remove-comments"
+                )
+                yield Static("")  # Spacer
+            
+            yield Static("Remove debug symbols and metadata from compiled binaries", classes="param-description")
+            yield Checkbox(
+                "Strip binary metadata",
+                value=self.strip_binaries,
+                id="build-strip-binaries"
+            )
+        
+        yield Static("")  # Spacer before buttons
+        with Horizontal(classes="button-container"):
                 yield Button("Generate", variant="primary", id="generate-btn")
                 yield Button("Cancel", variant="default", id="cancel-btn")
     
@@ -318,11 +347,21 @@ class ParameterConfigScreen(ModalScreen):
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         """Handle checkbox changes."""
         widget_id = event.checkbox.id
-        if not widget_id or not widget_id.startswith("param-"):
+        if not widget_id:
             return
         
-        param_name = widget_id[6:]
-        self.param_values[param_name] = event.value
+        # Handle build options
+        if widget_id == "build-remove-comments":
+            self.remove_comments = event.value
+            return
+        elif widget_id == "build-strip-binaries":
+            self.strip_binaries = event.value
+            return
+        
+        # Handle parameter checkboxes
+        if widget_id.startswith("param-"):
+            param_name = widget_id[6:]
+            self.param_values[param_name] = event.value
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
@@ -347,8 +386,15 @@ class ParameterConfigScreen(ModalScreen):
                 self.notify("Please fill in all required fields", severity="error")
                 return
         
-        # All validation passed, return parameters
-        self.dismiss(self.param_values)
+        # All validation passed, return parameters and build options
+        result = {
+            'parameters': self.param_values,
+            'build_options': {
+                'remove_comments': self.remove_comments,
+                'strip_binaries': self.strip_binaries
+            }
+        }
+        self.dismiss(result)
     
     def action_cancel(self) -> None:
         """Cancel parameter configuration."""

@@ -166,6 +166,8 @@ output_dir: "~/Documents/Tools/paygen/output"
 
 keep_source_files: false
 show_build_debug: false
+remove_comments: true      # Strip comments from source before compilation
+strip_binaries: true       # Remove debug symbols from compiled binaries
 ```
 
 ---

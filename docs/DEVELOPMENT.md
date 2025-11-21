@@ -105,6 +105,8 @@ transparent_background: true
 # Build preferences
 keep_source_files: false # If true, save rendered source code alongside compiled binaries
 show_build_debug: false # If true, show real-time command output in build popup
+remove_comments: true # If true, strip comments from source code before compilation
+strip_binaries: true # If true, remove debug symbols and metadata from compiled binaries
 ```
 
 ### Configuration Initialization

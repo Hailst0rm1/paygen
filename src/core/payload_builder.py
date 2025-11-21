@@ -46,18 +46,24 @@ class BuildStep:
 class PayloadBuilder:
     """Orchestrates payload generation from recipes"""
     
-    def __init__(self, config: ConfigManager):
+    def __init__(self, config: ConfigManager, build_options: dict = None):
         """
         Initialize payload builder
         
         Args:
             config: ConfigManager instance
+            build_options: Optional dict with remove_comments and strip_binaries flags
         """
         self.config = config
         self.compiler = Compiler()
         self.variables = {}
         self.steps: List[BuildStep] = []
         self.progress_callback: Optional[Callable] = None
+        
+        # Build options - override config defaults if provided
+        self.build_options = build_options or {}
+        self.remove_comments = self.build_options.get('remove_comments', config.remove_comments)
+        self.strip_binaries = self.build_options.get('strip_binaries', config.strip_binaries)
     
     def set_progress_callback(self, callback: Callable[[BuildStep], None]):
         """
@@ -295,6 +301,10 @@ class PayloadBuilder:
             template = JINJA_ENV.from_string(template_content)
             rendered_code = template.render(**self.variables)
             
+            # Remove comments if configured
+            if self.remove_comments:
+                rendered_code = self._remove_comments(rendered_code, full_template_path.suffix)
+            
             # Determine output paths
             output_path = Path(self.variables.get('output_path', self.config.output_dir))
             output_file = self.variables.get('output_file', 'payload')
@@ -342,6 +352,25 @@ class PayloadBuilder:
                 compile_step.status = "success"
                 compile_step.output = stdout
                 self._update_step(compile_step)
+                
+                # Strip binaries if configured
+                if self.strip_binaries:
+                    # The compiled output file path (from output_path and output_file parameters)
+                    final_output = output_path / output_file
+                    if final_output.exists():
+                        strip_step = BuildStep("Stripping binary", "strip")
+                        self.steps.append(strip_step)
+                        strip_step.status = "running"
+                        self._update_step(strip_step)
+                        
+                        success = self._strip_binary(final_output)
+                        if success:
+                            strip_step.status = "success"
+                            strip_step.output = f"Stripped metadata from {final_output.name}"
+                        else:
+                            strip_step.status = "warning"
+                            strip_step.output = "Strip command not available or failed"
+                        self._update_step(strip_step)
                 
                 # Remove source file if keep_source_files is False
                 if not self.config.keep_source_files:
@@ -414,6 +443,22 @@ class PayloadBuilder:
                 output_file = self.variables.get('output_file', 'payload')
                 full_output = output_path / output_file
                 
+                # Strip binaries if configured and file exists
+                if self.strip_binaries and full_output.exists():
+                    strip_step = BuildStep("Stripping binary", "strip")
+                    self.steps.append(strip_step)
+                    strip_step.status = "running"
+                    self._update_step(strip_step)
+                    
+                    success = self._strip_binary(full_output)
+                    if success:
+                        strip_step.status = "success"
+                        strip_step.output = f"Stripped metadata from {full_output.name}"
+                    else:
+                        strip_step.status = "warning"
+                        strip_step.output = "Strip command not available or failed"
+                    self._update_step(strip_step)
+                
                 return True, str(full_output), self.steps
             else:
                 step.status = "failed"
@@ -432,3 +477,63 @@ class PayloadBuilder:
             step.error = str(e)
             self._update_step(step)
             return False, "", self.steps
+    
+    def _remove_comments(self, code: str, file_extension: str) -> str:
+        """Remove comments from source code based on file type
+        
+        Args:
+            code: Source code string
+            file_extension: File extension (e.g., '.cs', '.c', '.py')
+            
+        Returns:
+            Code with comments removed
+        """
+        import re
+        
+        # C-style comments (C, C++, C#, Java, JavaScript)
+        if file_extension in ['.c', '.cpp', '.cs', '.h', '.hpp', '.java', '.js']:
+            # Remove single-line comments
+            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
+            # Remove multi-line comments
+            code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+        
+        # Python comments
+        elif file_extension in ['.py']:
+            # Remove single-line comments (but not in strings)
+            code = re.sub(r'#.*?$', '', code, flags=re.MULTILINE)
+        
+        # PowerShell comments
+        elif file_extension in ['.ps1']:
+            # Remove single-line comments
+            code = re.sub(r'#.*?$', '', code, flags=re.MULTILINE)
+            # Remove multi-line comments
+            code = re.sub(r'<#.*?#>', '', code, flags=re.DOTALL)
+        
+        # Remove excessive blank lines (more than 2 consecutive)
+        code = re.sub(r'\n{3,}', '\n\n', code)
+        
+        return code
+    
+    def _strip_binary(self, binary_path: Path) -> bool:
+        """Strip debug symbols and metadata from compiled binary
+        
+        Args:
+            binary_path: Path to binary file
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Use strip command if available (Linux/Unix)
+            result = subprocess.run(
+                ['strip', '--strip-all', str(binary_path)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            return result.returncode == 0
+        except FileNotFoundError:
+            # strip command not available
+            return False
+        except Exception:
+            return False

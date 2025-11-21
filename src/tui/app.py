@@ -316,18 +316,31 @@ class PaygenApp(App):
         if popup:
             popup.remove()
         
-        # Start build process
-        self._start_build(message.params)
+        # Extract parameters and build options
+        result = message.params
+        if isinstance(result, dict) and 'parameters' in result:
+            params = result['parameters']
+            build_options = result.get('build_options', {})
+        else:
+            # Backward compatibility - if just params dict
+            params = result
+            build_options = {}
+        
+        # Start build process with build options
+        self._start_build(params, build_options)
     
-    def _start_build(self, params: dict) -> None:
+    def _start_build(self, params: dict, build_options: dict = None) -> None:
         """
         Start the payload build process.
         
         Args:
             params: Build parameters from user
+            build_options: Optional build options (remove_comments, strip_binaries)
         """
         if not self.selected_recipe:
             return
+        
+        build_options = build_options or {}
         
         # Create build progress popup
         progress_popup = BuildProgressPopup(
@@ -349,8 +362,8 @@ class PaygenApp(App):
         # Mount popup
         self.mount(progress_popup)
         
-        # Create payload builder
-        builder = PayloadBuilder(self.config)
+        # Create payload builder with build options
+        builder = PayloadBuilder(self.config, build_options=build_options)
         
         # Set progress callback to update popup
         def on_progress(step):
