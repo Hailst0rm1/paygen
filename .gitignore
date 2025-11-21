@@ -25,6 +25,9 @@ venv/
 env/
 ENV/
 
+# Nix
+.direnv/
+
 # IDE
 .vscode/
 .idea/
