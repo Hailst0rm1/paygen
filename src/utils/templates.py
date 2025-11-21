@@ -20,7 +20,7 @@ class TemplateRenderer:
         
         # Set up Jinja2 environment for file-based templates
         self.env = Environment(
-            loader=FileSystemLoader(str(self.config.payloads_dir)),
+            loader=FileSystemLoader(str(self.config.templates_dir)),
             trim_blocks=True,
             lstrip_blocks=True,
             keep_trailing_newline=True
@@ -30,7 +30,7 @@ class TemplateRenderer:
         """Render a template file with given context
         
         Args:
-            template_path: Path to template file (relative to payloads_dir)
+            template_path: Path to template file (relative to templates_dir)
             context: Dictionary of variables to pass to template
             
         Returns:
@@ -107,7 +107,7 @@ class TemplateRenderer:
             # Add default config values
             context['config'] = {
                 'output_dir': str(self.config.output_dir),
-                'payloads_dir': str(self.config.payloads_dir),
+                'templates_dir': str(self.config.templates_dir),
                 'preprocessors_dir': str(self.config.preprocessors_dir),
             }
         

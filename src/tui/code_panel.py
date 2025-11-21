@@ -121,9 +121,9 @@ class CodePanel(VerticalScroll):
             # Show template source code
             template_path = recipe.output.get('template')
             if template_path and self.config:
-                # Template path should be relative to payloads_dir
+                # Template path should be relative to templates_dir
                 # e.g., "process_injection/aes_injector.cs"
-                full_path = Path(self.config.payloads_dir) / template_path
+                full_path = Path(self.config.templates_dir) / template_path
                 
                 if full_path.exists():
                     try:

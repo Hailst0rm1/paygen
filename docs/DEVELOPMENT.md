@@ -94,7 +94,7 @@ User configuration is stored at: `~/.config/paygen/config.yaml`
 
 # Directory paths (can be relative to config location or absolute)
 recipes_dir: "~/Documents/Tools/paygen/recipes"
-payloads_dir: "~/Documents/Tools/paygen/payloads"
+templates_dir: "~/Documents/Tools/paygen/templates"
 preprocessors_dir: "~/Documents/Tools/paygen/preprocessors"
 output_dir: "~/Documents/Tools/paygen/output"
 

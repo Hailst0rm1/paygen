@@ -11,7 +11,7 @@ class ConfigManager:
     
     DEFAULT_CONFIG = {
         'recipes_dir': '~/Documents/Tools/paygen/recipes',
-        'payloads_dir': '~/Documents/Tools/paygen/payloads',
+        'templates_dir': '~/Documents/Tools/paygen/templates',
         'preprocessors_dir': '~/Documents/Tools/paygen/preprocessors',
         'output_dir': '~/Documents/Tools/paygen/output',
         'theme': 'catppuccin_mocha',
@@ -60,7 +60,7 @@ class ConfigManager:
     
     def _validate_paths(self) -> None:
         """Validate and expand paths in configuration"""
-        path_keys = ['recipes_dir', 'payloads_dir', 'preprocessors_dir', 'output_dir']
+        path_keys = ['recipes_dir', 'templates_dir', 'preprocessors_dir', 'output_dir']
         
         for key in path_keys:
             if key in self.config:
@@ -114,9 +114,9 @@ class ConfigManager:
         return self.get_path('recipes_dir')
     
     @property
-    def payloads_dir(self) -> Path:
-        """Get payloads directory path"""
-        return self.get_path('payloads_dir')
+    def templates_dir(self) -> Path:
+        """Get templates directory path"""
+        return self.get_path('templates_dir')
     
     @property
     def preprocessors_dir(self) -> Path:

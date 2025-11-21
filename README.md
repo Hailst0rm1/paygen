@@ -112,7 +112,7 @@ preprocessing:
 
 output:
   type: "template"  # or "command"
-  template: "payloads/injector.cs"
+  template: "injector.cs"
   compile:
     enabled: true
     command: "mcs -out:{{ output_path }}/{{ output_file }} {{ source_file }}"
@@ -145,7 +145,7 @@ paygen/
 │   ├── tui/            # TUI panels and widgets
 │   └── utils/          # Utilities
 ├── recipes/            # Recipe YAML files (tracked in git)
-├── payloads/           # Source templates (tracked in git)
+├── templates/          # Source templates (tracked in git)
 ├── preprocessors/      # Processing scripts (tracked in git)
 ├── output/             # Generated payloads (gitignored)
 ├── tests/              # Test suite (37 tests)
@@ -160,7 +160,7 @@ Located at `~/.config/paygen/config.yaml`:
 
 ```yaml
 recipes_dir: "~/Documents/Tools/paygen/recipes"
-payloads_dir: "~/Documents/Tools/paygen/payloads"
+templates_dir: "~/Documents/Tools/paygen/templates"
 preprocessors_dir: "~/Documents/Tools/paygen/preprocessors"
 output_dir: "~/Documents/Tools/paygen/output"
 
@@ -227,10 +227,10 @@ Current test coverage: 37 tests passing
 
 ### Template-Based Recipe
 
-1. Create template in `payloads/`:
+1. Create template in `templates/`:
 
 ```csharp
-// payloads/my_payload/injector.cs
+// templates/my_payload/injector.cs
 using System;
 
 class MyPayload {

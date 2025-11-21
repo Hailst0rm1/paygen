@@ -23,7 +23,7 @@ class TestConfigManager:
         config = ConfigManager()
         
         assert config.recipes_dir is not None
-        assert config.payloads_dir is not None
+        assert config.templates_dir is not None
         assert config.preprocessors_dir is not None
         assert config.output_dir is not None
     
@@ -32,7 +32,7 @@ class TestConfigManager:
         config = ConfigManager()
         
         assert isinstance(config.recipes_dir, Path)
-        assert isinstance(config.payloads_dir, Path)
+        assert isinstance(config.templates_dir, Path)
         assert isinstance(config.preprocessors_dir, Path)
         assert isinstance(config.output_dir, Path)
     
@@ -42,11 +42,11 @@ class TestConfigManager:
         assert config.recipes_dir.exists(), \
             f"Recipes directory should exist: {config.recipes_dir}"
     
-    def test_payloads_dir_exists(self):
-        """Test that payloads directory exists."""
+    def test_templates_dir_exists(self):
+        """Test that templates directory exists."""
         config = ConfigManager()
-        assert config.payloads_dir.exists(), \
-            f"Payloads directory should exist: {config.payloads_dir}"
+        assert config.templates_dir.exists(), \
+            f"Templates directory should exist: {config.templates_dir}"
     
     def test_preprocessors_dir_exists(self):
         """Test that preprocessors directory exists."""

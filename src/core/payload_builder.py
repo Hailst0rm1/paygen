@@ -91,7 +91,7 @@ class PayloadBuilder:
         self.variables['config'] = {
             'output_dir': str(self.config.output_dir),
             'recipes_dir': str(self.config.recipes_dir),
-            'payloads_dir': str(self.config.payloads_dir),
+            'templates_dir': str(self.config.templates_dir),
             'preprocessors_dir': str(self.config.preprocessors_dir)
         }
         
@@ -279,7 +279,7 @@ class PayloadBuilder:
         self._update_step(step)
         
         template_path = output_config.get('template', '')
-        full_template_path = self.config.payloads_dir / template_path
+        full_template_path = self.config.templates_dir / template_path
         
         if not full_template_path.exists():
             step.status = "failed"
