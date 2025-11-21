@@ -634,32 +634,30 @@ COLORS = {
 
 - `j`/`k`: Navigate down/up
 - `h`/`l` or `Tab`: Switch between panels (left/right)
-- `Enter`: Select/Activate
-- `Esc` or `Ctrl+c`: Go back/Cancel
-- `g`: Generate payload (from recipe detail view)
+- `Ctrl+G`: Generate payload (works from any panel)
+- `Ctrl+H`: View build history
 - `?`: Show help
-- `q`: Quit
+- `Ctrl+Q`: Quit
 
 **Left Panel (Categories & Recipes)**
 
-- `j`/`k`: Navigate categories or recipes down/up
-- `Enter` or `l`: Expand category or select recipe
-- `/`: Search recipes
+- `j`/`k` or `↑`/`↓`: Navigate categories or recipes
+- Navigation automatically updates recipe details (no Enter needed)
 - `gg`: Jump to top
 - `G`: Jump to bottom
 
 **Middle Panel (Recipe Metadata)**
 
 - `j`/`k`: Scroll down/up
-- `Enter`: Open parameter configuration
-- `v`: View full description
 - `gg`: Jump to top
 - `G`: Jump to bottom
 
 **Right Panel (Code View)**
 
 - `j`/`k`: Scroll down/up
-- `Ctrl+d`/`Ctrl+u`: Page down/up
+- `Ctrl+D`/`Ctrl+U`: Page down/up
+- `Ctrl+F`: Toggle fullscreen
+- `Esc`: Exit fullscreen
 - `gg`: Jump to top
 - `G`: Jump to bottom
 
@@ -939,7 +937,7 @@ COLORS = {
 
 **History UI:**
 
-- [x] Keybinding: Shift+H to open history popup
+- [x] Keybinding: Ctrl+H to open history popup
 - [x] History popup overlays main view (90 width, 80% height, centered)
 - [x] Display history entries (newest first):
   - [x] Date/time (formatted)

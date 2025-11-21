@@ -76,17 +76,19 @@ class HelpScreen(ModalScreen):
 - **G** - Jump to bottom
 
 ## Actions
-- **g** - Generate payload from selected recipe
+- **Ctrl+G** - Generate payload from selected recipe
+- **Ctrl+H** - View build history
+- **Ctrl+F** - Toggle fullscreen (code panel)
 - **?** - Show this help
-- **q** - Quit application
+- **Ctrl+Q** - Quit application
 
 # Usage
 
 1. **Browse Categories** - Use j/k to navigate categories in the left panel
-2. **Select Recipe** - Press Enter to expand a category, then select a recipe
+2. **Select Recipe** - Navigate with arrow keys to view details (no Enter needed)
 3. **View Details** - Middle panel shows recipe metadata, MITRE ATT&CK info
 4. **Preview Code** - Right panel displays template source or command
-5. **Generate** - Press 'g' to configure parameters and generate payload
+5. **Generate** - Press 'Ctrl+G' to configure parameters and generate payload
 
 # Recipe Information
 

@@ -66,10 +66,10 @@ class PaygenApp(App):
     """
     
     BINDINGS = [
-        Binding("q", "quit", "Quit", show=True),
+        Binding("ctrl+q", "quit", "Quit", show=True),
         Binding("?", "help", "Help", show=True),
-        Binding("g", "generate", "Generate", show=True),
-        Binding("shift+h", "history", "History", show=True),
+        Binding("ctrl+g", "generate", "Generate", show=True),
+        Binding("ctrl+h", "history", "History", show=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("h", "focus_left", "Left", show=False),
@@ -140,6 +140,23 @@ class PaygenApp(App):
         
         code_panel = self.query_one("#code-panel", CodePanel)
         code_panel.selected_recipe = message.recipe
+    
+    def on_code_panel_fullscreen_toggled(self, message: CodePanel.FullscreenToggled) -> None:
+        """Handle fullscreen toggle for code panel"""
+        category_panel = self.query_one("#category-panel", CategoryPanel)
+        recipe_panel = self.query_one("#recipe-panel", RecipePanel)
+        code_panel = self.query_one("#code-panel", CodePanel)
+        
+        if message.fullscreen:
+            # Hide other panels and expand code panel
+            category_panel.display = False
+            recipe_panel.display = False
+            code_panel.styles.width = "100%"
+        else:
+            # Restore original layout
+            category_panel.display = True
+            recipe_panel.display = True
+            code_panel.styles.width = "35%"
     
     def update_recipe_count(self) -> None:
         """Update the subtitle with recipe and category counts."""

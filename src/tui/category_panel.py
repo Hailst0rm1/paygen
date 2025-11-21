@@ -43,6 +43,9 @@ class CategoryPanel(ScrollableContainer):
     
     CategoryPanel Tree > .tree--label {
         color: """ + MOCHA['text'] + """;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        width: 100%;
     }
     
     CategoryPanel Tree > .tree--cursor {
@@ -112,7 +115,12 @@ class CategoryPanel(ScrollableContainer):
             # Add recipe nodes
             for recipe in sorted_recipes:
                 badge = get_effectiveness_badge(recipe.effectiveness)
-                recipe_label = f"{badge} {recipe.name}"
+                # Truncate long names to fit in the panel (max ~35 chars with badge)
+                max_length = 35
+                recipe_name = recipe.name
+                if len(recipe_name) > max_length:
+                    recipe_name = recipe_name[:max_length-3] + "..."
+                recipe_label = f"{badge} {recipe_name}"
                 
                 category_node.add_leaf(
                     recipe_label,

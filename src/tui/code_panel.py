@@ -10,6 +10,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Static
 from textual.reactive import reactive
 from textual.binding import Binding
+from textual.message import Message
 from rich.syntax import Syntax
 
 from .colors import MOCHA
@@ -25,7 +26,11 @@ class CodePanel(VerticalScroll):
         Binding("ctrl+u", "page_up", "Page Up", show=False),
         Binding("g", "scroll_home", "Top", show=False, key_display="gg"),
         Binding("G", "scroll_end", "Bottom", show=False),
+        Binding("ctrl+f", "toggle_fullscreen", "Fullscreen", show=True),
+        Binding("escape", "exit_fullscreen", "Exit Fullscreen", show=False),
     ]
+    
+    is_fullscreen = reactive(False)
     
     def action_scroll_down(self) -> None:
         """Scroll down faster (5 lines at a time)."""
@@ -34,6 +39,23 @@ class CodePanel(VerticalScroll):
     def action_scroll_up(self) -> None:
         """Scroll up faster (5 lines at a time)."""
         self.scroll_relative(y=-5, animate=False)
+    
+    def action_toggle_fullscreen(self) -> None:
+        """Toggle fullscreen mode for code panel"""
+        self.is_fullscreen = not self.is_fullscreen
+        self.post_message(self.FullscreenToggled(self.is_fullscreen))
+    
+    def action_exit_fullscreen(self) -> None:
+        """Exit fullscreen mode if active"""
+        if self.is_fullscreen:
+            self.is_fullscreen = False
+            self.post_message(self.FullscreenToggled(False))
+    
+    class FullscreenToggled(Message):
+        """Message posted when fullscreen is toggled"""
+        def __init__(self, fullscreen: bool):
+            super().__init__()
+            self.fullscreen = fullscreen
     
     DEFAULT_CSS = """
     CodePanel {
@@ -58,6 +80,7 @@ class CodePanel(VerticalScroll):
     CodePanel .code-content {
         padding: 1;
         color: """ + MOCHA['text'] + """;
+        width: 100%;
     }
     """
     
@@ -76,7 +99,11 @@ class CodePanel(VerticalScroll):
     def compose(self) -> ComposeResult:
         """Compose the panel widgets."""
         yield Static("Code Preview", classes="panel-title")
-        yield Static("Select a recipe to view code", classes="code-content", id="code-content")
+        # Create a Static widget that will hold our code content
+        # The VerticalScroll parent will handle scrolling
+        code_widget = Static("Select a recipe to view code", classes="code-content", id="code-content")
+        code_widget.shrink = False  # Don't shrink to fit content
+        yield code_widget
     
     def watch_selected_recipe(self, recipe) -> None:
         """Update panel when recipe selection changes."""
@@ -122,7 +149,7 @@ class CodePanel(VerticalScroll):
                             lexer,
                             theme="monokai",  # Close to Catppuccin Mocha
                             line_numbers=True,
-                            word_wrap=False,
+                            word_wrap=True,
                             background_color="#1e1e2e"
                         )
                         
