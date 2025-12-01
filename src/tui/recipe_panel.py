@@ -162,8 +162,12 @@ class RecipePanel(VerticalScroll):
         if recipe.is_template_based:
             compile_info = recipe.output.get('compile', {})
             if compile_info.get('enabled'):
-                compiler = compile_info.get('compiler', 'unknown')
-                content.append(f"[bold {MOCHA['lavender']}]Compiler:[/] [{MOCHA['green']}]{compiler}[/{MOCHA['green']}]")
+                # Extract compiler from command (first word of the command)
+                command = compile_info.get('command', '')
+                if command:
+                    # Get first word (compiler executable)
+                    compiler = command.split()[0] if command.split() else 'unknown'
+                    content.append(f"[bold {MOCHA['lavender']}]Compiler:[/] [{MOCHA['green']}]{compiler}[/{MOCHA['green']}]")
         
         # Launch instructions
         if recipe.launch_instructions:
