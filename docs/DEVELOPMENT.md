@@ -1051,6 +1051,7 @@ Users should manually create recipe YAML files following the documented schema.
   - aes_process_injection_example.yaml
 
 **Benefits:**
+
 - Simpler recipe format (one field instead of two)
 - More flexible (can use any compilation command structure)
 - Still supports Jinja2 templating for dynamic values

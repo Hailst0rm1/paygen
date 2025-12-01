@@ -6,7 +6,7 @@ Middle panel displaying recipe details, MITRE ATT&CK info, and parameters.
 
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer, VerticalScroll
-from textual.widgets import Static
+from textual.widgets import Static, Markdown
 from textual.reactive import reactive
 from textual.binding import Binding
 
@@ -58,6 +58,15 @@ class RecipePanel(VerticalScroll):
         color: """ + MOCHA['text'] + """;
     }
     
+    RecipePanel .launch-instructions {
+        padding: 1;
+        display: none;
+        color: """ + MOCHA['text'] + """;
+        background: """ + MOCHA['surface0'] + """;
+        border: solid """ + MOCHA['surface2'] + """;
+        margin: 1;
+    }
+    
     RecipePanel .section-header {
         color: """ + MOCHA['lavender'] + """;
         text-style: bold;
@@ -86,6 +95,7 @@ class RecipePanel(VerticalScroll):
         """Compose the panel widgets."""
         yield Static("Recipe Details", classes="panel-title")
         yield Static("Select a recipe to view details", classes="recipe-content", id="recipe-content")
+        yield Markdown("", id="launch-instructions", classes="launch-instructions")
     
     def watch_selected_recipe(self, recipe) -> None:
         """Update panel when recipe selection changes."""
@@ -94,6 +104,9 @@ class RecipePanel(VerticalScroll):
         else:
             content_widget = self.query_one("#recipe-content", Static)
             content_widget.update("Select a recipe to view details")
+            # Hide launch instructions
+            launch_widget = self.query_one("#launch-instructions", Markdown)
+            launch_widget.styles.display = "none"
     
     def update_recipe_display(self, recipe) -> None:
         """Display recipe metadata."""
@@ -165,14 +178,18 @@ class RecipePanel(VerticalScroll):
                 compiler = compile_info.get('compiler', 'unknown')
                 content.append(f"[bold {MOCHA['lavender']}]Compiler:[/] [{MOCHA['green']}]{compiler}[/{MOCHA['green']}]")
         
-        # Launch instructions
-        if recipe.launch_instructions:
-            content.append("")
-            content.append(f"[bold {MOCHA['lavender']}]Launch Instructions:[/]")
-            for line in recipe.launch_instructions.strip().split('\n'):
-                content.append(f"  [{MOCHA['subtext0']}]{line}[/{MOCHA['subtext0']}]")
-        
-        # Join and update
+        # Join and update (launch instructions removed - rendered separately)
         display_text = "\n".join(content)
         content_widget = self.query_one("#recipe-content", Static)
         content_widget.update(display_text)
+        
+        # Launch instructions (rendered as markdown in separate widget)
+        launch_widget = self.query_one("#launch-instructions", Markdown)
+        if recipe.launch_instructions:
+            # Add a header for the launch instructions
+            markdown_content = f"## Launch Instructions\n\n{recipe.launch_instructions.strip()}"
+            launch_widget.update(markdown_content)
+            launch_widget.styles.display = "block"
+        else:
+            launch_widget.update("")
+            launch_widget.styles.display = "none"
