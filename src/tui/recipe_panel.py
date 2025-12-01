@@ -5,7 +5,7 @@ Middle panel displaying recipe details, MITRE ATT&CK info, and parameters.
 """
 
 from textual.app import ComposeResult
-from textual.containers import ScrollableContainer, VerticalScroll
+from textual.containers import VerticalScroll
 from textual.widgets import Static
 from textual.reactive import reactive
 from textual.binding import Binding
@@ -101,8 +101,10 @@ class RecipePanel(VerticalScroll):
         content = []
         
         # Name and category
-        content.append(f"[bold {MOCHA['text']}]{recipe.name}[/bold {MOCHA['text']}]")
-        content.append(f"[{MOCHA['subtext0']}]Category: {recipe.category}[/{MOCHA['subtext0']}]")
+        escaped_name = recipe.name.replace('[', r'\[').replace(']', r'\]')
+        escaped_category = recipe.category.replace('[', r'\[').replace(']', r'\]')
+        content.append(f"[bold {MOCHA['text']}]{escaped_name}[/bold {MOCHA['text']}]")
+        content.append(f"[{MOCHA['subtext0']}]Category: {escaped_category}[/{MOCHA['subtext0']}]")
         content.append("")
         
         # Effectiveness
@@ -114,23 +116,27 @@ class RecipePanel(VerticalScroll):
         content.append(f"[bold {MOCHA['lavender']}]Description:[/]")
         # Wrap description lines
         for line in recipe.description.strip().split('\n'):
-            content.append(f"[{MOCHA['subtext0']}]{line}[/{MOCHA['subtext0']}]")
+            escaped_line = line.replace('[', r'\[').replace(']', r'\]')
+            content.append(f"[{MOCHA['subtext0']}]{escaped_line}[/{MOCHA['subtext0']}]")
         content.append("")
         
         # MITRE ATT&CK
         if recipe.mitre_tactic or recipe.mitre_technique:
             content.append(f"[bold {MOCHA['lavender']}]MITRE ATT&CK:[/]")
             if recipe.mitre_tactic:
-                content.append(f"  [bold]Tactic:[/] [{MOCHA['teal']}]{recipe.mitre_tactic}[/{MOCHA['teal']}]")
+                escaped_tactic = recipe.mitre_tactic.replace('[', r'\[').replace(']', r'\]')
+                content.append(f"  [bold]Tactic:[/] [{MOCHA['teal']}]{escaped_tactic}[/{MOCHA['teal']}]")
             if recipe.mitre_technique:
-                content.append(f"  [bold]Technique:[/] [{MOCHA['teal']}]{recipe.mitre_technique}[/{MOCHA['teal']}]")
+                escaped_technique = recipe.mitre_technique.replace('[', r'\[').replace(']', r'\]')
+                content.append(f"  [bold]Technique:[/] [{MOCHA['teal']}]{escaped_technique}[/{MOCHA['teal']}]")
             content.append("")
         
         # Artifacts
         if recipe.artifacts:
             content.append(f"[bold {MOCHA['lavender']}]Artifacts:[/]")
             for artifact in recipe.artifacts:
-                content.append(f"  • [{MOCHA['peach']}]{artifact}[/{MOCHA['peach']}]")
+                escaped_artifact = artifact.replace('[', r'\[').replace(']', r'\]')
+                content.append(f"  • [{MOCHA['peach']}]{escaped_artifact}[/{MOCHA['peach']}]")
             content.append("")
         
         # Parameters
@@ -145,18 +151,23 @@ class RecipePanel(VerticalScroll):
                 
                 req_marker = f"[{MOCHA['red']}]*[/{MOCHA['red']}]" if required else " "
                 
-                param_line = f"  {req_marker} [bold]{name}[/bold] ([{MOCHA['sky']}]{param_type}[/{MOCHA['sky']}])"
+                escaped_name = name.replace('[', r'\[').replace(']', r'\]')
+                escaped_type = param_type.replace('[', r'\[').replace(']', r'\]')
+                param_line = f"  {req_marker} [bold]{escaped_name}[/bold] ([{MOCHA['sky']}]{escaped_type}[/{MOCHA['sky']}])"
                 if default:
-                    param_line += f" = [{MOCHA['yellow']}]{default}[/{MOCHA['yellow']}]"
+                    escaped_default = str(default).replace('[', r'\[').replace(']', r'\]')
+                    param_line += f" = [{MOCHA['yellow']}]{escaped_default}[/{MOCHA['yellow']}]"
                 content.append(param_line)
                 
                 if description:
-                    content.append(f"      [{MOCHA['subtext0']}]{description}[/{MOCHA['subtext0']}]")
+                    escaped_desc = description.replace('[', r'\[').replace(']', r'\]')
+                    content.append(f"      [{MOCHA['subtext0']}]{escaped_desc}[/{MOCHA['subtext0']}]")
             content.append("")
         
         # Output type
         output_type = recipe.output.get('type', 'unknown')
-        content.append(f"[bold {MOCHA['lavender']}]Output Type:[/] [{MOCHA['green']}]{output_type}[/{MOCHA['green']}]")
+        escaped_output_type = output_type.replace('[', r'\[').replace(']', r'\]')
+        content.append(f"[bold {MOCHA['lavender']}]Output Type:[/] [{MOCHA['green']}]{escaped_output_type}[/{MOCHA['green']}]")
         
         # Compilation info
         if recipe.is_template_based:
@@ -167,14 +178,18 @@ class RecipePanel(VerticalScroll):
                 if command:
                     # Get first word (compiler executable)
                     compiler = command.split()[0] if command.split() else 'unknown'
-                    content.append(f"[bold {MOCHA['lavender']}]Compiler:[/] [{MOCHA['green']}]{compiler}[/{MOCHA['green']}]")
+                    escaped_compiler = compiler.replace('[', r'\[').replace(']', r'\]')
+                    content.append(f"[bold {MOCHA['lavender']}]Compiler:[/] [{MOCHA['green']}]{escaped_compiler}[/{MOCHA['green']}]")
         
         # Launch instructions
         if recipe.launch_instructions:
             content.append("")
             content.append(f"[bold {MOCHA['lavender']}]Launch Instructions:[/]")
+            # Split into lines and escape each one individually before wrapping in markup
             for line in recipe.launch_instructions.strip().split('\n'):
-                content.append(f"  [{MOCHA['subtext0']}]{line}[/{MOCHA['subtext0']}]")
+                # Escape special markup characters in the line content
+                escaped_line = line.replace('[', r'\[').replace(']', r'\]')
+                content.append(f"  [{MOCHA['subtext0']}]{escaped_line}[/{MOCHA['subtext0']}]")
         
         # Join and update
         display_text = "\n".join(content)

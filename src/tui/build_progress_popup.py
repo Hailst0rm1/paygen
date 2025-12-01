@@ -289,10 +289,12 @@ class BuildProgressPopup(Widget):
             # Append launch instructions to the output area
             output_widget = self.query_one("#output-content", Static)
             current_content = output_widget.renderable
+            # Escape brackets in launch instructions to prevent Rich markup interpretation
+            escaped_instructions = launch_instructions.replace('[', r'\[').replace(']', r'\]')
             new_content = (
                 f"{current_content}\n\n"
                 f"[{MOCHA['blue']}]Launch Instructions:[/{MOCHA['blue']}]\n"
-                f"[{MOCHA['text']}]{launch_instructions}[/{MOCHA['text']}]"
+                f"[{MOCHA['text']}]{escaped_instructions}[/{MOCHA['text']}]"
             )
             output_widget.update(new_content)
     
