@@ -97,11 +97,20 @@ class CategoryPanel(ScrollableContainer):
                 categories[category] = []
             categories[category].append(recipe)
         
-        # Sort categories alphabetically, but always put "Misc" at the end
+        # Sort categories alphabetically, but always put "Misc" second to last and "Examples" last
         category_names = sorted(categories.keys())
+        
+        # Remove special categories from sorted list
         if "Misc" in category_names:
             category_names.remove("Misc")
+        if "Examples" in category_names:
+            category_names.remove("Examples")
+        
+        # Add special categories at the end in the desired order
+        if "Misc" in categories:
             category_names.append("Misc")
+        if "Examples" in categories:
+            category_names.append("Examples")
         
         for category in category_names:
             # Add category node
