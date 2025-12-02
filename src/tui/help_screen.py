@@ -68,6 +68,8 @@ class HelpScreen(ModalScreen):
 - **Tab** - Next panel
 - **Shift+Tab** - Previous panel
 - **Enter** - Select item / Expand category
+- **/** - Focus search (in Categories panel)
+- **Escape** - Clear search / Return to tree
 
 ## Scrolling (Recipe & Code Panels)
 - **j** / **k** - Scroll line by line

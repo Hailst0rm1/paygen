@@ -52,7 +52,7 @@ def get_effectiveness_color(effectiveness: str) -> str:
     elif effectiveness == 'medium':
         return MOCHA['peach']
     elif effectiveness == 'low':
-        return MOCHA['overlay1']
+        return MOCHA['red']
     else:
         return MOCHA['text']
 
@@ -71,7 +71,7 @@ def get_effectiveness_badge(effectiveness: str) -> str:
     color = get_effectiveness_color(effectiveness)
     text = effectiveness.upper()
     
-    return f"[{color}]\\[{text}][/{color}]"
+    return f"[{color}]{text}[/{color}]"
 
 
 # Textual CSS color mappings

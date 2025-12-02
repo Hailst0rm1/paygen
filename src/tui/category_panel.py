@@ -6,11 +6,12 @@ Left panel showing categories and recipes sorted by effectiveness.
 
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer
-from textual.widgets import Static, Tree
+from textual.widgets import Static, Tree, Input
 from textual.reactive import reactive
 from textual.message import Message
+from textual.binding import Binding
 
-from .colors import get_effectiveness_badge, MOCHA
+from .colors import get_effectiveness_badge, get_effectiveness_color, MOCHA
 
 
 class CategoryPanel(ScrollableContainer):
@@ -36,13 +37,24 @@ class CategoryPanel(ScrollableContainer):
         dock: top;
     }
     
+    CategoryPanel Input {
+        background: """ + MOCHA['surface0'] + """;
+        border: solid """ + MOCHA['surface1'] + """;
+        color: """ + MOCHA['text'] + """;
+        padding: 0 1;
+        margin: 0 1;
+    }
+    
+    CategoryPanel Input:focus {
+        border: solid """ + MOCHA['blue'] + """;
+    }
+    
     CategoryPanel Tree {
         background: #1e1e2e;
         padding: 1;
     }
     
     CategoryPanel Tree > .tree--label {
-        color: """ + MOCHA['text'] + """;
         text-overflow: ellipsis;
         overflow: hidden;
         width: 100%;
@@ -53,7 +65,13 @@ class CategoryPanel(ScrollableContainer):
     }
     """
     
+    BINDINGS = [
+        Binding("/", "focus_search", "Search", show=False),
+        Binding("escape", "clear_search", "Clear Search", show=False),
+    ]
+    
     selected_recipe = reactive(None)
+    search_query = reactive("")
     
     def __init__(self, recipes=None, **kwargs):
         """
@@ -65,10 +83,16 @@ class CategoryPanel(ScrollableContainer):
         super().__init__(**kwargs)
         self.recipes = recipes or []
         self.recipe_tree = None
+        self.search_input = None
     
     def compose(self) -> ComposeResult:
         """Compose the panel widgets."""
         yield Static("Categories & Recipes", classes="panel-title")
+        
+        # Search input
+        search = Input(placeholder="Search recipes... (press /)", id="recipe-search")
+        self.search_input = search
+        yield search
         
         # Create tree for categories and recipes
         tree = Tree("Recipes", id="recipe-tree")
@@ -81,17 +105,30 @@ class CategoryPanel(ScrollableContainer):
         """Populate the tree when mounted."""
         self.populate_tree()
     
-    def populate_tree(self) -> None:
-        """Populate the recipe tree with categories and recipes."""
+    def populate_tree(self, filter_query: str = "") -> None:
+        """Populate the recipe tree with categories and recipes.
+        
+        Args:
+            filter_query: Optional search query to filter recipes
+        """
         if not self.recipe_tree:
             return
         
         # Clear existing tree
         self.recipe_tree.clear()
         
+        # Filter recipes by search query if provided
+        filtered_recipes = self.recipes
+        if filter_query:
+            query_lower = filter_query.lower()
+            filtered_recipes = [
+                r for r in self.recipes 
+                if query_lower in r.name.lower()
+            ]
+        
         # Group recipes by category
         categories = {}
-        for recipe in self.recipes:
+        for recipe in filtered_recipes:
             category = recipe.category or "Misc"
             if category not in categories:
                 categories[category] = []
@@ -128,13 +165,16 @@ class CategoryPanel(ScrollableContainer):
             
             # Add recipe nodes
             for recipe in sorted_recipes:
-                badge = get_effectiveness_badge(recipe.effectiveness)
-                # Truncate long names to fit in the panel (max ~35 chars with badge)
-                max_length = 35
+                # Truncate long names to fit in the panel (max ~40 chars)
+                max_length = 40
                 recipe_name = recipe.name
                 if len(recipe_name) > max_length:
                     recipe_name = recipe_name[:max_length-3] + "..."
-                recipe_label = f"{badge} {recipe_name}"
+                # Escape brackets in recipe name FIRST to prevent markup conflicts
+                escaped_name = recipe_name.replace('[', r'\[').replace(']', r'\]')
+                # Get effectiveness color and apply it to the escaped name
+                color = get_effectiveness_color(recipe.effectiveness)
+                recipe_label = f"[{color}]{escaped_name}[/{color}]"
                 
                 category_node.add_leaf(
                     recipe_label,
@@ -159,6 +199,26 @@ class CategoryPanel(ScrollableContainer):
         """React to selected recipe changes."""
         if recipe:
             self.app.selected_recipe = recipe
+    
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Handle search input changes."""
+        if event.input.id == "recipe-search":
+            self.search_query = event.value
+            self.populate_tree(filter_query=event.value)
+    
+    def action_focus_search(self) -> None:
+        """Focus the search input (/)."""
+        if self.search_input:
+            self.search_input.focus()
+    
+    def action_clear_search(self) -> None:
+        """Clear search and refocus tree (Escape)."""
+        if self.search_input and self.search_input.has_focus:
+            self.search_input.value = ""
+            self.search_query = ""
+            self.populate_tree()
+            if self.recipe_tree:
+                self.recipe_tree.focus()
 
 
 class RecipeSelected(Message):
