@@ -70,6 +70,7 @@ class PaygenApp(App):
         Binding("?", "help", "Help", show=True),
         Binding("ctrl+g", "generate", "Generate", show=True),
         Binding("ctrl+h", "history", "History", show=True),
+        Binding("ctrl+r", "refresh_recipes", "Refresh", show=True),
         Binding("j", "cursor_down", "Down", show=False),
         Binding("k", "cursor_up", "Up", show=False),
         Binding("h", "focus_left", "Left", show=False),
@@ -472,6 +473,11 @@ class PaygenApp(App):
         
         # Mount popup
         self.mount(popup)
+    
+    def action_refresh_recipes(self) -> None:
+        """Refresh recipes from disk (Ctrl+R)"""
+        self._reload_recipes()
+        self.notify("Recipes refreshed", title="Refresh", severity="information")
     
     def _reload_recipes(self) -> None:
         """Reload recipes from disk"""

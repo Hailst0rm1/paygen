@@ -78,6 +78,7 @@ class HelpScreen(ModalScreen):
 ## Actions
 - **Ctrl+G** - Generate payload from selected recipe
 - **Ctrl+H** - View build history
+- **Ctrl+R** - Refresh recipes from disk
 - **Ctrl+F** - Toggle fullscreen (code panel)
 - **?** - Show this help
 - **Ctrl+Q** - Quit application
