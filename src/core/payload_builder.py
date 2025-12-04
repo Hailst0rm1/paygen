@@ -519,6 +519,11 @@ class PayloadBuilder:
             code = re.sub(r'<#.*?#>', '', code, flags=re.DOTALL)
             code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
         
+        # VBA comments (Visual Basic for Applications)
+        elif file_extension in ['.vba', '.vbs', '.bas']:
+            # Remove single-line comments (')
+            code = re.sub(r"'.*?$", '', code, flags=re.MULTILINE)
+        
         # Remove trailing whitespace from each line
         code = re.sub(r'[ \t]+$', '', code, flags=re.MULTILINE)
         
