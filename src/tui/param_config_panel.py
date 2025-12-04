@@ -167,6 +167,7 @@ class ParameterConfigPopup(Widget):
         # Build options with defaults from config
         self.remove_comments = config.remove_comments if config else True
         self.strip_binaries = config.strip_binaries if config else True
+        self.remove_console_output = True  # Default to removing console output
     
     def compose(self) -> ComposeResult:
         """Compose the configuration popup."""
@@ -200,6 +201,14 @@ class ParameterConfigPopup(Widget):
                     "Remove comments from source code",
                     value=self.remove_comments,
                     id="build-remove-comments"
+                )
+                yield Static("")  # Spacer
+                
+                yield Static("Remove console output statements (e.g., Console.WriteLine, printf)", classes="param-description")
+                yield Checkbox(
+                    "Remove console output",
+                    value=self.remove_console_output,
+                    id="build-remove-console"
                 )
                 yield Static("")  # Spacer
             
@@ -376,6 +385,9 @@ class ParameterConfigPopup(Widget):
         if widget_id == "build-remove-comments":
             self.remove_comments = event.value
             return
+        elif widget_id == "build-remove-console":
+            self.remove_console_output = event.value
+            return
         elif widget_id == "build-strip-binaries":
             self.strip_binaries = event.value
             return
@@ -411,6 +423,7 @@ class ParameterConfigPopup(Widget):
             'parameters': self.param_values,
             'build_options': {
                 'remove_comments': self.remove_comments,
+                'remove_console_output': self.remove_console_output,
                 'strip_binaries': self.strip_binaries
             }
         }

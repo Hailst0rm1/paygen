@@ -309,6 +309,10 @@ class PayloadBuilder:
             if self.remove_comments:
                 rendered_code = self._remove_comments(rendered_code, full_template_path.suffix)
             
+            # Remove console output if configured
+            if self.build_options.get('remove_console_output', False):
+                rendered_code = self._remove_console_output(rendered_code, full_template_path.suffix)
+            
             # Determine output paths
             output_path = Path(self.variables.get('output_path', self.config.output_dir))
             output_file = self.variables.get('output_file', 'payload')
@@ -490,7 +494,7 @@ class PayloadBuilder:
             file_extension: File extension (e.g., '.cs', '.c', '.py')
             
         Returns:
-            Code with comments removed
+            Code with comments removed and cleaned up
         """
         import re
         
@@ -503,17 +507,83 @@ class PayloadBuilder:
         
         # Python comments
         elif file_extension in ['.py']:
-            # Remove single-line comments (but not in strings)
+            # Remove single-line comments
             code = re.sub(r'#.*?$', '', code, flags=re.MULTILINE)
         
         # PowerShell comments
         elif file_extension in ['.ps1']:
-            # Remove single-line comments
+            # Remove single-line comments (both PowerShell # and C# // for embedded code)
             code = re.sub(r'#.*?$', '', code, flags=re.MULTILINE)
-            # Remove multi-line comments
+            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
+            # Remove multi-line comments (both PowerShell <# #> and C# /* */)
             code = re.sub(r'<#.*?#>', '', code, flags=re.DOTALL)
+            code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
         
-        # Remove excessive blank lines (more than 2 consecutive)
+        # Remove trailing whitespace from each line
+        code = re.sub(r'[ \t]+$', '', code, flags=re.MULTILINE)
+        
+        # Clean up blank lines: collapse 3+ consecutive newlines into 2 (keeping max 1 blank line)
+        code = re.sub(r'\n{3,}', '\n\n', code)
+        
+        return code
+    
+    def _remove_console_output(self, code: str, file_extension: str) -> str:
+        """Remove console output statements from source code
+        
+        Args:
+            code: Source code string
+            file_extension: File extension (e.g., '.cs', '.c', '.py')
+            
+        Returns:
+            Code with console output removed
+        """
+        import re
+        
+        # C# - Remove Console.WriteLine, Console.Write, etc.
+        if file_extension in ['.cs']:
+            # Remove entire Console.WriteLine/Write lines
+            # Use a pattern that matches the statement and removes just the content, not the line structure
+            lines = code.split('\n')
+            filtered_lines = []
+            for line in lines:
+                # Check if line contains a Console output statement
+                if re.match(r'^\s*Console\.(WriteLine|Write|Error\.WriteLine)', line.strip()):
+                    # Skip this line (effectively removing it)
+                    continue
+                filtered_lines.append(line)
+            code = '\n'.join(filtered_lines)
+        
+        # C/C++ - Remove printf, fprintf, puts, etc.
+        elif file_extension in ['.c', '.cpp', '.h', '.hpp']:
+            lines = code.split('\n')
+            filtered_lines = []
+            for line in lines:
+                if re.match(r'^\s*(printf|fprintf|puts|fputs)\s*\(', line.strip()):
+                    continue
+                filtered_lines.append(line)
+            code = '\n'.join(filtered_lines)
+        
+        # Python - Remove print statements
+        elif file_extension in ['.py']:
+            lines = code.split('\n')
+            filtered_lines = []
+            for line in lines:
+                if re.match(r'^\s*print\s*\(', line.strip()):
+                    continue
+                filtered_lines.append(line)
+            code = '\n'.join(filtered_lines)
+        
+        # PowerShell - Remove Write-Host, Write-Output, etc.
+        elif file_extension in ['.ps1']:
+            lines = code.split('\n')
+            filtered_lines = []
+            for line in lines:
+                if re.match(r'^\s*(Write-Host|Write-Output|Write-Verbose|Write-Debug|echo)\s+', line.strip()):
+                    continue
+                filtered_lines.append(line)
+            code = '\n'.join(filtered_lines)
+        
+        # Clean up excessive blank lines (keep max 1 blank line)
         code = re.sub(r'\n{3,}', '\n\n', code)
         
         return code
