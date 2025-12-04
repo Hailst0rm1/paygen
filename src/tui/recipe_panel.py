@@ -164,10 +164,16 @@ class RecipePanel(VerticalScroll):
                     content.append(f"      [{MOCHA['subtext0']}]{escaped_desc}[/{MOCHA['subtext0']}]")
             content.append("")
         
-        # Output type
-        output_type = recipe.output.get('type', 'unknown')
-        escaped_output_type = output_type.replace('[', r'\[').replace(']', r'\]')
-        content.append(f"[bold {MOCHA['lavender']}]Output Type:[/] [{MOCHA['green']}]{escaped_output_type}[/{MOCHA['green']}]")
+        # Preprocessing steps
+        if recipe.preprocessing:
+            content.append(f"[bold {MOCHA['lavender']}]Preprocessing Steps:[/]")
+            for idx, step in enumerate(recipe.preprocessing, 1):
+                step_name = step.get('name', 'unknown')
+                step_type = step.get('type', 'unknown')
+                escaped_name = step_name.replace('[', r'\[').replace(']', r'\]')
+                escaped_type = step_type.replace('[', r'\[').replace(']', r'\]')
+                content.append(f"  {idx}. [{MOCHA['green']}]{escaped_name}[/{MOCHA['green']}] ([{MOCHA['sky']}]{escaped_type}[/{MOCHA['sky']}])")
+            content.append("")
         
         # Compilation info
         if recipe.is_template_based:
@@ -185,11 +191,18 @@ class RecipePanel(VerticalScroll):
         if recipe.launch_instructions:
             content.append("")
             content.append(f"[bold {MOCHA['lavender']}]Launch Instructions:[/]")
-            # Split into lines and escape each one individually before wrapping in markup
+            # Split into lines and process each one
             for line in recipe.launch_instructions.strip().split('\n'):
-                # Escape special markup characters in the line content
-                escaped_line = line.replace('[', r'\[').replace(']', r'\]')
-                content.append(f"  [{MOCHA['subtext0']}]{escaped_line}[/{MOCHA['subtext0']}]")
+                stripped = line.strip()
+                if stripped.startswith('$ '):
+                    # Command line - extract command without "$ "
+                    command = stripped[2:]  # Remove "$ " prefix
+                    escaped_cmd = command.replace('[', r'\[').replace(']', r'\]')
+                    content.append(f"  [bold {MOCHA['blue']}]$[/bold {MOCHA['blue']}] [italic {MOCHA['subtext0']}]{escaped_cmd}[/italic {MOCHA['subtext0']}]")
+                else:
+                    # Regular text line
+                    escaped_line = line.replace('[', r'\[').replace(']', r'\]')
+                    content.append(f"  [{MOCHA['subtext0']}]{escaped_line}[/{MOCHA['subtext0']}]")
         
         # Join and update
         display_text = "\n".join(content)

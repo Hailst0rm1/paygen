@@ -7,12 +7,13 @@ and detailed output.
 
 from textual.app import ComposeResult
 from textual.containers import Vertical, Horizontal, VerticalScroll, Container
-from textual.widgets import Static, Label
+from textual.widgets import Static, Label, Button
 from textual.widget import Widget
 from textual.reactive import reactive
 from textual.message import Message
 from textual.binding import Binding
 from typing import List, Optional
+import subprocess
 
 from ..core.payload_builder import BuildStep
 from .colors import MOCHA
@@ -25,7 +26,9 @@ class BuildProgressPopup(Widget):
     can_focus = True
     
     BINDINGS = [
-        Binding("enter", "close", "Close", show=False),
+        Binding("escape,q", "close", "Close", show=False),
+        Binding("j", "scroll_down", "Scroll Down", show=False),
+        Binding("k", "scroll_up", "Scroll Up", show=False),
     ]
     
     DEFAULT_CSS = """
@@ -88,6 +91,28 @@ class BuildProgressPopup(Widget):
         dock: bottom;
         background: """ + MOCHA['base'] + """;
     }
+    
+    BuildProgressPopup .launch-copy-btn-container {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin: 0 0 1 0;
+    }
+    
+    BuildProgressPopup .launch-copy-btn {
+        width: 12;
+        height: 1;
+        margin: 0 1;
+        background: """ + MOCHA['blue'] + """ !important;
+        color: """ + MOCHA['base'] + """ !important;
+        text-style: bold;
+        border: none !important;
+    }
+    
+    BuildProgressPopup .launch-copy-btn:hover {
+        background: """ + MOCHA['sapphire'] + """ !important;
+        color: """ + MOCHA['text'] + """ !important;
+    }
     """
     
     class BuildComplete(Message):
@@ -130,7 +155,7 @@ class BuildProgressPopup(Widget):
         yield Static("", id="result-message")
         
         # Help text at very bottom
-        yield Static("Press Enter to close when complete", id="help-text")
+        yield Static("Press Esc or q to close when complete", id="help-text")
     
     def on_mount(self) -> None:
         """Start spinner animation on mount"""
@@ -286,17 +311,111 @@ class BuildProgressPopup(Widget):
         
         # Show launch instructions if successful
         if success and launch_instructions:
-            # Append launch instructions to the output area
-            output_widget = self.query_one("#output-content", Static)
-            current_content = output_widget.renderable
-            # Escape brackets in launch instructions to prevent Rich markup interpretation
-            escaped_instructions = launch_instructions.replace('[', r'\[').replace(']', r'\]')
-            new_content = (
-                f"{current_content}\n\n"
-                f"[{MOCHA['blue']}]Launch Instructions:[/{MOCHA['blue']}]\n"
-                f"[{MOCHA['text']}]{escaped_instructions}[/{MOCHA['text']}]"
-            )
-            output_widget.update(new_content)
+            self._render_launch_instructions(launch_instructions)
+    
+    def _render_launch_instructions(self, instructions: str) -> None:
+        """Parse and render launch instructions with copy buttons for commands"""
+        output_widget = self.query_one("#output-content", Static)
+        current_content = output_widget.renderable
+        
+        # Add header
+        new_content = f"{current_content}\n\n[{MOCHA['blue']}]Launch Instructions:[/{MOCHA['blue']}]\n"
+        output_widget.update(new_content)
+        
+        # Get container to mount buttons
+        container = self.query_one("#output-container", VerticalScroll)
+        
+        # Process each line
+        lines = instructions.split('\n')
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('$ '):
+                # Command line - extract command without "$ "
+                command = stripped[2:]  # Remove "$ " prefix
+                
+                # Handle word wrapping with proper indentation
+                # Split command into words and wrap at ~60 chars
+                words = command.split()
+                wrapped_lines = []
+                current = ""
+                
+                for word in words:
+                    test = current + (" " if current else "") + word
+                    if len(test) <= 60:
+                        current = test
+                    else:
+                        if current:
+                            wrapped_lines.append(current)
+                        current = word
+                if current:
+                    wrapped_lines.append(current)
+                
+                # Render first line with $
+                if wrapped_lines:
+                    escaped_first = wrapped_lines[0].replace('[', r'\[').replace(']', r'\]')
+                    cmd_text = Static(
+                        f"[bold {MOCHA['blue']}]$[/bold {MOCHA['blue']}] [italic {MOCHA['text']}]{escaped_first}[/italic {MOCHA['text']}]"
+                    )
+                    container.mount(cmd_text)
+                    
+                    # Render continuation lines with indentation (2 spaces to align after "$ ")
+                    for continuation in wrapped_lines[1:]:
+                        escaped_cont = continuation.replace('[', r'\[').replace(']', r'\]')
+                        cont_text = Static(
+                            f"  [italic {MOCHA['text']}]{escaped_cont}[/italic {MOCHA['text']}]"
+                        )
+                        container.mount(cont_text)
+                
+                # Add copy button in centered container
+                btn_container = Horizontal(classes="launch-copy-btn-container")
+                copy_btn = Button("Copy", classes="launch-copy-btn")
+                copy_btn.command_to_copy = command
+                btn_container.compose_add_child(copy_btn)
+                container.mount(btn_container)
+            else:
+                # Regular text line (including empty lines to preserve spacing)
+                if line:  # Non-empty line
+                    escaped_line = line.replace('[', r'\[').replace(']', r'\]')
+                    text_widget = Static(f"[{MOCHA['text']}]{escaped_line}[/{MOCHA['text']}]")
+                else:  # Empty line - preserve spacing
+                    text_widget = Static("")
+                container.mount(text_widget)
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle copy button presses"""
+        button = event.button
+        
+        # Check if it's a launch copy button
+        if hasattr(button, 'command_to_copy'):
+            command = button.command_to_copy
+            try:
+                # Copy to clipboard using wl-copy
+                subprocess.run(
+                    ['wl-copy'],
+                    input=command,
+                    text=True,
+                    check=True
+                )
+                # Visual feedback
+                original_label = button.label
+                button.label = "✓ Copied!"
+                self.set_timer(1.5, lambda: setattr(button, 'label', original_label))
+            except FileNotFoundError:
+                button.label = "wl-copy not found"
+                self.set_timer(2.0, lambda: setattr(button, 'label', 'Copy'))
+            except Exception as e:
+                button.label = "Error"
+                self.set_timer(2.0, lambda: setattr(button, 'label', 'Copy'))
+    
+    def action_scroll_down(self) -> None:
+        """Scroll down in output container"""
+        container = self.query_one("#output-container", VerticalScroll)
+        container.scroll_down()
+    
+    def action_scroll_up(self) -> None:
+        """Scroll up in output container"""
+        container = self.query_one("#output-container", VerticalScroll)
+        container.scroll_up()
     
     def action_close(self) -> None:
         """Handle close action"""

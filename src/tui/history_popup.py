@@ -6,12 +6,13 @@ Displays payload generation history with filtering and actions.
 
 from textual.app import ComposeResult
 from textual.containers import Vertical, Horizontal, VerticalScroll, Container
-from textual.widgets import Static, Label, ListView, ListItem
+from textual.widgets import Static, Label, ListView, ListItem, Button
 from textual.widget import Widget
 from textual.binding import Binding
 from textual.message import Message
 from typing import List, Optional
 import os
+import subprocess
 
 from ..core.history import HistoryManager, HistoryEntry
 from .colors import MOCHA
@@ -29,6 +30,8 @@ class HistoryPopup(Widget):
         Binding("c", "copy_launch", "Copy Launch", show=True),
         Binding("d", "delete", "Delete", show=True),
         Binding("o", "open_output", "Open Output", show=True),
+        Binding("j", "scroll_down", "Scroll Down", show=False),
+        Binding("k", "scroll_up", "Scroll Up", show=False),
     ]
     
     DEFAULT_CSS = """
@@ -119,6 +122,39 @@ class HistoryPopup(Widget):
         color: """ + MOCHA['text'] + """;
         margin-left: 2;
     }
+    
+    HistoryPopup .launch-copy-btn-container {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin: 0 0 1 0;
+    }
+    
+    HistoryPopup .launch-copy-btn {
+        width: 12;
+        height: 1;
+        margin: 0 1;
+        background: """ + MOCHA['blue'] + """ !important;
+        color: """ + MOCHA['base'] + """ !important;
+        text-style: bold;
+        border: none !important;
+    }
+    
+    HistoryPopup .launch-copy-btn:hover {
+        background: """ + MOCHA['sapphire'] + """ !important;
+        color: """ + MOCHA['text'] + """ !important;
+    }
+    
+    HistoryPopup #detail-help-text {
+        width: 100%;
+        height: auto;
+        text-align: center;
+        color: """ + MOCHA['overlay1'] + """;
+        padding: 0 1;
+        dock: bottom;
+        background: """ + MOCHA['base'] + """;
+        display: none;
+    }
     """
     
     class HistoryAction(Message):
@@ -163,6 +199,9 @@ class HistoryPopup(Widget):
         # Detail view (hidden by default)
         with VerticalScroll(id="detail-view"):
             yield Static(id="detail-content")
+        
+        # Help text at bottom
+        yield Static("Press Esc to go back", id="detail-help-text")
     
     def on_mount(self) -> None:
         """Called when widget is mounted"""
@@ -217,10 +256,12 @@ class HistoryPopup(Widget):
         detail_widget = self.query_one("#detail-content", Static)
         list_widget = self.query_one("#history-list", VerticalScroll)
         detail_view = self.query_one("#detail-view", VerticalScroll)
+        help_text = self.query_one("#detail-help-text", Static)
         
-        # Hide list, show detail
+        # Hide list, show detail and help text
         list_widget.display = False
         detail_view.display = True
+        help_text.display = True
         
         # Build detail content
         lines = []
@@ -268,21 +309,74 @@ class HistoryPopup(Widget):
         # Launch instructions
         if entry.launch_instructions:
             lines.append(f"[{MOCHA['blue']}]Launch Instructions:[/{MOCHA['blue']}]")
-            for line in entry.launch_instructions.split('\n'):
-                lines.append(f"  [{MOCHA['text']}]{line}[/{MOCHA['text']}]")
-        
-        lines.append("")
-        lines.append(f"[{MOCHA['overlay1']}]Press Esc to go back[/{MOCHA['overlay1']}]")
         
         detail_widget.update("\n".join(lines))
+        
+        # Now add launch instruction commands with copy buttons
+        if entry.launch_instructions:
+            for line in entry.launch_instructions.split('\n'):
+                stripped = line.strip()
+                if stripped.startswith('$ '):
+                    # Command line - extract command without "$ "
+                    command = stripped[2:]  # Remove "$ " prefix
+                    
+                    # Handle word wrapping with proper indentation
+                    # Split command into words and wrap at ~60 chars
+                    words = command.split()
+                    wrapped_lines = []
+                    current = ""
+                    
+                    for word in words:
+                        test = current + (" " if current else "") + word
+                        if len(test) <= 60:
+                            current = test
+                        else:
+                            if current:
+                                wrapped_lines.append(current)
+                            current = word
+                    if current:
+                        wrapped_lines.append(current)
+                    
+                    # Render first line with $
+                    if wrapped_lines:
+                        escaped_first = wrapped_lines[0].replace('[', r'\[').replace(']', r'\]')
+                        cmd_text = Static(
+                            f"[bold {MOCHA['blue']}]$[/bold {MOCHA['blue']}] [italic {MOCHA['text']}]{escaped_first}[/italic {MOCHA['text']}]"
+                        )
+                        detail_view.mount(cmd_text)
+                        
+                        # Render continuation lines with indentation (2 spaces to align after "$ ")
+                        for continuation in wrapped_lines[1:]:
+                            escaped_cont = continuation.replace('[', r'\[').replace(']', r'\]')
+                            cont_text = Static(
+                                f"  [italic {MOCHA['text']}]{escaped_cont}[/italic {MOCHA['text']}]"
+                            )
+                            detail_view.mount(cont_text)
+                    
+                    # Add copy button in centered container
+                    btn_container = Horizontal(classes="launch-copy-btn-container")
+                    detail_view.mount(btn_container)
+                    copy_btn = Button("Copy", classes="launch-copy-btn")
+                    copy_btn.command_to_copy = command
+                    btn_container.mount(copy_btn)
+                else:
+                    # Regular text line (including empty lines to preserve spacing)
+                    if line:  # Non-empty line
+                        escaped_line = line.replace('[', r'\[').replace(']', r'\]')
+                        text_widget = Static(f"  [{MOCHA['text']}]{escaped_line}[/{MOCHA['text']}]")
+                    else:  # Empty line - preserve spacing
+                        text_widget = Static("")
+                    detail_view.mount(text_widget)
     
     def _exit_detail(self) -> None:
         """Exit detail view back to list"""
         list_widget = self.query_one("#history-list", VerticalScroll)
         detail_view = self.query_one("#detail-view", VerticalScroll)
+        help_text = self.query_one("#detail-help-text", Static)
         
         list_widget.display = True
         detail_view.display = False
+        help_text.display = False
         self.detail_mode = False
     
     def action_dismiss(self) -> None:
@@ -338,6 +432,48 @@ class HistoryPopup(Widget):
         if self.entries and 0 <= self.selected_index < len(self.entries):
             entry = self.entries[self.selected_index]
             self.post_message(self.HistoryAction("open_output", entry, self.selected_index))
+    
+    def action_scroll_down(self) -> None:
+        """Scroll down in active view"""
+        if self.detail_mode:
+            container = self.query_one("#detail-view", VerticalScroll)
+        else:
+            container = self.query_one("#history-list", VerticalScroll)
+        container.scroll_down()
+    
+    def action_scroll_up(self) -> None:
+        """Scroll up in active view"""
+        if self.detail_mode:
+            container = self.query_one("#detail-view", VerticalScroll)
+        else:
+            container = self.query_one("#history-list", VerticalScroll)
+        container.scroll_up()
+    
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle copy button presses"""
+        button = event.button
+        
+        # Check if it's a launch copy button
+        if hasattr(button, 'command_to_copy'):
+            command = button.command_to_copy
+            try:
+                # Copy to clipboard using wl-copy
+                subprocess.run(
+                    ['wl-copy'],
+                    input=command,
+                    text=True,
+                    check=True
+                )
+                # Visual feedback
+                original_label = button.label
+                button.label = "✓ Copied!"
+                self.set_timer(1.5, lambda: setattr(button, 'label', original_label))
+            except FileNotFoundError:
+                button.label = "wl-copy not found"
+                self.set_timer(2.0, lambda: setattr(button, 'label', 'Copy'))
+            except Exception as e:
+                button.label = "Error"
+                self.set_timer(2.0, lambda: setattr(button, 'label', 'Copy'))
     
     def on_key(self, event) -> None:
         """Handle key events for navigation"""

@@ -388,9 +388,11 @@ class PaygenApp(App):
             launch_instructions = recipe_dict.get('launch_instructions', '')
             if launch_instructions and success:
                 from jinja2 import Template
+                import os
                 # Get all variables used in the build
                 all_vars = params.copy()
-                all_vars['output_file'] = output_file
+                # For launch instructions, use just the filename without path
+                all_vars['output_file'] = os.path.basename(output_file) if output_file else ''
                 # Render the launch instructions
                 try:
                     template = Template(launch_instructions)
