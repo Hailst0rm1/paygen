@@ -547,8 +547,9 @@ class PayloadBuilder:
         
         # VBA comments (Visual Basic for Applications)
         elif file_extension in ['.vba', '.vbs', '.bas']:
-            # Remove single-line comments (')
-            code = re.sub(r"'.*?$", '', code, flags=re.MULTILINE)
+            # Remove single-line comments (') - only at start of line or after whitespace
+            # This prevents removing single quotes inside strings
+            code = re.sub(r"^\s*'.*?$", '', code, flags=re.MULTILINE)
         
         # Remove trailing whitespace from each line
         code = re.sub(r'[ \t]+$', '', code, flags=re.MULTILINE)
