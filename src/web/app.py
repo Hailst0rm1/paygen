@@ -248,9 +248,12 @@ def generate_payload():
     parameters = data.get('parameters', {})
     build_options = data.get('build_options', {})
     
+    # Reload recipes from disk to ensure we have the latest version
+    current_recipes = recipe_loader.load_all_recipes()
+    
     # Find recipe
     recipe_obj = None
-    for r in recipes:
+    for r in current_recipes:
         if r.category == category and r.name == recipe_name:
             recipe_obj = r
             break
