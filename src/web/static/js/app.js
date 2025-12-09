@@ -864,6 +864,7 @@ async function pollBuildStatus(sessionId) {
     const stepsContainer = document.getElementById('build-steps-container');
     const resultContainer = document.getElementById('build-result');
     const closeBtn = document.getElementById('close-build-btn');
+    let modalContent = null;
     
     // Add title above the container
     const modalBody = stepsContainer.parentElement;
@@ -1060,6 +1061,15 @@ async function pollBuildStatus(sessionId) {
                     renderLaunchInstructions(instructions, 'launch-instructions-md-build');
                 }
                 
+                // Auto-scroll to show the complete message (with or without instructions)
+                setTimeout(() => {
+                    resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    modalContent = document.querySelector('#build-progress-modal .modal-content');
+                    if (modalContent) {
+                        modalContent.scrollTop = modalContent.scrollHeight;
+                    }
+                }, 100);
+                
                 closeBtn.style.display = 'block';
             } else if (data.status === 'failed') {
                 clearInterval(interval);
@@ -1069,6 +1079,14 @@ async function pollBuildStatus(sessionId) {
                         ${data.error ? `<div style="color: var(--text); margin-top: 0.5rem;">${escapeHtml(data.error)}</div>` : ''}
                     </div>
                 `;
+                
+                // Auto-scroll to show the error message
+                resultContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                modalContent = document.querySelector('#build-progress-modal .modal-content');
+                if (modalContent) {
+                    modalContent.scrollTop = modalContent.scrollHeight;
+                }
+                
                 closeBtn.style.display = 'block';
             }
             

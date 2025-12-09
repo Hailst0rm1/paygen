@@ -307,11 +307,29 @@ class PayloadBuilder:
             
             # Remove comments if configured
             if self.remove_comments:
+                comment_step = BuildStep("Removing comments", "preprocessing")
+                self.steps.append(comment_step)
+                comment_step.status = "running"
+                self._update_step(comment_step)
+                
                 rendered_code = self._remove_comments(rendered_code, full_template_path.suffix)
+                
+                comment_step.status = "success"
+                comment_step.output = "Comments removed from source code"
+                self._update_step(comment_step)
             
             # Remove console output if configured
             if self.build_options.get('remove_console_output', False):
+                console_step = BuildStep("Removing console output", "preprocessing")
+                self.steps.append(console_step)
+                console_step.status = "running"
+                self._update_step(console_step)
+                
                 rendered_code = self._remove_console_output(rendered_code, full_template_path.suffix)
+                
+                console_step.status = "success"
+                console_step.output = "Console output statements removed"
+                self._update_step(console_step)
             
             # Determine output paths - render templates
             output_path_template = self.variables.get('output_path', str(self.config.output_dir))

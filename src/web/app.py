@@ -283,7 +283,13 @@ def generate_payload():
     session_id = str(uuid.uuid4())
     build_sessions[session_id] = {
         'status': 'pending',
-        'steps': [],
+        'steps': [{
+            'name': 'Initializing build',
+            'type': 'initialize',
+            'status': 'running',
+            'output': 'Preparing build environment...',
+            'error': None
+        }],
         'output_file': None,
         'launch_instructions': None,
         'error': None
@@ -305,7 +311,8 @@ def generate_payload():
             if 'strip_binaries' in build_options:
                 temp_config.config['strip_binaries'] = build_options['strip_binaries']
             
-            builder = PayloadBuilder(temp_config)
+            # Pass build_options to PayloadBuilder
+            builder = PayloadBuilder(temp_config, build_options=build_options)
             
             # Progress callback
             def on_progress(step: BuildStep):
