@@ -5,6 +5,23 @@ let recipes = {};
 let selectedRecipe = null;
 let categories = {};
 
+// Notification popup
+function showNotificationPopup(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Trigger animation
+    setTimeout(() => notification.classList.add('show'), 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     loadRecipes();
@@ -15,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupEventListeners() {
     // Header buttons
     document.getElementById('history-btn').addEventListener('click', showHistory);
-    document.getElementById('refresh-btn').addEventListener('click', loadRecipes);
+    document.getElementById('refresh-btn').addEventListener('click', () => loadRecipes(true));
     
     // Fullscreen toggle for code preview
     const fullscreenToggle = document.getElementById('fullscreen-toggle');
@@ -74,8 +91,16 @@ function setupEventListeners() {
 }
 
 // Load recipes from API
-async function loadRecipes() {
+async function loadRecipes(showNotification = false) {
     try {
+        // Show loading indicator on refresh button
+        const refreshBtn = document.getElementById('refresh-btn');
+        const originalContent = refreshBtn.innerHTML;
+        if (showNotification) {
+            refreshBtn.innerHTML = '⟳';
+            refreshBtn.style.animation = 'spin 0.5s linear';
+        }
+        
         const response = await fetch('/api/recipes');
         const data = await response.json();
         
@@ -104,10 +129,23 @@ async function loadRecipes() {
             // Re-select the recipe to refresh its details
             await selectRecipe(category, name);
         }
+        
+        // Show success notification
+        if (showNotification) {
+            refreshBtn.innerHTML = originalContent;
+            refreshBtn.style.animation = '';
+            showNotificationPopup(`✓ Refreshed: ${data.total_recipes} recipes in ${data.total_categories} categories`, 'success');
+        }
     } catch (error) {
         console.error('Failed to load recipes:', error);
         document.getElementById('categories-panel').innerHTML = 
             '<div class="loading">Failed to load recipes. Please refresh.</div>';
+        if (showNotification) {
+            const refreshBtn = document.getElementById('refresh-btn');
+            refreshBtn.innerHTML = '⟳';
+            refreshBtn.style.animation = '';
+            showNotificationPopup('✗ Failed to refresh recipes', 'error');
+        }
     }
 }
 
@@ -277,7 +315,8 @@ function renderRecipeDetails(recipe) {
     
     // Name and Category
     html += `<div class="recipe-name">${escapeHtml(recipe.name)}</div>`;
-    html += `<div class="recipe-category">Category: ${escapeHtml(recipe.category)}</div>`;
+    const displayCategory = recipe.category || 'Misc';
+    html += `<div class="recipe-category">Category: ${escapeHtml(displayCategory)}</div>`;
     html += '<div class="separator"></div>';
     
     // Effectiveness

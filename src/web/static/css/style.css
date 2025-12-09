@@ -1353,3 +1353,41 @@ code {
     display: inline-block;
     animation: spin 1s linear infinite;
 }
+
+/* Notification popup */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    background: var(--surface0);
+    border-left: 4px solid var(--blue);
+    color: var(--text);
+    font-weight: 500;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s ease;
+}
+
+.notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.notification-success {
+    border-left-color: var(--green);
+    background: linear-gradient(135deg, var(--surface0) 0%, rgba(166, 227, 161, 0.1) 100%);
+}
+
+.notification-error {
+    border-left-color: var(--red);
+    background: linear-gradient(135deg, var(--surface0) 0%, rgba(243, 139, 168, 0.1) 100%);
+}
+
+.notification-info {
+    border-left-color: var(--blue);
+    background: linear-gradient(135deg, var(--surface0) 0%, rgba(137, 180, 250, 0.1) 100%);
+}

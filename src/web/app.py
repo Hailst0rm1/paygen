@@ -84,9 +84,12 @@ def index():
 @app.route('/api/recipes')
 def get_recipes():
     """Get all recipes organized by category"""
+    # Reload recipes from disk to detect changes
+    current_recipes = recipe_loader.load_all_recipes()
+    
     # Organize recipes by category
     categories = {}
-    for recipe in recipes:
+    for recipe in current_recipes:
         category = recipe.category if recipe.category else "Misc"
         if category not in categories:
             categories[category] = []
@@ -111,7 +114,7 @@ def get_recipes():
     
     return jsonify({
         'categories': categories,
-        'total_recipes': len(recipes),
+        'total_recipes': len(current_recipes),
         'total_categories': len(categories)
     })
 
@@ -119,7 +122,10 @@ def get_recipes():
 @app.route('/api/recipe/<category>/<name>')
 def get_recipe(category, name):
     """Get a specific recipe by category and name"""
-    for recipe in recipes:
+    # Reload recipes from disk to detect changes
+    current_recipes = recipe_loader.load_all_recipes()
+    
+    for recipe in current_recipes:
         # Handle empty categories mapped to "Misc"
         recipe_category = recipe.category if recipe.category else "Misc"
         if recipe_category == category and recipe.name == name:
@@ -160,7 +166,10 @@ def get_recipe(category, name):
 @app.route('/api/recipe/<category>/<name>/code')
 def get_recipe_code(category, name):
     """Get the template/command code for a recipe"""
-    for recipe in recipes:
+    # Reload recipes from disk to detect changes
+    current_recipes = recipe_loader.load_all_recipes()
+    
+    for recipe in current_recipes:
         # Handle empty categories mapped to "Misc"
         recipe_category = recipe.category if recipe.category else "Misc"
         if recipe_category == category and recipe.name == name:
