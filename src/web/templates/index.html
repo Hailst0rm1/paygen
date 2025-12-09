@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PAYGEN - Payload Generation Framework</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+    <!-- Prism.js for syntax highlighting with custom Catppuccin Mocha theme -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-csharp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-powershell.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js"></script>
+    <style>
+        /* Override Prism theme with Catppuccin Mocha colors */
+        pre[class*="language-"] {
+            background: #1e1e2e !important;
+            color: #cdd6f4 !important;
+        }
+        #recipe-details pre[class*="language-"] {
+            background: var(--crust) !important;
+        }
+        code[class*="language-"] {
+            color: #cdd6f4 !important;
+        }
+        .token.comment,
+        .token.prolog,
+        .token.doctype,
+        .token.cdata {
+            color: #6c7086 !important;
+        }
+        .token.punctuation {
+            color: #bac2de !important;
+        }
+        .token.property,
+        .token.tag,
+        .token.boolean,
+        .token.number,
+        .token.constant,
+        .token.symbol,
+        .token.deleted {
+            color: #fab387 !important;
+        }
+        .token.selector,
+        .token.attr-name,
+        .token.string,
+        .token.char,
+        .token.builtin,
+        .token.inserted {
+            color: #a6e3a1 !important;
+        }
+        .token.operator,
+        .token.entity,
+        .token.url,
+        .language-css .token.string,
+        .style .token.string {
+            color: #89dceb !important;
+        }
+        .token.atrule,
+        .token.attr-value,
+        .token.keyword {
+            color: #cba6f7 !important;
+        }
+        .token.function,
+        .token.class-name {
+            color: #89b4fa !important;
+        }
+        .token.regex,
+        .token.important,
+        .token.variable {
+            color: #f9e2af !important;
+        }
+        /* Line numbers styling */
+        .line-numbers .line-numbers-rows {
+            border-right: 1px solid #45475a !important;
+        }
+        .line-numbers .line-numbers-rows > span {
+            background: #181825 !important;
+        }
+        .line-numbers-rows > span:before {
+            color: #6c7086 !important;
+        }
+        pre[class*="language-"].line-numbers {
+            padding-left: 3.8em !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            overflow-y: visible !important;
+        }
+        pre[class*="language-"].line-numbers > code {
+            background: #1e1e2e !important;
+        }
+        /* Better font rendering for code */
+        pre[class*="language-"],
+        code[class*="language-"] {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+            font-size: 0.9rem !important;
+            line-height: 1.6 !important;
+            letter-spacing: 0.02em !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <h1 class="title">PAYGEN - Payload Generation Framework</h1>
+        <div class="header-info">
+            <span id="recipe-count">Recipes: 0</span>
+            <span>|</span>
+            <span id="category-count">Categories: 0</span>
+        </div>
+        <div class="header-actions">
+            <button id="history-btn" class="btn btn-secondary">
+                <span class="btn-icon">📜</span> History
+            </button>
+            <button id="refresh-btn" class="btn btn-secondary">
+                <span class="btn-icon">🔄</span> Refresh
+            </button>
+        </div>
+    </header>
+
+    <!-- Main container with 3-panel layout -->
+    <main class="main-container">
+        <!-- Left Panel: Categories & Recipes -->
+        <aside class="panel panel-left">
+            <div class="panel-header">
+                <h2>Recipes</h2>
+            </div>
+            <div class="panel-content" id="categories-panel">
+                <input type="text" id="recipe-search" class="recipe-search-input" placeholder="Search recipes... (press /)">
+                <div id="categories-container">
+                    <div class="loading">Loading recipes...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Middle Panel: Recipe Details -->
+        <section class="panel panel-middle">
+            <div class="panel-header">
+                <h2>Recipe Details</h2>
+            </div>
+            <div class="panel-content panel-content-with-footer" id="recipe-details">
+                <div class="placeholder">
+                    <p>Select a recipe to view details</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Panel: Code Preview -->
+        <section class="panel panel-right" id="code-preview-panel">
+            <div class="panel-header">
+                <h2>Code Preview</h2>
+                <button id="fullscreen-toggle" class="icon-btn" title="Toggle Fullscreen (Ctrl+F)">
+                    <span id="fullscreen-icon">⛶</span>
+                </button>
+            </div>
+            <div class="panel-content" id="code-preview">
+                <div class="placeholder">
+                    <p>Select a recipe to view code</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal: Parameter Configuration -->
+    <div id="param-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Generate Payload</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body" id="param-form-container">
+                <!-- Parameters form will be inserted here -->
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-generate-btn" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-generate-btn" class="btn btn-primary">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Build Progress -->
+    <div id="build-modal" class="modal">
+        <div class="modal-content build-modal">
+            <div class="modal-header">
+                <h2>Building Payload</h2>
+            </div>
+            <div class="modal-body">
+                <div id="build-steps-container">
+                    <!-- Build steps will be inserted here -->
+                </div>
+                <div id="build-result" class="build-result"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="close-build-btn" class="btn btn-secondary" style="display: none;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: History -->
+    <div id="history-modal" class="modal">
+        <div class="modal-content history-modal">
+            <div class="modal-header">
+                <h2>Build History</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="history-stats-bar" id="history-stats">
+                Total: 0 | Success: 0 | Failed: 0
+            </div>
+            <div class="modal-body">
+                <div id="history-container">
+                    <!-- History entries will be inserted here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="back-history-btn" class="btn btn-secondary" style="display: none; margin-right: auto;">Back</button>
+                <button id="clear-history-btn" class="btn btn-danger">Clear All</button>
+                <button id="close-history-btn" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        // Set build debug flag from backend config
+        window.showBuildDebug = {{ 'true' if show_build_debug else 'false' }};
+    </script>
+</body>
+</html>

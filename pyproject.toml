@@ -11,14 +11,17 @@ dependencies = [
     "Jinja2>=3.1.0",
     "pycryptodome>=3.19.0",
     "rich>=13.0.0",
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
 ]
 
 [project.scripts]
 paygen = "src.main:main"
+paygen-web = "src.web_main:main"
 
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["src", "src.tui", "src.core", "src.utils"]
+packages = ["src", "src.tui", "src.core", "src.utils", "src.web"]

@@ -313,9 +313,12 @@ class PayloadBuilder:
             if self.build_options.get('remove_console_output', False):
                 rendered_code = self._remove_console_output(rendered_code, full_template_path.suffix)
             
-            # Determine output paths
-            output_path = Path(self.variables.get('output_path', self.config.output_dir))
-            output_file = self.variables.get('output_file', 'payload')
+            # Determine output paths - render templates
+            output_path_template = self.variables.get('output_path', str(self.config.output_dir))
+            output_file_template = self.variables.get('output_file', 'payload')
+            
+            output_path = Path(JINJA_ENV.from_string(str(output_path_template)).render(**self.variables))
+            output_file = JINJA_ENV.from_string(str(output_file_template)).render(**self.variables)
             
             # Create output directory if it doesn't exist
             output_path.mkdir(parents=True, exist_ok=True)
@@ -447,8 +450,13 @@ class PayloadBuilder:
                 self._update_step(step)
                 
                 # Determine output file from parameters
-                output_path = Path(self.variables.get('output_path', self.config.output_dir))
-                output_file = self.variables.get('output_file', 'payload')
+                output_path_template = self.variables.get('output_path', str(self.config.output_dir))
+                output_file_template = self.variables.get('output_file', 'payload')
+                
+                # Render templates
+                output_path = Path(JINJA_ENV.from_string(str(output_path_template)).render(**self.variables))
+                output_file = JINJA_ENV.from_string(str(output_file_template)).render(**self.variables)
+                
                 full_output = output_path / output_file
                 
                 # Strip binaries if configured and file exists

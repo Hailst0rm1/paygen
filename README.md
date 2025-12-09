@@ -1,24 +1,39 @@
 # Paygen
 
-> Modern TUI framework for offensive payload generation
+> Modern TUI & Web framework for offensive payload generation
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Tests](https://img.shields.io/badge/tests-37%20passing-success.svg)
 
-Paygen is a terminal-based payload generation framework for security researchers and penetration testers. It provides an intuitive interface for creating and customizing offensive payloads with built-in MITRE ATT&CK mappings, effectiveness ratings, and advanced preprocessing pipelines.
+Paygen is a dual-interface payload generation framework for security researchers and penetration testers. It provides both a beautiful terminal UI (TUI) and a modern web interface for creating and customizing offensive payloads with built-in MITRE ATT&CK mappings, effectiveness ratings, and advanced preprocessing pipelines.
+
+---
+
+## Screenshots
+
+### Terminal UI (TUI)
+![Paygen TUI](screenshots/tui.png)
+
+### Web Interface
+![Paygen Web GUI](screenshots/web.png)
 
 ---
 
 ## Features
 
-- 🎨 **Beautiful TUI** - Catppuccin Mocha theme with vim-style navigation
+- 🎨 **Dual Interface** - Choose between TUI (terminal) or Web GUI
+- 🌐 **Web GUI** - Modern web interface with real-time validation and syntax highlighting
+- 🖥️ **Beautiful TUI** - Catppuccin Mocha theme with vim-style navigation
 - 📋 **Recipe System** - YAML-based payload definitions with rich metadata
 - 🔄 **Preprocessing** - Chain XOR/AES encryption, compression, encoding
 - 🎯 **MITRE ATT&CK** - Built-in tactic and technique mappings
 - 📊 **Effectiveness** - HIGH/MEDIUM/LOW evasion ratings
 - 📜 **History** - Track all builds with parameters and launch instructions
 - ⚡ **Flexible** - Template-based (C#, PS1) and command-based (msfvenom)
+- 🔍 **Search** - Quickly find recipes with built-in search functionality
+- ✅ **Validation** - Real-time parameter validation (IP, port, paths, hex)
+- 🎛️ **Build Options** - Remove comments, console output, strip binaries
 
 ---
 
@@ -32,8 +47,12 @@ cd paygen
 # Install dependencies
 pip install -r requirements.txt
 
-# Run paygen
+# Run TUI
 python -m src.main
+
+# Or run Web GUI
+python -m src.web_main
+# Then open http://localhost:1337 in your browser
 ```
 
 ### Requirements
@@ -45,6 +64,8 @@ python -m src.main
 
 ## Quick Start
 
+### Terminal UI (TUI)
+
 ```bash
 # 1. Launch TUI
 python -m src.main
@@ -55,9 +76,25 @@ python -m src.main
 # 5. View history with Ctrl+H
 ```
 
+### Web GUI
+
+```bash
+# 1. Launch web server
+python -m src.web_main
+
+# 2. Open browser to http://localhost:1337
+
+# 3. Click any recipe to view details
+# 4. Click "Generate" to configure parameters
+# 5. Use "/" to search recipes
+# 6. Click "History" to view past builds
+```
+
 ---
 
 ## Navigation
+
+### Terminal UI (TUI)
 
 | Key              | Action           |
 | ---------------- | ---------------- |
@@ -68,6 +105,18 @@ python -m src.main
 | `Ctrl+F`         | Fullscreen code  |
 | `?`              | Help             |
 | `Ctrl+Q`         | Quit             |
+
+### Web GUI
+
+| Action              | Method                        |
+| ------------------- | ----------------------------- |
+| Search recipes      | Press `/` or click search box |
+| Select recipe       | Click recipe name             |
+| Generate payload    | Click "Generate" button       |
+| View history        | Click "History" button        |
+| View recipe details | Click history entry           |
+| Refresh recipes     | Click refresh icon (top-left) |
+| Copy code           | Click copy icon in code panel |
 
 ---
 
@@ -143,12 +192,19 @@ paygen/
 ├── src/
 │   ├── core/           # Config, recipes, validation, building
 │   ├── tui/            # TUI panels and widgets
+│   ├── web/            # Web GUI (Flask + static assets)
+│   │   ├── app.py      # Flask application & REST API
+│   │   ├── static/     # CSS, JavaScript
+│   │   └── templates/  # HTML templates
+│   ├── main.py         # TUI entry point
+│   ├── web_main.py     # Web GUI entry point
 │   └── utils/          # Utilities
 ├── recipes/            # Recipe YAML files (tracked in git)
 ├── templates/          # Source templates (tracked in git)
 ├── preprocessors/      # Processing scripts (tracked in git)
 ├── output/             # Generated payloads (gitignored)
 ├── tests/              # Test suite (37 tests)
+├── screenshots/        # UI screenshots
 └── docs/               # Documentation
 ```
 
@@ -159,16 +215,36 @@ paygen/
 Located at `~/.config/paygen/config.yaml`:
 
 ```yaml
+# Directories
 recipes_dir: "~/Documents/Tools/paygen/recipes"
 templates_dir: "~/Documents/Tools/paygen/templates"
 preprocessors_dir: "~/Documents/Tools/paygen/preprocessors"
 output_dir: "~/Documents/Tools/paygen/output"
 
+# Build options
 keep_source_files: false
 show_build_debug: false
 remove_comments: true # Strip comments from source before compilation
 strip_binaries: true # Remove debug symbols from compiled binaries
+
+# Web GUI settings
+web_host: "0.0.0.0" # Bind to all interfaces
+web_port: 1337 # Web server port
+web_debug: false # Flask debug mode
 ```
+
+### Web GUI Features
+
+The web interface provides:
+
+- **Real-time Validation**: Parameters validated as you type (IP addresses, ports, paths, hex values)
+- **Syntax Highlighting**: Code preview with language-specific highlighting (C#, PowerShell, Python, etc.)
+- **Search**: Press `/` to quickly find recipes by name or category
+- **Build Progress**: Real-time build status with step-by-step progress
+- **Build Options**: Checkboxes to remove comments, console output, or strip binaries
+- **History Management**: View all builds, detailed parameters, and delete individual entries
+- **Launch Instructions**: Formatted markdown with syntax-highlighted code blocks and copy buttons
+- **Responsive Design**: Clean 3-panel layout with Catppuccin Mocha theme
 
 ---
 
@@ -388,6 +464,8 @@ pytest tests/ -v
 ### Tech Stack
 
 - **TUI**: Textual 0.47.0
+- **Web**: Flask 3.0.0+, Flask-CORS
+- **Frontend**: Vanilla JavaScript, Prism.js (syntax highlighting), Marked.js (markdown)
 - **Templates**: Jinja2
 - **Crypto**: PyCryptodome
 - **Testing**: pytest

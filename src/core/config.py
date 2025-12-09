@@ -19,7 +19,10 @@ class ConfigManager:
         'keep_source_files': False,
         'show_build_debug': False,
         'remove_comments': True,
-        'strip_binaries': True
+        'strip_binaries': True,
+        'web_host': '0.0.0.0',
+        'web_port': 1337,
+        'web_debug': False
     }
     
     def __init__(self, config_path: Optional[str] = None):
@@ -159,6 +162,21 @@ class ConfigManager:
     def strip_binaries(self) -> bool:
         """Get strip binaries setting"""
         return self.get('strip_binaries', True)
+    
+    @property
+    def web_host(self) -> str:
+        """Get web server host"""
+        return self.get('web_host', '0.0.0.0')
+    
+    @property
+    def web_port(self) -> int:
+        """Get web server port"""
+        return self.get('web_port', 1337)
+    
+    @property
+    def web_debug(self) -> bool:
+        """Get web server debug mode"""
+        return self.get('web_debug', False)
 
 
 # Global config instance

@@ -15,6 +15,8 @@ pkgs.mkShell {
     python311Packages.rich
     python311Packages.pycryptodome
     python311Packages.pytest
+    python311Packages.flask
+    python311Packages.flask-cors
 
     # Development tools
     git
@@ -41,6 +43,7 @@ pkgs.mkShell {
     echo ""
     echo "Installed packages:"
     echo "  - PyYAML, Jinja2, Textual, Rich, PyCryptodome"
+    echo "  - Flask, Flask-CORS (web GUI)"
     echo "  - pytest (testing framework)"
     echo ""
     echo "Payload tools:"
