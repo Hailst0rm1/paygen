@@ -1335,11 +1335,8 @@ function showHistoryDetail(index) {
                 instructions = instructions.replace(regex1, paramValue);
             });
             
-            // Store old ID, change to expected ID, render, restore
-            const oldId = launchContainer.id;
-            launchContainer.id = 'launch-instructions-md';
-            renderLaunchInstructions(instructions);
-            launchContainer.id = oldId;
+            // Render launch instructions with the correct container ID
+            renderLaunchInstructions(instructions, `history-launch-detail-${index}`);
         }
     }
 }
