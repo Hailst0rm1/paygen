@@ -154,6 +154,14 @@ function renderCategories(filterQuery = '') {
     sortedCategories.forEach(categoryName => {
         const categoryRecipes = filteredCategories[categoryName];
         
+        // Sort recipes by effectiveness: HIGH -> MEDIUM -> LOW
+        const effectivenessOrder = { 'high': 1, 'medium': 2, 'low': 3 };
+        const sortedRecipes = categoryRecipes.sort((a, b) => {
+            const aOrder = effectivenessOrder[a.effectiveness.toLowerCase()] || 4;
+            const bOrder = effectivenessOrder[b.effectiveness.toLowerCase()] || 4;
+            return aOrder - bOrder;
+        });
+        
         html += `
             <div class="category">
                 <div class="category-header" onclick="toggleCategory(this)">
@@ -161,7 +169,7 @@ function renderCategories(filterQuery = '') {
                     <span>${categoryName}</span>
                 </div>
                 <div class="recipe-list">
-                    ${categoryRecipes.map(recipe => `
+                    ${sortedRecipes.map(recipe => `
                         <div class="recipe-item" 
                              data-category="${recipe.category}" 
                              data-name="${recipe.name}"
