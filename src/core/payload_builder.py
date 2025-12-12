@@ -133,12 +133,18 @@ class PayloadBuilder:
                                 # Not JSON, store as-is (plain string or bytes)
                                 self.variables[preproc_step['output_var']] = output
                         else:
-                            # Command output - base64 encode bytes so they can be safely passed through Jinja2
+                            # Command output - decode bytes to string if possible, otherwise base64 encode
                             if isinstance(output, bytes):
-                                import base64
-                                self.variables[preproc_step['output_var']] = base64.b64encode(output).decode('ascii')
+                                try:
+                                    # Try to decode as UTF-8 text (for file paths, JSON, etc.)
+                                    decoded = output.decode('utf-8').strip()
+                                    self.variables[preproc_step['output_var']] = decoded
+                                except UnicodeDecodeError:
+                                    # Binary data (shellcode, etc.) - base64 encode for safe template passing
+                                    import base64
+                                    self.variables[preproc_step['output_var']] = base64.b64encode(output).decode('ascii')
                             else:
-                                self.variables[preproc_step['output_var']] = output
+                                self.variables[preproc_step['output_var']] = output.strip() if isinstance(output, str) else output
             
             # Step 2: Generate payload
             output_config = recipe.get('output', {})
