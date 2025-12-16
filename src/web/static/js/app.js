@@ -4,6 +4,7 @@
 let recipes = {};
 let selectedRecipe = null;
 let categories = {};
+let activeEffectivenessFilters = new Set();
 
 // Notification popup
 function showNotificationPopup(message, type = 'info') {
@@ -33,6 +34,26 @@ function setupEventListeners() {
     // Header buttons
     document.getElementById('history-btn').addEventListener('click', showHistory);
     document.getElementById('refresh-btn').addEventListener('click', () => loadRecipes(true));
+    
+    // Effectiveness filter pills
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+        pill.addEventListener('click', function() {
+            const effectiveness = this.dataset.effectiveness;
+            
+            // Toggle this filter on/off
+            if (activeEffectivenessFilters.has(effectiveness)) {
+                activeEffectivenessFilters.delete(effectiveness);
+                this.classList.remove('active');
+            } else {
+                activeEffectivenessFilters.add(effectiveness);
+                this.classList.add('active');
+            }
+            
+            // Re-render with current search query
+            const searchInput = document.getElementById('recipe-search');
+            renderCategories(searchInput ? searchInput.value : '');
+        });
+    });
     
     // Fullscreen toggle for code preview
     const fullscreenToggle = document.getElementById('fullscreen-toggle');
@@ -156,21 +177,26 @@ function renderCategories(filterQuery = '') {
     
     let html = '';
     
-    // Filter recipes if query provided
-    let filteredCategories = categories;
-    if (filterQuery) {
-        const queryLower = filterQuery.toLowerCase();
-        filteredCategories = {};
-        
-        Object.keys(categories).forEach(categoryName => {
-            const matchingRecipes = categories[categoryName].filter(recipe => 
-                recipe.name.toLowerCase().includes(queryLower)
-            );
-            if (matchingRecipes.length > 0) {
-                filteredCategories[categoryName] = matchingRecipes;
-            }
+    // Filter recipes by search query and effectiveness
+    let filteredCategories = {};
+    
+    Object.keys(categories).forEach(categoryName => {
+        const matchingRecipes = categories[categoryName].filter(recipe => {
+            // Check if recipe matches search query
+            const matchesSearch = !filterQuery || recipe.name.toLowerCase().includes(filterQuery.toLowerCase());
+            
+            // Check if recipe matches effectiveness filter
+            // If no filters are active, show all recipes
+            const matchesEffectiveness = activeEffectivenessFilters.size === 0 || 
+                                        activeEffectivenessFilters.has(recipe.effectiveness.toLowerCase());
+            
+            return matchesSearch && matchesEffectiveness;
         });
-    }
+        
+        if (matchingRecipes.length > 0) {
+            filteredCategories[categoryName] = matchingRecipes;
+        }
+    });
     
     // Sort categories with Misc and Examples at the bottom
     const sortedCategories = Object.keys(filteredCategories).sort((a, b) => {
@@ -333,7 +359,7 @@ function renderRecipeDetails(recipe) {
     // Description
     html += '<div class="section-header">Description:</div>';
     const formattedDescription = recipe.description.split('\n').map(line => 
-        `<div class="description-line">${escapeHtml(line)}</div>`
+        `<div class="description-line">${escapeHtml(line) || '&nbsp;'}</div>`
     ).join('');
     html += `<div class="description-content">${formattedDescription}</div>`;
     html += '<div class="separator"></div>';

@@ -253,6 +253,58 @@ body {
     font-style: italic;
 }
 
+/* Effectiveness filters */
+.effectiveness-filters {
+    flex-shrink: 0;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0 1rem 1rem 1rem;
+    position: sticky;
+    top: 3rem;
+    z-index: 9;
+}
+
+.filter-pill {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0.4;
+    color: var(--base);
+}
+
+.filter-pill.active {
+    opacity: 1;
+}
+
+.filter-pill-high {
+    background-color: var(--green);
+}
+
+.filter-pill-high:hover {
+    background-color: var(--teal);
+}
+
+.filter-pill-medium {
+    background-color: var(--yellow);
+}
+
+.filter-pill-medium:hover {
+    background-color: var(--peach);
+}
+
+.filter-pill-low {
+    background-color: var(--red);
+}
+
+.filter-pill-low:hover {
+    background-color: var(--maroon);
+}
+
 #categories-container {
     flex: 1;
     overflow-y: auto;
