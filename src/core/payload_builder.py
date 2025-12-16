@@ -532,24 +532,24 @@ class PayloadBuilder:
         
         # C-style comments (C, C++, C#, Java, JavaScript)
         if file_extension in ['.c', '.cpp', '.cs', '.h', '.hpp', '.java', '.js']:
-            # Remove single-line comments
-            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
+            # Remove single-line comments (only lines that start with //)
+            code = re.sub(r'^\s*//.*?$', '', code, flags=re.MULTILINE)
             # Remove multi-line comments
             code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
         
         # Python comments
         elif file_extension in ['.py']:
-            # Remove single-line comments
-            code = re.sub(r'#.*?$', '', code, flags=re.MULTILINE)
+            # Remove single-line comments (only lines that start with #)
+            code = re.sub(r'^\s*#.*?$', '', code, flags=re.MULTILINE)
         
         # PowerShell comments
         elif file_extension in ['.ps1']:
-            # Remove single-line comments (both PowerShell # and C# // for embedded code)
-            code = re.sub(r'#.*?$', '', code, flags=re.MULTILINE)
-            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
-            # Remove multi-line comments (both PowerShell <# #> and C# /* */)
+            # Remove multi-line comments first (both PowerShell <# #> and C# /* */)
             code = re.sub(r'<#.*?#>', '', code, flags=re.DOTALL)
             code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+            # Then remove single-line comments (only lines that start with # or //)
+            code = re.sub(r'^\s*#.*?$', '', code, flags=re.MULTILINE)
+            code = re.sub(r'^\s*//.*?$', '', code, flags=re.MULTILINE)
         
         # VBA comments (Visual Basic for Applications)
         elif file_extension in ['.vba', '.vbs', '.bas']:
