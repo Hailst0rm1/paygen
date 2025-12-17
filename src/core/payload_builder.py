@@ -611,12 +611,12 @@ class PayloadBuilder:
                 filtered_lines.append(line)
             code = '\n'.join(filtered_lines)
         
-        # PowerShell - Remove Write-Host, Write-Output, etc.
+        # PowerShell - Remove Write-Host, Write-Verbose, Write-Debug (but NOT Write-Output as it's used for returns)
         elif file_extension in ['.ps1']:
             lines = code.split('\n')
             filtered_lines = []
             for line in lines:
-                if re.match(r'^\s*(Write-Host|Write-Output|Write-Verbose|Write-Debug|echo)\s+', line.strip()):
+                if re.match(r'^\s*(Write-Host|Write-Verbose|Write-Debug|Write-Information|echo)\s+', line.strip()):
                     continue
                 filtered_lines.append(line)
             code = '\n'.join(filtered_lines)
