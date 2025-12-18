@@ -64,14 +64,6 @@ function setupEventListeners() {
         fullscreenToggle.addEventListener('click', () => {
             codePreviewPanel.classList.toggle('fullscreen');
         });
-        
-        // Keyboard shortcut for fullscreen (Ctrl+F)
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 'f') {
-                e.preventDefault();
-                codePreviewPanel.classList.toggle('fullscreen');
-            }
-        });
     }
     
     // Modal close buttons
