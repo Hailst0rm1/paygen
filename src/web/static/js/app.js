@@ -617,8 +617,18 @@ async function loadCodePreview(category, name) {
 }
 
 // Show parameter form
-function showParameterForm() {
+async function showParameterForm() {
     if (!selectedRecipe) return;
+    
+    // Load AMSI bypasses
+    let amsiBypasses = [];
+    try {
+        const response = await fetch('/api/amsi-bypasses');
+        const data = await response.json();
+        amsiBypasses = data.bypasses || [];
+    } catch (error) {
+        console.error('Failed to load AMSI bypasses:', error);
+    }
     
     const container = document.getElementById('param-form-container');
     let html = '';
@@ -672,6 +682,82 @@ function showParameterForm() {
         html = '<p>This recipe has no configurable parameters.</p>';
     }
     
+    // Add language-specific options section (for PowerShell obfuscation)
+    const outputType = selectedRecipe.output?.type || 'template';
+    if (outputType === 'template') {
+        const templatePath = selectedRecipe.output?.template || '';
+        const isPS1 = templatePath.toLowerCase().endsWith('.ps1');
+        
+        if (isPS1) {
+            html += `
+                <div class="param-form-separator"></div>
+                <div class="param-form-section-title">Language Specific Options</div>
+                <div class="param-form-item">
+                    <label class="param-form-checkbox-label">
+                        <input type="checkbox" id="ps-amsi-bypass" class="param-form-checkbox">
+                        Insert AMSI bypass
+                    </label>
+                    <div class="param-form-description">Inject AMSI bypass at the beginning of the script</div>
+                </div>
+                <div class="param-form-item" id="ps-amsi-method-container" style="display: none;">
+                    <label class="param-form-label">
+                        Bypass Method
+                        <span class="param-type">[choice]</span>
+                    </label>
+                    <select class="param-form-select" id="ps-amsi-method">
+                        ${amsiBypasses.map(bypass => `<option value="${bypass}">${bypass}</option>`).join('')}
+                    </select>
+                    <div class="param-form-description">AMSI bypass method to inject (applied before obfuscation)</div>
+                </div>
+                <div class="param-form-item">
+                    <label class="param-form-checkbox-label">
+                        <input type="checkbox" id="ps-obfuscate" class="param-form-checkbox" checked>
+                        Obfuscate PowerShell script
+                    </label>
+                    <div class="param-form-description">Apply obfuscation using psobf to evade detection</div>
+                </div>
+                <div class="param-form-item" id="ps-obfuscate-level-container">
+                    <label class="param-form-label">
+                        Obfuscation Level
+                        <span class="param-type">[choice]</span>
+                    </label>
+                    <select class="param-form-select" id="ps-obfuscate-level">
+                        <option value="high" selected>High - Maximum obfuscation</option>
+                        <option value="medium">Medium - Balanced obfuscation</option>
+                        <option value="low">Low - Minimal obfuscation</option>
+                    </select>
+                    <div class="param-form-description">Higher levels provide better evasion but may fail on complex scripts</div>
+                </div>
+            `;
+            
+            // Add event listener logic for checkbox toggle (will be added after DOM update)
+            setTimeout(() => {
+                const amsiCheckbox = document.getElementById('ps-amsi-bypass');
+                const amsiContainer = document.getElementById('ps-amsi-method-container');
+                const obfCheckbox = document.getElementById('ps-obfuscate');
+                const levelContainer = document.getElementById('ps-obfuscate-level-container');
+                
+                if (amsiCheckbox && amsiContainer) {
+                    const updateAmsiVisibility = () => {
+                        amsiContainer.style.display = amsiCheckbox.checked ? 'block' : 'none';
+                    };
+                    
+                    amsiCheckbox.addEventListener('change', updateAmsiVisibility);
+                    updateAmsiVisibility();
+                }
+                
+                if (obfCheckbox && levelContainer) {
+                    const updateLevelVisibility = () => {
+                        levelContainer.style.display = obfCheckbox.checked ? 'block' : 'none';
+                    };
+                    
+                    obfCheckbox.addEventListener('change', updateLevelVisibility);
+                    updateLevelVisibility();
+                }
+            }, 0);
+        }
+    }
+    
     // Add build options section
     html += `
         <div class="param-form-separator"></div>
@@ -679,7 +765,7 @@ function showParameterForm() {
     `;
     
     // Only show "remove comments" option for template-based recipes
-    const outputType = selectedRecipe.output?.type || 'template';
+    // outputType already declared above
     if (outputType === 'template') {
         html += `
             <div class="param-form-item">
@@ -707,7 +793,69 @@ function showParameterForm() {
             </label>
             <div class="param-form-description">Remove debug symbols and metadata from compiled binaries</div>
         </div>
+        <div class="param-form-item">
+            <label class="param-form-checkbox-label">
+                <input type="checkbox" id="amsi-bypass-launch" class="param-form-checkbox">
+                Insert AMSI bypass in launch instructions
+            </label>
+            <div class="param-form-description">Inject AMSI bypass into PowerShell code blocks</div>
+        </div>
+        <div class="param-form-item" id="amsi-bypass-launch-method-container" style="display: none;">
+            <label class="param-form-label">
+                Bypass Method
+                <span class="param-type">[choice]</span>
+            </label>
+            <select class="param-form-select" id="amsi-bypass-launch-method">
+                ${amsiBypasses.map(bypass => `<option value="${bypass}">${bypass}</option>`).join('')}
+            </select>
+            <div class="param-form-description">AMSI bypass method (applied before obfuscation)</div>
+        </div>
+        <div class="param-form-item">
+            <label class="param-form-checkbox-label">
+                <input type="checkbox" id="obfuscate-launch-ps" class="param-form-checkbox">
+                Obfuscate PowerShell in launch instructions
+            </label>
+            <div class="param-form-description">Apply obfuscation to PowerShell code blocks in launch instructions</div>
+        </div>
+        <div class="param-form-item" id="obfuscate-launch-ps-level-container" style="display: none;">
+            <label class="param-form-label">
+                Obfuscation Level
+                <span class="param-type">[choice]</span>
+            </label>
+            <select class="param-form-select" id="obfuscate-launch-ps-level">
+                <option value="high">High - Maximum obfuscation</option>
+                <option value="medium">Medium - Balanced obfuscation</option>
+                <option value="low" selected>Low - Minimal obfuscation</option>
+            </select>
+            <div class="param-form-description">Higher levels provide better evasion but may fail on complex scripts</div>
+        </div>
     `;
+    
+    // Add event listeners for launch instructions options
+    setTimeout(() => {
+        const amsiLaunchCheckbox = document.getElementById('amsi-bypass-launch');
+        const amsiLaunchContainer = document.getElementById('amsi-bypass-launch-method-container');
+        const obfCheckbox = document.getElementById('obfuscate-launch-ps');
+        const levelContainer = document.getElementById('obfuscate-launch-ps-level-container');
+        
+        if (amsiLaunchCheckbox && amsiLaunchContainer) {
+            const updateAmsiVisibility = () => {
+                amsiLaunchContainer.style.display = amsiLaunchCheckbox.checked ? 'block' : 'none';
+            };
+            
+            amsiLaunchCheckbox.addEventListener('change', updateAmsiVisibility);
+            updateAmsiVisibility();
+        }
+        
+        if (obfCheckbox && levelContainer) {
+            const updateLevelVisibility = () => {
+                levelContainer.style.display = obfCheckbox.checked ? 'block' : 'none';
+            };
+            
+            obfCheckbox.addEventListener('change', updateLevelVisibility);
+            updateLevelVisibility();
+        }
+    }, 0);
     
     container.innerHTML = html;
     
@@ -864,6 +1012,46 @@ async function generatePayload() {
         remove_console_output: document.getElementById('build-remove-console')?.checked || false,
         strip_binaries: document.getElementById('build-strip-binaries')?.checked || false
     };
+    
+    // Collect PowerShell obfuscation options
+    const psObfuscateCheckbox = document.getElementById('ps-obfuscate');
+    if (psObfuscateCheckbox) {
+        buildOptions.ps_obfuscate = psObfuscateCheckbox.checked;
+        if (psObfuscateCheckbox.checked) {
+            const psObfuscateLevel = document.getElementById('ps-obfuscate-level');
+            buildOptions.ps_obfuscate_level = psObfuscateLevel ? psObfuscateLevel.value : 'high';
+        }
+    }
+    
+    // Collect PowerShell AMSI bypass options for templates
+    const psAmsiCheckbox = document.getElementById('ps-amsi-bypass');
+    if (psAmsiCheckbox) {
+        buildOptions.ps_amsi_bypass = psAmsiCheckbox.checked;
+        if (psAmsiCheckbox.checked) {
+            const psAmsiMethod = document.getElementById('ps-amsi-method');
+            buildOptions.ps_amsi_method = psAmsiMethod ? psAmsiMethod.value : '';
+        }
+    }
+    
+    // Collect AMSI bypass options for launch instructions
+    const amsiLaunchCheckbox = document.getElementById('amsi-bypass-launch');
+    if (amsiLaunchCheckbox) {
+        buildOptions.amsi_bypass_launch = amsiLaunchCheckbox.checked;
+        if (amsiLaunchCheckbox.checked) {
+            const amsiLaunchMethod = document.getElementById('amsi-bypass-launch-method');
+            buildOptions.amsi_bypass_launch_method = amsiLaunchMethod ? amsiLaunchMethod.value : '';
+        }
+    }
+    
+    // Collect launch instructions obfuscation options
+    const launchPsObfuscateCheckbox = document.getElementById('obfuscate-launch-ps');
+    if (launchPsObfuscateCheckbox) {
+        buildOptions.obfuscate_launch_ps = launchPsObfuscateCheckbox.checked;
+        if (launchPsObfuscateCheckbox.checked) {
+            const launchPsObfuscateLevel = document.getElementById('obfuscate-launch-ps-level');
+            buildOptions.obfuscate_launch_ps_level = launchPsObfuscateLevel ? launchPsObfuscateLevel.value : 'low';
+        }
+    }
     
     // Close parameter modal
     document.getElementById('param-modal').classList.remove('active');
@@ -1297,7 +1485,8 @@ function showHistoryDetail(index) {
                             <div class="history-detail-step">
                                 <span style="color: ${stepColor};">${stepIcon}</span>
                                 ${escapeHtml(step.name)}
-                                ${step.error ? `<div class="history-detail-step-error">${escapeHtml(step.error.substring(0, 200))}</div>` : ''}
+                                ${step.output ? `<div class="history-detail-step-output">${escapeHtml(step.output)}</div>` : ''}
+                                ${step.error ? `<div class="history-detail-step-error">${escapeHtml(step.error)}</div>` : ''}
                             </div>
                         `;
                     }).join('')}

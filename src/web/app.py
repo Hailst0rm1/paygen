@@ -10,6 +10,10 @@ import sys
 import json
 import threading
 import uuid
+import re
+import tempfile
+import subprocess
+import random
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -41,6 +45,250 @@ config = None
 recipe_loader = None
 recipes = []
 history_manager = None
+
+
+def load_amsi_bypasses():
+    """Load AMSI bypass methods from templates/amsi_bypasses directory
+    
+    Returns:
+        Dict mapping bypass names to their code content
+    """
+    bypasses = {}
+    amsi_dir = config.templates_dir / 'amsi_bypasses'
+    
+    if not amsi_dir.exists():
+        return bypasses
+    
+    for bypass_file in amsi_dir.glob('*.ps1'):
+        # Convert filename to display name (remove extension, replace _ with space)
+        name = bypass_file.stem.replace('_', ' ')
+        
+        try:
+            with open(bypass_file, 'r') as f:
+                code = f.read().strip()
+                bypasses[name] = code
+        except Exception as e:
+            print(f"Warning: Failed to load AMSI bypass {bypass_file}: {e}", file=sys.stderr)
+    
+    return bypasses
+
+
+def inject_amsi_bypass_launch_instructions(launch_instructions: str, bypass_method: str) -> str:
+    """Inject AMSI bypass into launch instructions
+    
+    Args:
+        launch_instructions: Markdown text containing PowerShell code blocks
+        bypass_method: Name of the bypass method to use
+        
+    Returns:
+        Modified launch instructions with AMSI bypass injected
+    """
+    if not launch_instructions:
+        return launch_instructions
+    
+    # Load bypass code
+    amsi_dir = config.templates_dir / 'amsi_bypasses'
+    bypass_file = amsi_dir / f"{bypass_method.replace(' ', '_')}.ps1"
+    
+    if not bypass_file.exists():
+        return launch_instructions
+    
+    try:
+        with open(bypass_file, 'r') as f:
+            bypass_code = f.read().strip()
+    except:
+        return launch_instructions
+    
+    # Check if bypass is a one-liner (no newlines)
+    is_oneliner = '\n' not in bypass_code
+    
+    # Add AMSI Bypass section at the top
+    amsi_section = f"# AMSI Bypass\n\n```powershell\n{bypass_code}\n```\n\n"
+    modified_instructions = amsi_section + launch_instructions
+    
+    # If one-liner, prepend to download cradles
+    if is_oneliner:
+        # Keywords that identify download cradles
+        cradle_keywords = [
+            'DownloadString',
+            'DownloadFile',
+            'DownloadData',
+            'WebClient',
+            'WebRequest',
+            'Invoke-WebRequest',
+            'IWR',
+            'Invoke-RestMethod',
+            'IRM',
+            'Net.WebClient'
+        ]
+        
+        # Pattern to match PowerShell code blocks
+        pattern = r'(```(?:powershell|ps1)\s*\n)(.*?)(```)'
+        
+        def process_code_block(match):
+            opening = match.group(1)
+            code = match.group(2)
+            closing = match.group(3)
+            
+            # Check if this block contains download cradle keywords
+            has_cradle = any(keyword in code for keyword in cradle_keywords)
+            
+            if not has_cradle:
+                return match.group(0)
+            
+            # Split code into lines
+            lines = code.split('\n')
+            modified_lines = []
+            block_modified = False
+            
+            for line in lines:
+                # Check if this line contains a cradle
+                if any(keyword in line for keyword in cradle_keywords):
+                    # Prepend bypass with semicolon separator
+                    modified_line = f"{bypass_code}; {line}"
+                    modified_lines.append(modified_line)
+                    block_modified = True
+                else:
+                    modified_lines.append(line)
+            
+            if block_modified:
+                # Add note after the code block
+                modified_code = '\n'.join(modified_lines)
+                return f"{opening}{modified_code}\n{closing}\n\n*The command above includes an AMSI bypass*"
+            else:
+                return match.group(0)
+        
+        # Apply to all PowerShell code blocks
+        modified_instructions = re.sub(pattern, process_code_block, modified_instructions, flags=re.DOTALL)
+    
+    return modified_instructions
+
+
+def obfuscate_powershell_in_launch_instructions(launch_instructions: str, level: str) -> tuple:
+    """Obfuscate PowerShell code blocks in launch instructions
+    
+    Args:
+        launch_instructions: Markdown text containing PowerShell code blocks
+        level: Obfuscation level ('high', 'medium', 'low')
+        
+    Returns:
+        Tuple of (modified_instructions, commands_executed)
+    """
+    if not launch_instructions:
+        return launch_instructions, []
+    
+    # Pattern to match PowerShell code blocks (```powershell or ```ps1)
+    pattern = r'```(?:powershell|ps1)\s*\n(.*?)```'
+    
+    commands_executed = []
+    
+    def obfuscate_code_block(match):
+        code = match.group(1)
+        
+        # Create temporary files for obfuscation
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as tmp_in:
+            tmp_in.write(code)
+            tmp_in_path = tmp_in.name
+        
+        tmp_out_path = tmp_in_path.replace('.ps1', '_obf.ps1')
+        
+        try:
+            # Define obfuscation levels
+            levels = []
+            if level == 'high':
+                levels = ['high', 'medium', 'low']
+            elif level == 'medium':
+                levels = ['medium', 'low']
+            else:
+                levels = ['low']
+            
+            # Try each level with failover
+            for current_level in levels:
+                # Generate random values
+                rand_hex_bytes = random.randint(8, 32)
+                rand_hex_length = rand_hex_bytes * 2
+                rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+                rand_stringdict = random.randint(0, 100)
+                rand_deadcode = random.randint(0, 100)
+                rand_seed = random.randint(0 if current_level != 'high' else 1, 10000)
+                
+                # Build command based on level
+                if current_level == 'high':
+                    command = (
+                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 5 '
+                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
+                        f'-iden obf -strenc xor -strkey {rand_hex} '
+                        f'-stringdict {rand_stringdict} -numenc -fmt jitter -cf-opaque '
+                        f'-deadcode {rand_deadcode} -frag profile=medium -seed {rand_seed}'
+                    )
+                elif current_level == 'medium':
+                    command = (
+                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 3 '
+                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
+                        f'-strenc xor -strkey {rand_hex} -stringdict {rand_stringdict} '
+                        f'-deadcode {rand_deadcode} -fmt jitter -frag profile=medium '
+                        f'-seed {rand_seed}'
+                    )
+                else:
+                    command = (
+                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" '
+                        f'-level 2 -seed {rand_seed}'
+                    )
+                
+                # Execute obfuscation
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+                
+                # Check if successful
+                if result.returncode == 0 and os.path.exists(tmp_out_path):
+                    with open(tmp_out_path, 'r') as f:
+                        obfuscated_code = f.read()
+                    
+                    # Ensure code ends with newline before closing backticks
+                    if not obfuscated_code.endswith('\n'):
+                        obfuscated_code += '\n'
+                    
+                    # Clean up temp files
+                    try:
+                        os.unlink(tmp_in_path)
+                        os.unlink(tmp_out_path)
+                    except:
+                        pass
+                    
+                    # Store the successful command
+                    commands_executed.append(command)
+                    
+                    return f'```powershell\n{obfuscated_code}```'
+            
+            # All levels failed, return original
+            try:
+                os.unlink(tmp_in_path)
+                if os.path.exists(tmp_out_path):
+                    os.unlink(tmp_out_path)
+            except:
+                pass
+            
+            return match.group(0)  # Return original code block
+            
+        except Exception as e:
+            # Clean up and return original on error
+            try:
+                os.unlink(tmp_in_path)
+                if os.path.exists(tmp_out_path):
+                    os.unlink(tmp_out_path)
+            except:
+                pass
+            
+            return match.group(0)
+    
+    # Replace all PowerShell code blocks
+    modified_instructions = re.sub(pattern, obfuscate_code_block, launch_instructions, flags=re.DOTALL)
+    return modified_instructions, commands_executed
 
 
 def init_app():
@@ -79,6 +327,14 @@ def index():
     """Main page"""
     return render_template('index.html', 
                           show_build_debug=config.show_build_debug if config else False)
+
+
+@app.route('/api/amsi-bypasses')
+def get_amsi_bypasses():
+    """Get available AMSI bypass methods"""
+    bypasses = load_amsi_bypasses()
+    # Return as list of names for dropdown
+    return jsonify({'bypasses': sorted(bypasses.keys())})
 
 
 @app.route('/api/recipes')
@@ -362,7 +618,83 @@ def generate_payload():
                 if success:
                     build_sessions[session_id]['status'] = 'success'
                     build_sessions[session_id]['output_file'] = output_file
-                    build_sessions[session_id]['launch_instructions'] = recipe_obj.launch_instructions
+                    
+                    # Process launch instructions
+                    final_launch_instructions = recipe_obj.launch_instructions
+                    
+                    # Step 1: Insert AMSI bypass if requested (BEFORE obfuscation)
+                    if (build_options.get('amsi_bypass_launch', False) and 
+                        recipe_obj.launch_instructions):
+                        amsi_method = build_options.get('amsi_bypass_launch_method', '')
+                        
+                        if amsi_method:
+                            # Add AMSI bypass step
+                            amsi_step = {
+                                'name': f'Inserting AMSI bypass in launch instructions ({amsi_method})',
+                                'type': 'amsi_bypass',
+                                'status': 'success',
+                                'output': f"AMSI bypass '{amsi_method}' injected into launch instructions",
+                                'error': ''
+                            }
+                            build_sessions[session_id]['steps'].append(amsi_step)
+                            
+                            # Inject bypass
+                            final_launch_instructions = inject_amsi_bypass_launch_instructions(
+                                final_launch_instructions,
+                                amsi_method
+                            )
+                    
+                    # Step 2: Obfuscate PowerShell if requested
+                    if (build_options.get('obfuscate_launch_ps', False) and 
+                        final_launch_instructions):
+                        obf_level = build_options.get('obfuscate_launch_ps_level', 'low')
+                        
+                        # Add obfuscation step to build session
+                        obf_step = {
+                            'name': f'Obfuscating launch instructions ({obf_level.upper()} level)',
+                            'type': 'obfuscation',
+                            'status': 'running',
+                            'output': f'Obfuscating PowerShell code blocks in launch instructions',
+                            'error': ''
+                        }
+                        build_sessions[session_id]['steps'].append(obf_step)
+                        
+                        # Perform obfuscation
+                        final_launch_instructions, commands = obfuscate_powershell_in_launch_instructions(
+                            recipe_obj.launch_instructions, 
+                            obf_level
+                        )
+                        
+                        # Update step status with commands
+                        commands_output = '\n\n'.join([f'Command: {cmd}' for cmd in commands]) if commands else 'No PowerShell code blocks found'
+                        obf_step['status'] = 'success'
+                        obf_step['output'] = f'{commands_output}\n\nSuccessfully obfuscated PowerShell code blocks ({obf_level.upper()} level)'
+                    
+                    build_sessions[session_id]['launch_instructions'] = final_launch_instructions
+                    
+                    # Prepare build steps for history (include obfuscation step if present)
+                    history_steps = [{
+                        'name': s.name,
+                        'type': s.type,
+                        'status': s.status,
+                        'output': str(s.output) if s.output else '',
+                        'error': str(s.error) if s.error else ''
+                    } for s in steps]
+                    
+                    # Add AMSI bypass step for launch instructions if performed
+                    if build_options.get('amsi_bypass_launch', False) and recipe_obj.launch_instructions:
+                        for step in build_sessions[session_id]['steps']:
+                            if 'AMSI bypass in launch instructions' in step['name']:
+                                history_steps.append(step)
+                                break
+                    
+                    # Add launch instructions obfuscation step to history if it was performed
+                    if build_options.get('obfuscate_launch_ps', False) and final_launch_instructions:
+                        # Find the obfuscation step in build_sessions
+                        for step in build_sessions[session_id]['steps']:
+                            if 'Obfuscating launch instructions' in step['name']:
+                                history_steps.append(step)
+                                break
                     
                     # Add to history
                     if history_manager:
@@ -371,12 +703,8 @@ def generate_payload():
                             success=True,
                             output_file=output_file,
                             parameters=validated_params,
-                            launch_instructions=recipe_obj.launch_instructions or "",
-                            build_steps=[{
-                                'name': s.name,
-                                'type': s.type,
-                                'status': s.status
-                            } for s in steps]
+                            launch_instructions=final_launch_instructions or "",
+                            build_steps=history_steps
                         )
                 else:
                     build_sessions[session_id]['status'] = 'failed'
@@ -395,7 +723,9 @@ def generate_payload():
                             build_steps=[{
                                 'name': s.name,
                                 'type': s.type,
-                                'status': s.status
+                                'status': s.status,
+                                'output': str(s.output) if s.output else '',
+                                'error': str(s.error) if s.error else ''
                             } for s in steps]
                         )
         

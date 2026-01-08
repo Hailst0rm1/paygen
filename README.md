@@ -34,6 +34,7 @@ Paygen is a dual-interface payload generation framework for security researchers
 - 🔍 **Search** - Quickly find recipes with built-in search functionality
 - ✅ **Validation** - Real-time parameter validation (IP, port, paths, hex)
 - 🎛️ **Build Options** - Remove comments, console output, strip binaries
+- 🔐 **PowerShell Obfuscation** - Integrated psobf with 3 levels and automatic failover
 
 ---
 
@@ -58,7 +59,23 @@ python -m src.web_main
 ### Requirements
 
 - Python 3.10+
-- Optional: `msfvenom`, `mcs` (Mono), `gcc`/`mingw-w64`
+- Optional compilers and tools:
+  - `msfvenom` - For generating shellcode payloads
+  - `mcs` (Mono C# compiler) - For compiling C# templates
+  - `gcc`/`mingw-w64` - For compiling C/C++ code
+  - `psobf` - PowerShell obfuscation tool ([TaurusOmar/psobf](https://github.com/TaurusOmar/psobf))
+
+#### Installing psobf
+
+The `psobf` tool is required for PowerShell obfuscation features in the web interface:
+
+```bash
+# Install from source
+git clone https://github.com/TaurusOmar/psobf.git
+cd psobf
+# Follow installation instructions from the repository
+# Ensure 'psobf' is available in your PATH
+```
 
 ---
 
@@ -242,9 +259,95 @@ The web interface provides:
 - **Search**: Press `/` to quickly find recipes by name or category
 - **Build Progress**: Real-time build status with step-by-step progress
 - **Build Options**: Checkboxes to remove comments, console output, or strip binaries
+- **PowerShell Obfuscation**: Automatic obfuscation with 3 levels and intelligent failover
+- **Launch Instructions Obfuscation**: Obfuscate PowerShell code blocks in launch instructions
 - **History Management**: View all builds, detailed parameters, and delete individual entries
 - **Launch Instructions**: Formatted markdown with syntax-highlighted code blocks and copy buttons
 - **Responsive Design**: Clean 3-panel layout with Catppuccin Mocha theme
+
+### PowerShell Obfuscation
+
+#### Template Obfuscation
+
+When building PowerShell (.ps1) templates via the web interface, you can enable automatic obfuscation:
+
+- **Enabled by default** - Checkbox is pre-selected for PowerShell recipes
+- **3 Obfuscation Levels**:
+  - **High**: Maximum obfuscation with string encryption (XOR), identifier obfuscation, control flow obfuscation, dead code injection, and code fragmentation
+  - **Medium**: Balanced obfuscation with string encryption, dead code, and moderate fragmentation
+  - **Low**: Minimal obfuscation for quick processing
+- **Automatic Failover**: If a level fails (e.g., complex scripts), automatically tries the next lower level
+- **Build Progress**: Shows obfuscation steps in real-time during payload generation
+- **Requires**: `psobf` tool installed and available in PATH (see [Installation](#installing-psobf))
+
+#### Launch Instructions Obfuscation
+
+Obfuscate PowerShell code blocks within launch instructions across all recipe types:
+
+- **Disabled by default** - Global option available for any recipe with PowerShell in launch instructions
+- **Same 3 Levels**: High, Medium, Low with automatic failover
+- **Applied to Code Blocks**: Automatically detects and obfuscates all PowerShell code blocks in launch instructions
+- **Universal**: Works with any recipe type (C#, Python, etc.) that includes PowerShell commands in launch instructions
+
+Obfuscation helps evade signature-based detection and makes reverse engineering more difficult.
+
+### AMSI Bypass Integration
+
+Paygen provides modular AMSI (Antimalware Scan Interface) bypass capabilities to help evade Windows Defender and other security products:
+
+#### Template AMSI Bypass
+
+For PowerShell (.ps1) templates, inject AMSI bypass code **before** obfuscation:
+
+- **Disabled by default** - Optional checkbox for PowerShell recipes
+- **Dropdown Selection**: Choose from built-in or custom bypass methods
+- **Inserted at Top**: Bypass code is prepended to the PowerShell template
+- **Pre-Obfuscation**: Applied before any PowerShell obfuscation for maximum evasion
+
+#### Launch Instructions AMSI Bypass
+
+For PowerShell commands in launch instructions across any recipe type:
+
+- **Disabled by default** - Global option for recipes with PowerShell in launch instructions
+- **Dropdown Selection**: Same bypass methods available as template option
+- **Smart Injection**: 
+  - Adds "# AMSI Bypass" section at the top of launch instructions
+  - For one-liner bypasses, also prepends to download cradles (DownloadString, DownloadFile, etc.)
+  - Prepends with semicolon separator for inline execution
+  - Adds marker text to indicate bypassed commands
+- **Pre-Obfuscation**: Applied before launch instruction obfuscation
+
+#### Built-in Bypass Methods
+
+Paygen includes two proven AMSI bypass techniques:
+
+1. **AmsiInitialize**: Sets `[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)`
+2. **amsiContext**: Memory patching technique using `[Runtime.InteropServices.Marshal]::Copy()`
+
+#### Custom Bypass Methods
+
+Add your own bypass techniques to `templates/amsi_bypasses/`:
+
+1. Create a `.ps1` file with your bypass code (single line or multi-line)
+2. Filename without extension becomes the display name (underscores converted to spaces)
+3. Example: `my_custom_bypass.ps1` → appears as "my custom bypass" in dropdown
+
+```powershell
+# templates/amsi_bypasses/my_custom_bypass.ps1
+# Your custom AMSI bypass code here
+[System.Reflection.Assembly]::Load(...) | Out-Null
+```
+
+Custom bypasses are automatically loaded and available in both template and launch instruction options.
+
+#### Bypass Execution Order
+
+When multiple evasion techniques are enabled, they execute in this order:
+
+1. **AMSI Bypass** (template or launch instructions)
+2. **PowerShell Obfuscation** (if enabled)
+
+This ensures bypass code is in place before obfuscation layers are applied.
 
 ---
 

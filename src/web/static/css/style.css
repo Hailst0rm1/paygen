@@ -1169,6 +1169,19 @@ code {
     padding: 0.25rem 0;
 }
 
+.history-detail-step-output {
+    color: var(--overlay2);
+    font-size: 0.85rem;
+    margin-left: 1.5rem;
+    margin-top: 0.25rem;
+    white-space: pre-wrap;
+    font-family: 'Courier New', monospace;
+    background-color: var(--crust);
+    padding: 0.5rem;
+    border-radius: 4px;
+    border-left: 3px solid var(--blue);
+}
+
 .history-detail-step-error {
     color: var(--red);
     font-size: 0.85rem;

