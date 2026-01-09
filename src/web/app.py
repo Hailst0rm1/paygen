@@ -302,39 +302,80 @@ def obfuscate_csharp_identifiers(code: str) -> tuple:
     """
     import random
     
-    # List of innocuous replacement names
+    # Large list of innocuous replacement names (150+)
     replacement_pool = [
+        # Nature - landscapes
         'forest', 'lake', 'river', 'mountain', 'ocean', 'desert', 'valley', 'canyon',
         'meadow', 'stream', 'pond', 'hill', 'cliff', 'cave', 'island', 'shore',
+        'beach', 'dune', 'glacier', 'volcano', 'prairie', 'marsh', 'swamp', 'bayou',
+        'fjord', 'plateau', 'ridge', 'peak', 'summit', 'basin', 'delta', 'estuary',
+        # Sky and space
         'star', 'moon', 'sun', 'planet', 'comet', 'nebula', 'galaxy', 'cosmos',
+        'orbit', 'asteroid', 'meteor', 'aurora', 'eclipse', 'horizon', 'zenith', 'constellation',
+        # Weather
         'cloud', 'rain', 'snow', 'wind', 'storm', 'thunder', 'lightning', 'fog',
+        'mist', 'hail', 'frost', 'breeze', 'gale', 'drizzle', 'blizzard', 'cyclone',
+        # Plants
         'tree', 'flower', 'grass', 'leaf', 'branch', 'root', 'seed', 'bloom',
+        'pine', 'oak', 'willow', 'birch', 'maple', 'cedar', 'fern', 'moss',
+        'ivy', 'vine', 'bush', 'shrub', 'herb', 'petal', 'thorn', 'bamboo',
+        # Animals
         'bird', 'fish', 'deer', 'wolf', 'bear', 'eagle', 'hawk', 'owl',
+        'fox', 'rabbit', 'squirrel', 'beaver', 'otter', 'seal', 'whale', 'dolphin',
+        'tiger', 'lion', 'leopard', 'panther', 'lynx', 'falcon', 'raven', 'crow',
+        # Objects - furniture
         'table', 'chair', 'desk', 'lamp', 'window', 'door', 'wall', 'floor',
+        'shelf', 'cabinet', 'drawer', 'mirror', 'frame', 'cushion', 'bench', 'couch',
+        # Objects - office
         'book', 'paper', 'pen', 'pencil', 'notebook', 'folder', 'file', 'document',
+        'binder', 'envelope', 'stamp', 'clip', 'stapler', 'marker', 'eraser', 'ruler',
+        # Gems and minerals
         'ruby', 'emerald', 'sapphire', 'diamond', 'pearl', 'jade', 'amber', 'topaz',
+        'quartz', 'opal', 'garnet', 'onyx', 'crystal', 'granite', 'marble', 'slate',
+        # Greek letters
         'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'theta', 'omega',
+        'sigma', 'lambda', 'kappa', 'phi', 'psi', 'rho', 'tau', 'iota',
+        # Common nouns
         'config', 'data', 'info', 'result', 'item', 'element', 'node', 'key',
-        'handle', 'buffer', 'cache', 'queue', 'stack', 'array', 'map', 'field'
+        'handle', 'buffer', 'cache', 'queue', 'stack', 'array', 'map', 'field',
+        'value', 'index', 'count', 'size', 'length', 'width', 'height', 'depth',
+        'state', 'status', 'flag', 'mode', 'type', 'kind', 'form', 'shape'
     ]
     
     # Shuffle to randomize order
     random.shuffle(replacement_pool)
     
-    # Track replacements
+    # Track replacements - maps original identifier to replacement name
     replacements = {}
+    used_replacements = set()
     pool_index = 0
     
-    def get_replacement_name():
-        nonlocal pool_index
-        if pool_index < len(replacement_pool):
+    def get_replacement_name(original_identifier):
+        """Get a unique replacement name for an identifier"""
+        nonlocal pool_index, replacements, used_replacements
+        
+        # If we already have a replacement for this identifier, reuse it
+        if original_identifier in replacements:
+            return replacements[original_identifier]
+        
+        # Get next unused name from pool
+        while pool_index < len(replacement_pool):
             name = replacement_pool[pool_index]
             pool_index += 1
-        else:
-            # Generate numbered names if we run out
-            name = f"item{pool_index - len(replacement_pool) + 1}"
-            pool_index += 1
-        return name
+            if name not in used_replacements:
+                used_replacements.add(name)
+                replacements[original_identifier] = name
+                return name
+        
+        # If we run out of pool, generate numbered names
+        counter = 1
+        while True:
+            name = f"var{counter}"
+            if name not in used_replacements:
+                used_replacements.add(name)
+                replacements[original_identifier] = name
+                return name
+            counter += 1
     
     # C# keywords, framework types, and attributes to NEVER replace
     protected_keywords = {
@@ -407,10 +448,10 @@ def obfuscate_csharp_identifiers(code: str) -> tuple:
         (r'\benum\s+([A-Z][a-zA-Z0-9_]*)\b', 1),
         # Method declarations: static void MyMethod( or bool MyMethod(
         (r'\b(?:static\s+)?(?:extern\s+)?(?:void|bool|int|uint|long|ulong|short|ushort|byte|sbyte|string|String|IntPtr|double|float)\s+([a-z][a-zA-Z0-9_]*)\s*\(', 1),
-        # Variable declarations: int myVar = or String myVar; (including both string and String)
-        (r'\b(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|String|IntPtr|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*[=;,])', 1),
-        # Public static constants: public static uint MY_CONSTANT = 
-        (r'\bpublic\s+static\s+(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|String|IntPtr)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=', 1),
+        # Variable declarations: int myVar = or String myVar; or byte[] myArray = (including array types)
+        (r'\b(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|String|IntPtr|var)\s*(?:\[\])?\s*([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*[=;,])', 1),
+        # Public static constants: public static uint MY_CONSTANT = (including array types)
+        (r'\bpublic\s+static\s+(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|String|IntPtr)\s*(?:\[\])?\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=', 1),
         # All parameters in method signatures (any type followed by identifier)
         # This will catch: IntPtr Thread, IntPtr Token, uint dwAccess, string[] args, etc.
         (r'\b(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|IntPtr|out|ref|in)\s*(?:\[\])?\s*(?:out\s+|ref\s+|in\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*[,\)])', 1),
@@ -448,7 +489,7 @@ def obfuscate_csharp_identifiers(code: str) -> tuple:
     # Build replacement map
     for identifier in sorted(identifiers_to_replace):
         if identifier not in replacements:
-            replacements[identifier] = get_replacement_name()
+            replacements[identifier] = get_replacement_name(identifier)
     
     # Step 1: Extract and protect string literals
     string_placeholders = {}

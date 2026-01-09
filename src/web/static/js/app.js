@@ -637,7 +637,6 @@ async function showParameterForm() {
     const preprocessingOptions = selectedRecipe.preprocessing?.filter(p => p.type === 'option') || [];
     if (preprocessingOptions.length > 0) {
         html += `
-            <div class="param-form-separator"></div>
             <div class="param-form-section-title">Preprocessing Options</div>
         `;
         
@@ -666,8 +665,11 @@ async function showParameterForm() {
     
     // Add regular parameters
     if (selectedRecipe.parameters && selectedRecipe.parameters.length > 0) {
+        // Only add separator if preprocessing options exist
+        if (preprocessingOptions.length > 0) {
+            html += `<div class="param-form-separator"></div>`;
+        }
         html += `
-            <div class="param-form-separator"></div>
             <div class="param-form-section-title">Parameters</div>
         `;
         
