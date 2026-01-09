@@ -395,6 +395,26 @@ class PayloadBuilder:
                     source_file = Path(obf_file)
                 # If obfuscation fails, continue with non-obfuscated version
             
+            # Step: C# name obfuscation if enabled (BEFORE compilation)
+            if (full_template_path.suffix.lower() == '.cs' and 
+                self.build_options.get('cs_obfuscate_names', True)):  # Default: enabled
+                
+                obf_step = BuildStep("Obfuscating C# names", "obfuscation")
+                self.steps.append(obf_step)
+                obf_step.status = "running"
+                self._update_step(obf_step)
+                
+                success, replacements = self._obfuscate_csharp_names(source_file)
+                
+                if success:
+                    obf_step.status = "success"
+                    obf_step.output = f"Replaced {replacements} function/variable names with innocuous identifiers"
+                    self._update_step(obf_step)
+                else:
+                    obf_step.status = "failed"
+                    obf_step.error = "Failed to obfuscate C# names"
+                    self._update_step(obf_step)
+            
             # Step: Compile if needed
             compile_config = output_config.get('compile', {})
             if compile_config.get('enabled', False):
@@ -855,3 +875,35 @@ class PayloadBuilder:
             
         except Exception as e:
             return False
+    
+    def _obfuscate_csharp_names(self, cs_file: Path) -> tuple:
+        """Obfuscate C# function and variable names with innocuous identifiers
+        
+        Args:
+            cs_file: Path to the C# source file
+            
+        Returns:
+            Tuple of (success: bool, replacement_count: int)
+        """
+        try:
+            # Read the source file
+            with open(cs_file, 'r') as f:
+                code = f.read()
+            
+            # Import obfuscation function from web.app module
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+            from src.web.app import obfuscate_csharp_identifiers
+            
+            # Perform obfuscation
+            obfuscated_code, replacements = obfuscate_csharp_identifiers(code)
+            
+            # Write the obfuscated code back
+            with open(cs_file, 'w') as f:
+                f.write(obfuscated_code)
+            
+            return True, len(replacements)
+            
+        except Exception as e:
+            return False, 0

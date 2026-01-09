@@ -19,7 +19,7 @@ class ConfigManager:
         'keep_source_files': False,
         'show_build_debug': False,
         'remove_comments': True,
-        'strip_binaries': True,
+        'strip_binaries': False,
         'web_host': '0.0.0.0',
         'web_port': 1337,
         'web_debug': False

@@ -633,13 +633,64 @@ async function showParameterForm() {
     const container = document.getElementById('param-form-container');
     let html = '';
     
-    if (selectedRecipe.parameters && selectedRecipe.parameters.length > 0) {
-        selectedRecipe.parameters.forEach(param => {
+    // Add preprocessing options section first
+    const preprocessingOptions = selectedRecipe.preprocessing?.filter(p => p.type === 'option') || [];
+    if (preprocessingOptions.length > 0) {
+        html += `
+            <div class="param-form-separator"></div>
+            <div class="param-form-section-title">Preprocessing Options</div>
+        `;
+        
+        preprocessingOptions.forEach((optionStep, idx) => {
             html += `
                 <div class="param-form-item">
                     <label class="param-form-label">
+                        ${optionStep.name}
+                        <span class="param-type">[option]</span>
+                    </label>
+                    <select class="param-form-select preprocessing-option" data-option-name="${optionStep.name}" id="preprocessing-option-${idx}">
+            `;
+            
+            optionStep.options.forEach((opt, optIdx) => {
+                // First option is selected by default
+                html += `<option value="${optIdx}" ${optIdx === 0 ? 'selected' : ''}>${opt.name}</option>`;
+            });
+            
+            html += `
+                    </select>
+                    <div class="param-form-description">Select the method to use for this preprocessing step</div>
+                </div>
+            `;
+        });
+    }
+    
+    // Add regular parameters
+    if (selectedRecipe.parameters && selectedRecipe.parameters.length > 0) {
+        html += `
+            <div class="param-form-separator"></div>
+            <div class="param-form-section-title">Parameters</div>
+        `;
+        
+        selectedRecipe.parameters.forEach(param => {
+            // Determine if this parameter is conditional
+            const requiredFor = param['required_for'];
+            const isConditional = requiredFor !== undefined;
+            const isRequired = param.required || false;
+            
+            // Build data attributes for conditional parameters
+            let dataAttrs = '';
+            let containerStyle = '';
+            if (isConditional) {
+                dataAttrs = `data-required-for="${requiredFor}"`;
+                // Hide conditional parameters by default, will be shown based on selection
+                containerStyle = 'style="display: none;"';
+            }
+            
+            html += `
+                <div class="param-form-item param-conditional" ${dataAttrs} ${containerStyle}>
+                    <label class="param-form-label">
                         ${param.name}
-                        ${param.required ? '<span class="param-required">*</span>' : ''}
+                        ${isRequired || isConditional ? '<span class="param-required">*</span>' : ''}
                         <span class="param-type">[${param.type}]</span>
                     </label>
             `;
@@ -679,7 +730,7 @@ async function showParameterForm() {
             html += '</div>';
         });
     } else {
-        html = '<p>This recipe has no configurable parameters.</p>';
+        html += '<p>This recipe has no configurable parameters.</p>';
     }
     
     // Add language-specific options section (for PowerShell obfuscation)
@@ -687,6 +738,7 @@ async function showParameterForm() {
     if (outputType === 'template') {
         const templatePath = selectedRecipe.output?.template || '';
         const isPS1 = templatePath.toLowerCase().endsWith('.ps1');
+        const isCS = templatePath.toLowerCase().endsWith('.cs');
         
         if (isPS1) {
             html += `
@@ -755,6 +807,18 @@ async function showParameterForm() {
                     updateLevelVisibility();
                 }
             }, 0);
+        } else if (isCS) {
+            html += `
+                <div class="param-form-separator"></div>
+                <div class="param-form-section-title">Language Specific Options</div>
+                <div class="param-form-item">
+                    <label class="param-form-checkbox-label">
+                        <input type="checkbox" id="cs-obfuscate-names" class="param-form-checkbox" checked>
+                        Obfuscate function/variable names
+                    </label>
+                    <div class="param-form-description">Replace function and variable names with innocuous identifiers (forest, lake, var1, etc.)</div>
+                </div>
+            `;
         }
     }
     
@@ -788,10 +852,10 @@ async function showParameterForm() {
     html += `
         <div class="param-form-item">
             <label class="param-form-checkbox-label">
-                <input type="checkbox" id="build-strip-binaries" class="param-form-checkbox" checked>
+                <input type="checkbox" id="build-strip-binaries" class="param-form-checkbox">
                 Strip binary metadata
             </label>
-            <div class="param-form-description">Remove debug symbols and metadata from compiled binaries</div>
+            <div class="param-form-description">Remove debug symbols and metadata from compiled binaries.<br>Warning: On PE files it will however mark metadata with e.g. "No debug"</div>
         </div>
         <div class="param-form-item">
             <label class="param-form-checkbox-label">
@@ -859,6 +923,14 @@ async function showParameterForm() {
     
     container.innerHTML = html;
     
+    // Add event listeners for preprocessing option changes
+    const preprocessingSelects = document.querySelectorAll('.preprocessing-option');
+    preprocessingSelects.forEach((select, idx) => {
+        select.addEventListener('change', function() {
+            updateConditionalParameters();
+        });
+    });
+    
     // Add event listeners for validation
     const inputs = document.querySelectorAll('.param-form-input');
     inputs.forEach(input => {
@@ -872,10 +944,65 @@ async function showParameterForm() {
         });
     });
     
+    // Initial update of conditional parameters visibility
+    updateConditionalParameters();
+    
     // Initial validation of all fields
     validateAllParameters();
     
     document.getElementById('param-modal').classList.add('active');
+}
+
+// Update visibility of conditional parameters based on preprocessing option selection
+function updateConditionalParameters() {
+    if (!selectedRecipe) return;
+    
+    // Get all selected preprocessing options
+    const selectedOptions = {};
+    const preprocessingOptions = selectedRecipe.preprocessing?.filter(p => p.type === 'option') || [];
+    
+    preprocessingOptions.forEach((optionStep, idx) => {
+        const selectElement = document.getElementById(`preprocessing-option-${idx}`);
+        if (selectElement) {
+            const selectedIndex = parseInt(selectElement.value);
+            const selectedOption = optionStep.options[selectedIndex];
+            if (selectedOption) {
+                selectedOptions[optionStep.name] = selectedOption.name;
+            }
+        }
+    });
+    
+    // Show/hide conditional parameters
+    const conditionalParams = document.querySelectorAll('.param-conditional');
+    conditionalParams.forEach(paramElement => {
+        const requiredFor = paramElement.getAttribute('data-required-for');
+        if (requiredFor) {
+            // Check if any selected option matches this parameter's required-for value
+            const shouldShow = Object.values(selectedOptions).includes(requiredFor);
+            paramElement.style.display = shouldShow ? 'block' : 'none';
+            
+            // If showing, restore default value if input is empty
+            if (shouldShow) {
+                const input = paramElement.querySelector('.param-form-input, .param-form-select');
+                if (input && !input.value) {
+                    const paramName = input.getAttribute('data-param');
+                    const param = selectedRecipe.parameters.find(p => p.name === paramName);
+                    if (param && param.default !== undefined) {
+                        input.value = param.default;
+                    }
+                }
+            } else {
+                // If hiding, clear value
+                const input = paramElement.querySelector('.param-form-input, .param-form-select');
+                if (input) {
+                    input.value = '';
+                }
+            }
+        }
+    });
+    
+    // Revalidate all parameters
+    validateAllParameters();
 }
 
 // Validate a single parameter
@@ -947,6 +1074,12 @@ function validateAllParameters() {
     let allValid = true;
     
     inputs.forEach(input => {
+        // Skip validation for hidden parameters
+        const paramContainer = input.closest('.param-conditional');
+        if (paramContainer && paramContainer.style.display === 'none') {
+            return; // Skip hidden parameters
+        }
+        
         if (!validateParameter(input)) {
             allValid = false;
         }
@@ -984,6 +1117,14 @@ async function generatePayload() {
     
     inputs.forEach(input => {
         const paramName = input.dataset.param;
+        if (!paramName) return; // Skip non-parameter inputs
+        
+        // Skip hidden parameters
+        const paramContainer = input.closest('.param-conditional');
+        if (paramContainer && paramContainer.style.display === 'none') {
+            return;
+        }
+        
         let value = input.value.trim();
         
         // Convert boolean strings
@@ -1000,6 +1141,17 @@ async function generatePayload() {
         
         if (value !== '') {
             parameters[paramName] = value;
+        }
+    });
+    
+    // Collect preprocessing option selections
+    const preprocessingSelections = {};
+    const preprocessingOptions = selectedRecipe.preprocessing?.filter(p => p.type === 'option') || [];
+    preprocessingOptions.forEach((optionStep, idx) => {
+        const selectElement = document.getElementById(`preprocessing-option-${idx}`);
+        if (selectElement) {
+            const selectedIndex = parseInt(selectElement.value);
+            preprocessingSelections[optionStep.name] = selectedIndex;
         }
     });
     
@@ -1053,6 +1205,12 @@ async function generatePayload() {
         }
     }
     
+    // Collect C# obfuscation options
+    const csObfuscateNamesCheckbox = document.getElementById('cs-obfuscate-names');
+    if (csObfuscateNamesCheckbox) {
+        buildOptions.cs_obfuscate_names = csObfuscateNamesCheckbox.checked;
+    }
+    
     // Close parameter modal
     document.getElementById('param-modal').classList.remove('active');
     
@@ -1078,6 +1236,7 @@ async function generatePayload() {
                 category: selectedRecipe.category,
                 recipe: selectedRecipe.name,
                 parameters: parameters,
+                preprocessing_selections: preprocessingSelections,
                 build_options: buildOptions
             })
         });

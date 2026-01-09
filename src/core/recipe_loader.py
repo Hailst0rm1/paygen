@@ -69,6 +69,22 @@ class Recipe:
         """Get list of optional parameters"""
         return [p for p in self.parameters if not p.get('required', False)]
     
+    def get_conditional_parameters(self) -> List[Dict[str, Any]]:
+        """Get list of parameters that are conditionally required
+        
+        Returns:
+            List of parameters with 'required-for' field
+        """
+        return [p for p in self.parameters if 'required-for' in p]
+    
+    def get_preprocessing_options(self) -> List[Dict[str, Any]]:
+        """Get list of preprocessing steps that are option types
+        
+        Returns:
+            List of preprocessing steps with type='option'
+        """
+        return [p for p in self.preprocessing if p.get('type') == 'option']
+    
     def to_dict(self) -> dict:
         """Convert recipe to dictionary
         

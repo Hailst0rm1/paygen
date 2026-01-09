@@ -291,6 +291,194 @@ def obfuscate_powershell_in_launch_instructions(launch_instructions: str, level:
     return modified_instructions, commands_executed
 
 
+def obfuscate_csharp_identifiers(code: str) -> tuple:
+    """Obfuscate C# function and variable names
+    
+    Args:
+        code: C# source code
+        
+    Returns:
+        Tuple of (obfuscated_code, replacement_map)
+    """
+    import random
+    
+    # List of innocuous replacement names
+    replacement_pool = [
+        'forest', 'lake', 'river', 'mountain', 'ocean', 'desert', 'valley', 'canyon',
+        'meadow', 'stream', 'pond', 'hill', 'cliff', 'cave', 'island', 'shore',
+        'star', 'moon', 'sun', 'planet', 'comet', 'nebula', 'galaxy', 'cosmos',
+        'cloud', 'rain', 'snow', 'wind', 'storm', 'thunder', 'lightning', 'fog',
+        'tree', 'flower', 'grass', 'leaf', 'branch', 'root', 'seed', 'bloom',
+        'bird', 'fish', 'deer', 'wolf', 'bear', 'eagle', 'hawk', 'owl',
+        'table', 'chair', 'desk', 'lamp', 'window', 'door', 'wall', 'floor',
+        'book', 'paper', 'pen', 'pencil', 'notebook', 'folder', 'file', 'document',
+        'ruby', 'emerald', 'sapphire', 'diamond', 'pearl', 'jade', 'amber', 'topaz',
+        'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'theta', 'omega',
+        'config', 'data', 'info', 'result', 'item', 'element', 'node', 'key',
+        'handle', 'buffer', 'cache', 'queue', 'stack', 'array', 'map', 'field'
+    ]
+    
+    # Shuffle to randomize order
+    random.shuffle(replacement_pool)
+    
+    # Track replacements
+    replacements = {}
+    pool_index = 0
+    
+    def get_replacement_name():
+        nonlocal pool_index
+        if pool_index < len(replacement_pool):
+            name = replacement_pool[pool_index]
+            pool_index += 1
+        else:
+            # Generate numbered names if we run out
+            name = f"item{pool_index - len(replacement_pool) + 1}"
+            pool_index += 1
+        return name
+    
+    # C# keywords, framework types, and attributes to NEVER replace
+    protected_keywords = {
+        # Keywords
+        'using', 'namespace', 'class', 'struct', 'enum', 'interface', 'delegate',
+        'public', 'private', 'protected', 'internal', 'static', 'readonly', 'const',
+        'virtual', 'override', 'abstract', 'sealed', 'new', 'extern', 'unsafe',
+        'void', 'int', 'uint', 'long', 'ulong', 'short', 'ushort', 'byte', 'sbyte',
+        'float', 'double', 'decimal', 'bool', 'char', 'string', 'object',
+        'var', 'dynamic', 'if', 'else', 'switch', 'case', 'default',
+        'for', 'foreach', 'while', 'do', 'break', 'continue', 'return',
+        'throw', 'try', 'catch', 'finally', 'lock', 'async', 'await', 'yield',
+        'get', 'set', 'value', 'add', 'remove', 'true', 'false', 'null',
+        'this', 'base', 'typeof', 'sizeof', 'is', 'as', 'in', 'out', 'ref', 'params',
+        'checked', 'unchecked', 'fixed', 'stackalloc', 'nameof', 'when', 'where',
+        
+        # Common .NET types
+        'System', 'Console', 'String', 'Int16', 'Int32', 'Int64', 'UInt16', 'UInt32', 'UInt64',
+        'Boolean', 'Byte', 'SByte', 'Char', 'Double', 'Single', 'Decimal', 'IntPtr', 'UIntPtr',
+        'Object', 'Exception', 'Array', 'Delegate', 'MulticastDelegate', 'Enum', 'ValueType',
+        'DateTime', 'TimeSpan', 'Guid', 'Math', 'Convert', 'BitConverter', 'Buffer',
+        
+        # Runtime/Interop
+        'Marshal', 'GCHandle', 'GCHandleType', 'Runtime', 'InteropServices', 'Interop',
+        'DllImport', 'StructLayout', 'FieldOffset', 'MarshalAs', 'UnmanagedType',
+        'LayoutKind', 'CharSet', 'CallingConvention', 'ComVisible', 'Guid',
+        
+        # Attribute properties
+        'SetLastError', 'EntryPoint', 'CharSet', 'CallingConvention', 'PreserveSig',
+        'ExactSpelling', 'BestFitMapping', 'ThrowOnUnmappableChar',
+        
+        # CharSet values
+        'Auto', 'Ansi', 'Unicode', 'None',
+        
+        # LayoutKind values
+        'Sequential', 'Explicit',
+        
+        # UnmanagedType values
+        'Bool', 'I1', 'U1', 'I2', 'U2', 'I4', 'U4', 'I8', 'U8', 'R4', 'R8',
+        'LPStr', 'LPWStr', 'LPTStr', 'ByValTStr', 'BStr', 'SysInt', 'SysUInt',
+        
+        # Modifiers
+        'In', 'Out', 'Optional', 'Obsolete', 'Serializable', 'NonSerialized',
+        
+        # Common method names from framework
+        'ToString', 'GetHashCode', 'Equals', 'GetType', 'Dispose', 'Finalize',
+        'WriteLine', 'Write', 'ReadLine', 'Read',
+        
+        # Common collections
+        'List', 'Dictionary', 'HashSet', 'Queue', 'Stack', 'ArrayList', 'Hashtable',
+        'IEnumerable', 'ICollection', 'IList', 'IDictionary',
+        
+        # Threading types (but not parameter names)
+        'Task', 'ThreadPool', 'Monitor', 'Mutex', 'Semaphore',
+        
+        # Common struct fields
+        'Length', 'Count', 'Capacity', 'Size', 'Width', 'Height', 'X', 'Y', 'Z',
+    }
+    
+    # Pattern to find user-defined identifiers
+    # Match: namespace names, class names, method names, variable names, parameter names
+    patterns_to_replace = [
+        # Namespace declarations: namespace MyNamespace
+        (r'\bnamespace\s+([A-Z][a-zA-Z0-9_]*)\b', 1),
+        # Class declarations: class MyClass
+        (r'\bclass\s+([A-Z][a-zA-Z0-9_]*)\b', 1),
+        # Struct declarations: struct MyStruct  
+        (r'\bstruct\s+([A-Z][a-zA-Z0-9_]*)\b', 1),
+        # Enum declarations: enum MyEnum
+        (r'\benum\s+([A-Z][a-zA-Z0-9_]*)\b', 1),
+        # Method declarations: static void MyMethod( or bool MyMethod(
+        (r'\b(?:static\s+)?(?:extern\s+)?(?:void|bool|int|uint|long|ulong|short|ushort|byte|sbyte|string|String|IntPtr|double|float)\s+([a-z][a-zA-Z0-9_]*)\s*\(', 1),
+        # Variable declarations: int myVar = or String myVar; (including both string and String)
+        (r'\b(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|String|IntPtr|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*[=;,])', 1),
+        # Public static constants: public static uint MY_CONSTANT = 
+        (r'\bpublic\s+static\s+(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|String|IntPtr)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=', 1),
+        # All parameters in method signatures (any type followed by identifier)
+        # This will catch: IntPtr Thread, IntPtr Token, uint dwAccess, string[] args, etc.
+        (r'\b(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|IntPtr|out|ref|in)\s*(?:\[\])?\s*(?:out\s+|ref\s+|in\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\b(?=\s*[,\)])', 1),
+        # Field declarations in structs/classes: public int myField; or public IntPtr hField;
+        # Enhanced to catch all field patterns including dw*, w*, cb*, h*, lp*, n*
+        # Also handles fields with attributes like [MarshalAs(...)]
+        (r'\b(?:public|private|protected|internal)\s+(?:static\s+)?(?:readonly\s+)?(?:int|uint|long|ulong|short|ushort|byte|sbyte|bool|float|double|decimal|char|string|String|IntPtr|UInt32|Int32)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;', 1),
+        # Enum members and custom type parameters (e.g., SECURITY_IMPERSONATION_LEVEL ImpersonationLevel)
+        (r'\b([A-Z][A-Z0-9_]+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', 2),
+        # ref/out struct parameters: ref STARTUPINFO lpStartupInfo
+        (r'\b(?:ref|out|in)\s+([A-Z][A-Z0-9_]+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', 2),
+    ]
+    
+    # Find all identifiers to replace
+    identifiers_to_replace = set()
+    
+    for pattern, group_idx in patterns_to_replace:
+        matches = re.finditer(pattern, code)
+        for match in matches:
+            identifier = match.group(group_idx)
+            if identifier not in protected_keywords:
+                identifiers_to_replace.add(identifier)
+    
+    # Special handling for enum members - find all values inside enum blocks
+    enum_blocks = re.finditer(r'\benum\s+[A-Z][a-zA-Z0-9_]*\s*\{([^}]+)\}', code, re.DOTALL)
+    for enum_match in enum_blocks:
+        enum_body = enum_match.group(1)
+        # Find enum member names (identifiers before = or , or })
+        # Matches: SecurityAnonymous, TokenPrimary = 1, etc.
+        enum_members = re.findall(r'\b([A-Z][a-zA-Z0-9_]*)\s*(?:=\s*\d+)?(?:\s*,|\s*$)', enum_body, re.MULTILINE)
+        for member in enum_members:
+            if member not in protected_keywords:
+                identifiers_to_replace.add(member)
+    
+    # Build replacement map
+    for identifier in sorted(identifiers_to_replace):
+        if identifier not in replacements:
+            replacements[identifier] = get_replacement_name()
+    
+    # Step 1: Extract and protect string literals
+    string_placeholders = {}
+    placeholder_counter = 0
+    
+    def replace_string_with_placeholder(match):
+        nonlocal placeholder_counter
+        placeholder = f'__STRING_PLACEHOLDER_{placeholder_counter}__'
+        string_placeholders[placeholder] = match.group(0)
+        placeholder_counter += 1
+        return placeholder
+    
+    # Match both regular strings and verbatim strings (@"...")
+    # Also match char literals ('x')
+    string_pattern = r'(@?"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)?\')'
+    obfuscated_code = re.sub(string_pattern, replace_string_with_placeholder, code)
+    
+    # Step 2: Apply identifier replacements (now strings are protected)
+    for original, replacement in replacements.items():
+        # Use word boundary pattern to replace all occurrences
+        pattern = r'\b' + re.escape(original) + r'\b'
+        obfuscated_code = re.sub(pattern, replacement, obfuscated_code)
+    
+    # Step 3: Restore string literals
+    for placeholder, original_string in string_placeholders.items():
+        obfuscated_code = obfuscated_code.replace(placeholder, original_string)
+    
+    return obfuscated_code, replacements
+
+
 def init_app():
     """Initialize the Flask application with paygen configuration"""
     global config, recipe_loader, recipes, history_manager
@@ -502,6 +690,7 @@ def generate_payload():
     category = data.get('category')
     recipe_name = data.get('recipe')
     parameters = data.get('parameters', {})
+    preprocessing_selections = data.get('preprocessing_selections', {})
     build_options = data.get('build_options', {})
     
     # Reload recipes from disk to ensure we have the latest version
@@ -517,6 +706,17 @@ def generate_payload():
     if not recipe_obj:
         return jsonify({'error': 'Recipe not found'}), 404
     
+    # Build a set of selected option names for conditional parameter validation
+    selected_option_names = set()
+    preprocessing_options = [p for p in recipe_obj.preprocessing if p.get('type') == 'option']
+    for option_step in preprocessing_options:
+        option_name = option_step.get('name')
+        selected_index = preprocessing_selections.get(option_name, 0)
+        options = option_step.get('options', [])
+        if 0 <= selected_index < len(options):
+            selected_option = options[selected_index]
+            selected_option_names.add(selected_option.get('name'))
+    
     # Validate parameters
     validator = ParameterValidator()
     validated_params = {}
@@ -525,6 +725,14 @@ def generate_payload():
         for param_def in recipe_obj.parameters:
             param_name = param_def.get('name')
             value = parameters.get(param_name)
+            
+            # Check if this is a conditional parameter
+            required_for = param_def.get('required_for')
+            if required_for:
+                # This parameter is only required if the specified option is selected
+                if required_for not in selected_option_names:
+                    # Skip validation for this parameter since its option is not selected
+                    continue
             
             # Validate this parameter
             validator.validate_parameter(param_def, value)
@@ -610,8 +818,28 @@ def generate_payload():
             
             builder.set_progress_callback(on_progress)
             
-            # Build payload
+            # Resolve preprocessing options in recipe
             recipe_dict = recipe_obj.to_dict()
+            if preprocessing_selections:
+                resolved_preprocessing = []
+                for step in recipe_dict.get('preprocessing', []):
+                    if step.get('type') == 'option':
+                        # This is an option step - resolve to the selected option
+                        option_name = step.get('name')
+                        selected_index = preprocessing_selections.get(option_name, 0)
+                        options = step.get('options', [])
+                        
+                        if 0 <= selected_index < len(options):
+                            # Replace with the selected option
+                            selected_option = options[selected_index]
+                            resolved_preprocessing.append(selected_option)
+                    else:
+                        # Regular preprocessing step - keep as is
+                        resolved_preprocessing.append(step)
+                
+                recipe_dict['preprocessing'] = resolved_preprocessing
+            
+            # Build payload
             success, output_file, steps = builder.build(recipe_dict, validated_params)
             
             with build_locks[session_id]:

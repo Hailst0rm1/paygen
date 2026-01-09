@@ -240,7 +240,7 @@ class RecipeValidator:
     
     VALID_EFFECTIVENESS = ['low', 'medium', 'high']
     VALID_OUTPUT_TYPES = ['template', 'command']
-    VALID_PREPROCESSING_TYPES = ['command', 'script']
+    VALID_PREPROCESSING_TYPES = ['command', 'script', 'option']
     
     @classmethod
     def validate_recipe(cls, recipe_data: Dict[str, Any]) -> bool:
@@ -308,10 +308,15 @@ class RecipeValidator:
         
         param_names = set()
         for param in parameters:
-            # Check required fields
-            for field in cls.REQUIRED_PARAM_FIELDS:
+            # Check required fields (except 'required' which may be conditional)
+            required_fields = ['name', 'type', 'description']
+            for field in required_fields:
                 if field not in param:
                     raise ValidationError(f"Parameter missing required field: {field}")
+            
+            # 'required' field must exist OR 'required_for' field must exist
+            if 'required' not in param and 'required_for' not in param:
+                raise ValidationError(f"Parameter '{param['name']}' must have either 'required' or 'required_for' field")
             
             # Check for duplicate names
             name = param['name']
@@ -342,14 +347,42 @@ class RecipeValidator:
                     f"Must be one of: {cls.VALID_PREPROCESSING_TYPES}"
                 )
             
-            if 'output_var' not in step:
-                raise ValidationError(f"Preprocessing step {i} missing 'output_var' field")
+            # Validate option type (container for multiple options)
+            if step_type == 'option':
+                if 'name' not in step:
+                    raise ValidationError(f"Option preprocessing step {i} missing 'name' field")
+                if 'options' not in step:
+                    raise ValidationError(f"Option preprocessing step {i} missing 'options' field")
+                if not isinstance(step['options'], list):
+                    raise ValidationError(f"Option preprocessing step {i} 'options' must be a list")
+                if len(step['options']) == 0:
+                    raise ValidationError(f"Option preprocessing step {i} must have at least one option")
+                
+                # Validate each nested option
+                for j, option in enumerate(step['options']):
+                    if 'type' not in option:
+                        raise ValidationError(f"Option {j} in preprocessing step {i} missing 'type' field")
+                    if 'name' not in option:
+                        raise ValidationError(f"Option {j} in preprocessing step {i} missing 'name' field")
+                    if 'output_var' not in option:
+                        raise ValidationError(f"Option {j} in preprocessing step {i} missing 'output_var' field")
+                    
+                    option_type = option['type']
+                    if option_type == 'command' and 'command' not in option:
+                        raise ValidationError(f"Command option {j} in step {i} missing 'command' field")
+                    if option_type == 'script' and 'script' not in option:
+                        raise ValidationError(f"Script option {j} in step {i} missing 'script' field")
             
-            if step_type == 'command' and 'command' not in step:
-                raise ValidationError(f"Command preprocessing step {i} missing 'command' field")
-            
-            if step_type == 'script' and 'script' not in step:
-                raise ValidationError(f"Script preprocessing step {i} missing 'script' field")
+            # Validate regular command/script types
+            elif step_type in ['command', 'script']:
+                if 'output_var' not in step:
+                    raise ValidationError(f"Preprocessing step {i} missing 'output_var' field")
+                
+                if step_type == 'command' and 'command' not in step:
+                    raise ValidationError(f"Command preprocessing step {i} missing 'command' field")
+                
+                if step_type == 'script' and 'script' not in step:
+                    raise ValidationError(f"Script preprocessing step {i} missing 'script' field")
         
         return True
     
