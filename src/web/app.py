@@ -1073,6 +1073,145 @@ def delete_history_entry(index):
     return jsonify({'error': 'History manager not available'}), 500
 
 
+@app.route('/api/obfuscate-ps', methods=['POST'])
+def obfuscate_powershell():
+    """Obfuscate PowerShell command
+    
+    Request JSON:
+        command: PowerShell command to obfuscate
+        level: Obfuscation level ('high', 'medium', 'low')
+        
+    Returns:
+        JSON with obfuscated PowerShell code
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        ps_command = data.get('command', '').strip()
+        level = data.get('level', 'medium').lower()
+        
+        if not ps_command:
+            return jsonify({'error': 'PowerShell command is required'}), 400
+        
+        if level not in ['high', 'medium', 'low']:
+            return jsonify({'error': 'Invalid obfuscation level'}), 400
+        
+        # Create temporary files for obfuscation
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as tmp_in:
+            tmp_in.write(ps_command)
+            tmp_in_path = tmp_in.name
+        
+        tmp_out_path = tmp_in_path.replace('.ps1', '_obf.ps1')
+        
+        try:
+            # Define obfuscation levels
+            levels = []
+            if level == 'high':
+                levels = ['high', 'medium', 'low']
+            elif level == 'medium':
+                levels = ['medium', 'low']
+            else:
+                levels = ['low']
+            
+            # Try each level with failover
+            for current_level in levels:
+                # Generate random values
+                rand_hex_bytes = random.randint(8, 32)
+                rand_hex_length = rand_hex_bytes * 2
+                rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+                rand_stringdict = random.randint(0, 100)
+                rand_deadcode = random.randint(0, 100)
+                rand_seed = random.randint(0 if current_level != 'high' else 1, 10000)
+                
+                # Build command based on level
+                if current_level == 'high':
+                    command = (
+                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 5 '
+                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
+                        f'-iden obf -strenc xor -strkey {rand_hex} '
+                        f'-stringdict {rand_stringdict} -numenc -fmt jitter -cf-opaque '
+                        f'-deadcode {rand_deadcode} -frag profile=medium -seed {rand_seed}'
+                    )
+                elif current_level == 'medium':
+                    command = (
+                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 3 '
+                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
+                        f'-strenc xor -strkey {rand_hex} -stringdict {rand_stringdict} '
+                        f'-deadcode {rand_deadcode} -fmt jitter -frag profile=medium '
+                        f'-seed {rand_seed}'
+                    )
+                else:
+                    command = (
+                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" '
+                        f'-level 2 -seed {rand_seed}'
+                    )
+                
+                # Execute obfuscation
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+                
+                # Check if successful
+                if result.returncode == 0 and os.path.exists(tmp_out_path):
+                    with open(tmp_out_path, 'r') as f:
+                        obfuscated_code = f.read().strip()
+                    
+                    # Clean up temp files
+                    try:
+                        os.unlink(tmp_in_path)
+                        os.unlink(tmp_out_path)
+                    except:
+                        pass
+                    
+                    return jsonify({
+                        'success': True,
+                        'obfuscated': obfuscated_code,
+                        'level': current_level
+                    })
+            
+            # All levels failed
+            try:
+                os.unlink(tmp_in_path)
+                if os.path.exists(tmp_out_path):
+                    os.unlink(tmp_out_path)
+            except:
+                pass
+            
+            return jsonify({'error': 'All obfuscation levels failed. Please check your PowerShell syntax.'}), 500
+            
+        except subprocess.TimeoutExpired:
+            # Clean up temp files on timeout
+            try:
+                os.unlink(tmp_in_path)
+                if os.path.exists(tmp_out_path):
+                    os.unlink(tmp_out_path)
+            except:
+                pass
+            
+            return jsonify({'error': 'Obfuscation timed out. Try a simpler command or lower obfuscation level.'}), 500
+            
+        except Exception as e:
+            # Clean up temp files on error
+            try:
+                os.unlink(tmp_in_path)
+                if os.path.exists(tmp_out_path):
+                    os.unlink(tmp_out_path)
+            except:
+                pass
+            
+            return jsonify({'error': f'Obfuscation failed: {str(e)}'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': f'Request processing failed: {str(e)}'}), 500
+
+
 def run_web_app(host=None, port=None, debug=None):
     """Run the Flask web application
     

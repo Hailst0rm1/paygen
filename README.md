@@ -302,10 +302,36 @@ The web interface provides:
 - **Build Progress**: Real-time build status with step-by-step progress
 - **Build Options**: Checkboxes to remove comments, console output, or strip binaries
 - **PowerShell Obfuscation**: Automatic obfuscation with 3 levels and intelligent failover
+- **Standalone PowerShell Obfuscator**: Dedicated tool for obfuscating individual PowerShell commands
 - **Launch Instructions Obfuscation**: Obfuscate PowerShell code blocks in launch instructions
 - **History Management**: View all builds, detailed parameters, and delete individual entries
 - **Launch Instructions**: Formatted markdown with syntax-highlighted code blocks and copy buttons
 - **Responsive Design**: Clean 3-panel layout with Catppuccin Mocha theme
+
+### Standalone PowerShell Obfuscator
+
+The web interface includes a dedicated PowerShell obfuscation tool, accessible via the **"Obfuscate PS"** button (to the left of History):
+
+**Features**:
+- **Quick Access**: One-click access from the main header
+- **Simple Interface**: 
+  - Large text area for entering PowerShell commands
+  - Dropdown menu for obfuscation level selection (High/Medium/Low)
+  - Green "Generate" button to process the command
+- **Real-time Processing**: Shows loading spinner while obfuscating
+- **Syntax-Highlighted Output**: Obfuscated PowerShell displayed with proper highlighting
+- **One-Click Copy**: Copy button to instantly copy obfuscated code to clipboard
+- **Same Obfuscation Levels**: Uses identical logic as recipe-based obfuscation (High/Medium/Low)
+- **Automatic Failover**: If a level fails, automatically tries the next lower level
+- **No Recipe Required**: Obfuscate standalone commands without creating a full payload
+
+**Use Cases**:
+- Quickly obfuscate PowerShell one-liners before execution
+- Test obfuscation on custom commands
+- Prepare download cradles and execution commands
+- Obfuscate scripts for manual deployment
+
+**Requirements**: `psobf` tool must be installed (see [Installation](#installing-psobf))
 
 ### PowerShell Obfuscation
 

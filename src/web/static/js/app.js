@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Setup event listeners
 function setupEventListeners() {
     // Header buttons
+    document.getElementById('obfuscate-ps-btn').addEventListener('click', showObfuscatePsModal);
     document.getElementById('history-btn').addEventListener('click', showHistory);
     document.getElementById('refresh-btn').addEventListener('click', () => loadRecipes(true));
     
@@ -92,6 +93,15 @@ function setupEventListeners() {
     
     // Clear history button handler is set dynamically in showHistory/showHistoryDetail
     // Don't add a static event listener here
+    
+    // PowerShell Obfuscator modal buttons
+    document.getElementById('close-obfuscate-ps-btn').addEventListener('click', function() {
+        document.getElementById('obfuscate-ps-modal').classList.remove('active');
+    });
+    
+    document.getElementById('obfuscate-ps-generate-btn').addEventListener('click', generateObfuscatedPs);
+    
+    document.getElementById('obfuscate-ps-copy-btn').addEventListener('click', copyObfuscatedPs);
     
     // Close modals on background click
     document.querySelectorAll('.modal').forEach(modal => {
@@ -1758,4 +1768,108 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ===== PowerShell Obfuscator Functions =====
+
+// Show PowerShell Obfuscator modal
+function showObfuscatePsModal() {
+    const modal = document.getElementById('obfuscate-ps-modal');
+    const inputTextarea = document.getElementById('obfuscate-ps-input');
+    const outputSection = document.getElementById('obfuscate-ps-output-section');
+    const loadingDiv = document.getElementById('obfuscate-ps-loading');
+    
+    // Reset modal state
+    inputTextarea.value = '';
+    outputSection.style.display = 'none';
+    loadingDiv.style.display = 'none';
+    
+    // Show modal
+    modal.classList.add('active');
+    
+    // Focus on input
+    setTimeout(() => inputTextarea.focus(), 100);
+}
+
+// Generate obfuscated PowerShell
+async function generateObfuscatedPs() {
+    const inputTextarea = document.getElementById('obfuscate-ps-input');
+    const levelSelect = document.getElementById('obfuscate-ps-level');
+    const outputSection = document.getElementById('obfuscate-ps-output-section');
+    const outputDiv = document.getElementById('obfuscate-ps-output');
+    const loadingDiv = document.getElementById('obfuscate-ps-loading');
+    const generateBtn = document.getElementById('obfuscate-ps-generate-btn');
+    
+    const psCommand = inputTextarea.value.trim();
+    const level = levelSelect.value;
+    
+    // Validate input
+    if (!psCommand) {
+        showNotificationPopup('Please enter a PowerShell command', 'error');
+        return;
+    }
+    
+    // Show loading, hide output
+    outputSection.style.display = 'none';
+    loadingDiv.style.display = 'flex';
+    generateBtn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/obfuscate-ps', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                command: psCommand,
+                level: level
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Obfuscation failed');
+        }
+        
+        // Display obfuscated code with syntax highlighting
+        outputDiv.innerHTML = `<pre class="line-numbers"><code class="language-powershell">${escapeHtml(data.obfuscated)}</code></pre>`;
+        
+        // Apply syntax highlighting
+        Prism.highlightAllUnder(outputDiv);
+        
+        // Show output section
+        loadingDiv.style.display = 'none';
+        outputSection.style.display = 'flex';
+        
+        showNotificationPopup('PowerShell obfuscated successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Obfuscation error:', error);
+        loadingDiv.style.display = 'none';
+        showNotificationPopup(error.message || 'Failed to obfuscate PowerShell', 'error');
+    } finally {
+        generateBtn.disabled = false;
+    }
+}
+
+// Copy obfuscated PowerShell to clipboard
+async function copyObfuscatedPs() {
+    const outputDiv = document.getElementById('obfuscate-ps-output');
+    const codeElement = outputDiv.querySelector('code');
+    
+    if (!codeElement) {
+        showNotificationPopup('No obfuscated code to copy', 'error');
+        return;
+    }
+    
+    const code = codeElement.textContent;
+    
+    try {
+        await navigator.clipboard.writeText(code);
+        showNotificationPopup('Copied to clipboard!', 'success');
+    } catch (error) {
+        console.error('Failed to copy:', error);
+        showNotificationPopup('Failed to copy to clipboard', 'error');
+    }
 }
