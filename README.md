@@ -90,21 +90,6 @@ python -m src.main
 
 ---
 
-## Navigation
-
-### Web Interface
-
-| Action              | Method                        |
-| ------------------- | ----------------------------- |
-| Search recipes      | Press `/` or click search box |
-| Select recipe       | Click recipe name             |
-| Generate payload    | Click "Generate" button       |
-| View history        | Click "History" button        |
-| View recipe details | Click history entry           |
-| Refresh recipes     | Click refresh icon (top-left) |
-| Copy code           | Click copy icon in code panel |
-
----
 
 ## Recipe Format
 
@@ -405,42 +390,6 @@ When multiple evasion techniques are enabled, they execute in this order:
 2. **PowerShell Obfuscation** (if enabled)
 
 This ensures bypass code is in place before obfuscation layers are applied.
-
----
-
-## Example Recipes
-
-### 1. Basic Msfvenom Payload
-
-Simple msfvenom reverse TCP shell:
-
-```bash
-# Select: "Basic Msfvenom Reverse TCP Shell"
-# Parameters: lhost=192.168.1.100, lport=4444
-# Output: payload.exe
-```
-
-### 2. AES-Encrypted C# Injector
-
-Process injection with AES-256-CBC encryption:
-
-```bash
-# Select: "C# AES-Encrypted Shellcode Injector"
-# Parameters: target_process=explorer.exe, lhost, lport
-# Steps: msfvenom → AES encrypt → C# template → compile
-# Output: injector.exe
-```
-
-### 3. XOR-Encoded Injector
-
-Simple XOR obfuscation:
-
-```bash
-# Select: "XOR-Encoded Shellcode Injector"
-# Parameters: lhost, lport, xor_key=fa
-# Steps: msfvenom → XOR encode → C# template → compile
-# Output: xor_injector.exe
-```
 
 ---
 
