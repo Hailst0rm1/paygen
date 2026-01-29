@@ -1,30 +1,25 @@
 # Paygen
 
-> Modern TUI & Web framework for offensive payload generation
+> Modern web-based framework for offensive payload generation
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Tests](https://img.shields.io/badge/tests-37%20passing-success.svg)
 
-Paygen is a dual-interface payload generation framework for security researchers and penetration testers. It provides both a beautiful terminal UI (TUI) and a modern web interface for creating and customizing offensive payloads with built-in MITRE ATT&CK mappings, effectiveness ratings, and advanced preprocessing pipelines.
+Paygen is a web-based payload generation framework for security researchers and penetration testers. It provides a modern web interface for creating and customizing offensive payloads with built-in MITRE ATT&CK mappings, effectiveness ratings, and advanced preprocessing pipelines.
 
 ---
 
 ## Screenshots
 
-### Terminal UI (TUI)
-![Paygen TUI](screenshots/tui.png)
-
 ### Web Interface
-![Paygen Web GUI](screenshots/web.png)
+![Paygen Web Interface](screenshots/web.png)
 
 ---
 
 ## Features
 
-- 🎨 **Dual Interface** - Choose between TUI (terminal) or Web GUI
-- 🌐 **Web GUI** - Modern web interface with real-time validation and syntax highlighting
-- 🖥️ **Beautiful TUI** - Catppuccin Mocha theme with vim-style navigation
+- 🌐 **Modern Web Interface** - Clean, responsive design with real-time validation
 - 📋 **Recipe System** - YAML-based payload definitions with rich metadata
 - 🔄 **Preprocessing** - Chain XOR/AES encryption, compression, encoding
 - 🔀 **Preprocessing Options** - Select between multiple shellcode generation methods (msfvenom, donut, custom)
@@ -49,11 +44,8 @@ cd paygen
 # Install dependencies
 pip install -r requirements.txt
 
-# Run TUI
+# Run Web Interface
 python -m src.main
-
-# Or run Web GUI
-python -m src.web_main
 # Then open http://localhost:1337 in your browser
 ```
 
@@ -68,7 +60,7 @@ python -m src.web_main
 
 #### Installing psobf
 
-The `psobf` tool is required for PowerShell obfuscation features in the web interface:
+The `psobf` tool is required for PowerShell obfuscation features:
 
 ```bash
 # Install from source
@@ -82,23 +74,11 @@ cd psobf
 
 ## Quick Start
 
-### Terminal UI (TUI)
-
-```bash
-# 1. Launch TUI
-python -m src.main
-
-# 2. Navigate with j/k or arrow keys
-# 3. Press Ctrl+G on any recipe to generate
-# 4. Fill parameters (required fields marked with *)
-# 5. View history with Ctrl+H
-```
-
-### Web GUI
+### Web Interface
 
 ```bash
 # 1. Launch web server
-python -m src.web_main
+python -m src.main
 
 # 2. Open browser to http://localhost:1337
 
@@ -112,19 +92,7 @@ python -m src.web_main
 
 ## Navigation
 
-### Terminal UI (TUI)
-
-| Key              | Action           |
-| ---------------- | ---------------- |
-| `j`/`k`, `↑`/`↓` | Navigate         |
-| `h`/`l`, `Tab`   | Switch panels    |
-| `Ctrl+G`         | Generate payload |
-| `Ctrl+H`         | Build history    |
-| `Ctrl+F`         | Fullscreen code  |
-| `?`              | Help             |
-| `Ctrl+Q`         | Quit             |
-
-### Web GUI
+### Web Interface
 
 | Action              | Method                        |
 | ------------------- | ----------------------------- |
@@ -250,13 +218,11 @@ When using conditional parameters:
 paygen/
 ├── src/
 │   ├── core/           # Config, recipes, validation, building
-│   ├── tui/            # TUI panels and widgets
-│   ├── web/            # Web GUI (Flask + static assets)
+│   ├── web/            # Web interface (Flask + static assets)
 │   │   ├── app.py      # Flask application & REST API
 │   │   ├── static/     # CSS, JavaScript
 │   │   └── templates/  # HTML templates
-│   ├── main.py         # TUI entry point
-│   ├── web_main.py     # Web GUI entry point
+│   ├── main.py         # Web interface entry point
 │   └── utils/          # Utilities
 ├── recipes/            # Recipe YAML files (tracked in git)
 ├── templates/          # Source templates (tracked in git)
@@ -286,13 +252,13 @@ show_build_debug: false
 remove_comments: true # Strip comments from source before compilation
 strip_binaries: true # Remove debug symbols from compiled binaries
 
-# Web GUI settings
+# Web Interface settings
 web_host: "0.0.0.0" # Bind to all interfaces
 web_port: 1337 # Web server port
 web_debug: false # Flask debug mode
 ```
 
-### Web GUI Features
+### Web Interface Features
 
 The web interface provides:
 
@@ -311,8 +277,6 @@ The web interface provides:
 ### Standalone PowerShell Obfuscator
 
 The web interface includes a dedicated PowerShell obfuscation tool, accessible via the **"Obfuscate PS"** button (to the left of History):
-
-**Features**:
 - **Quick Access**: One-click access from the main header
 - **Simple Interface**: 
   - Large text area for entering PowerShell commands
@@ -337,7 +301,7 @@ The web interface includes a dedicated PowerShell obfuscation tool, accessible v
 
 #### Template Obfuscation
 
-When building PowerShell (.ps1) templates via the web interface, you can enable automatic obfuscation:
+When building PowerShell (.ps1) templates, you can enable automatic obfuscation:
 
 - **Enabled by default** - Checkbox is pre-selected for PowerShell recipes
 - **3 Obfuscation Levels**:
@@ -363,7 +327,7 @@ Obfuscation helps evade signature-based detection and makes reverse engineering 
 
 #### Name Obfuscation
 
-When building C# (.cs) templates via the web interface, you can enable automatic name obfuscation:
+When building C# (.cs) templates, you can enable automatic name obfuscation:
 
 - **Enabled by default** - Checkbox is pre-selected for C# recipes
 - **Function & Variable Replacement**: Replaces all function and variable names with innocuous-looking identifiers
@@ -653,13 +617,12 @@ pytest tests/ -v
 ### Project Structure
 
 - `src/core/` - Core functionality (config, recipes, validation, building)
-- `src/tui/` - Textual TUI components
+- `src/web/` - Web interface components
 - `src/utils/` - Utility functions
 - `tests/` - Test suite
 
 ### Tech Stack
 
-- **TUI**: Textual 0.47.0
 - **Web**: Flask 3.0.0+, Flask-CORS
 - **Frontend**: Vanilla JavaScript, Prism.js (syntax highlighting), Marked.js (markdown)
 - **Templates**: Jinja2
@@ -689,9 +652,9 @@ Free and open source for security research and educational purposes.
 
 ## Acknowledgments
 
-- [Textual](https://textual.textualize.io/) - Modern TUI framework
 - [Catppuccin](https://github.com/catppuccin) - Beautiful color palette
 - [Metasploit](https://www.metasploit.com/) - Shellcode generation
+- [Flask](https://flask.palletsprojects.com/) - Web framework
 
 ---
 

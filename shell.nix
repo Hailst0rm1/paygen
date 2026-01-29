@@ -11,7 +11,6 @@ pkgs.mkShell {
     # Python dependencies for Paygen
     python311Packages.pyyaml
     python311Packages.jinja2
-    python311Packages.textual
     python311Packages.rich
     python311Packages.pycryptodome
     python311Packages.pytest
@@ -42,8 +41,8 @@ pkgs.mkShell {
     echo "Mono version: $(mono --version | head -n1)"
     echo ""
     echo "Installed packages:"
-    echo "  - PyYAML, Jinja2, Textual, Rich, PyCryptodome"
-    echo "  - Flask, Flask-CORS (web GUI)"
+    echo "  - PyYAML, Jinja2, Rich, PyCryptodome"
+    echo "  - Flask, Flask-CORS (web interface)"
     echo "  - pytest (testing framework)"
     echo ""
     echo "Payload tools:"

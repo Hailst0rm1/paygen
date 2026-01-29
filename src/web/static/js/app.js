@@ -1356,7 +1356,7 @@ async function pollBuildStatus(sessionId) {
                         if (debugDiv) {
                             let debugHtml = '';
                             if (step.output && step.output.trim()) {
-                                // Truncate output to 500 chars like TUI
+                                // Truncate output to 500 chars
                                 let output = step.output.trim();
                                 if (output.length > 500) {
                                     output = output.substring(0, 500) + '... (truncated)';
@@ -1401,7 +1401,7 @@ async function pollBuildStatus(sessionId) {
                         
                         let debugHtml = '';
                         if (step.output && step.output.trim()) {
-                            // Truncate output to 500 chars like TUI
+                            // Truncate output to 500 chars
                             let output = step.output.trim();
                             if (output.length > 500) {
                                 output = output.substring(0, 500) + '... (truncated)';

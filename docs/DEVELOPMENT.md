@@ -1,6 +1,6 @@
 # Paygen - Payload Generation Framework
 
-A menu-driven TUI tool for generating and customizing malicious payloads with MITRE ATT&CK context and effectiveness ratings.
+A web-based tool for generating and customizing malicious payloads with MITRE ATT&CK context and effectiveness ratings.
 
 ---
 
@@ -8,7 +8,7 @@ A menu-driven TUI tool for generating and customizing malicious payloads with MI
 
 **Repository**: Private GitHub repository (Hailst0rm1/paygen)  
 **Language**: Python 3.10+  
-**Interface**: Terminal User Interface (TUI)  
+**Interface**: Web Interface  
 **Purpose**: Template-based payload generation with custom preprocessing and categorization
 
 ---
@@ -18,7 +18,7 @@ A menu-driven TUI tool for generating and customizing malicious payloads with MI
 ### Core Technologies
 
 - **Language**: Python 3.10+
-- **TUI Framework**: Textual
+- **Web Framework**: Flask
 - **Color Scheme**: Catppuccin Mocha palette
 - **Recipe Format**: YAML
 - **Templating**: Jinja2 (for source code generation and command rendering)
@@ -31,7 +31,7 @@ A menu-driven TUI tool for generating and customizing malicious payloads with MI
 - **File operations**: pathlib, shutil
 - **Templating**: Jinja2
 - **Encryption**: PyCryptodome
-- **TUI**: Textual, Rich
+- **Web**: Flask, Flask-CORS, Rich
 
 ---
 
@@ -45,12 +45,10 @@ paygen/
 │   └── config.yaml              # User configuration file
 ├── src/
 │   ├── main.py                  # Entry point
-│   ├── tui/
-│   │   ├── app.py              # Main TUI application
-│   │   ├── category_panel.py  # Left panel: Categories & Recipes
-│   │   ├── recipe_panel.py    # Middle panel: Recipe metadata
-│   │   ├── code_panel.py      # Right panel: Template/command source
-│   │   └── colors.py          # Catppuccin Mocha color definitions
+│   ├── web/
+│   │   ├── app.py              # Flask application & REST API
+│   │   ├── static/             # CSS, JavaScript
+│   │   └── templates/          # HTML templates
 │   ├── core/
 │   │   ├── config.py          # Configuration management
 │   │   ├── recipe_loader.py   # Load and parse YAML recipes
@@ -64,7 +62,7 @@ paygen/
 │   ├── process_injection.yaml
 │   ├── msfvenom_shell.yaml
 │   └── ...
-├── payloads/                    # Source code templates
+├── templates/                   # Source code templates
 │   └── process_injection/
 │       ├── process_injection.cs
 │       └── process_injection.ps1
@@ -98,9 +96,10 @@ templates_dir: "~/Documents/Tools/paygen/templates"
 preprocessors_dir: "~/Documents/Tools/paygen/preprocessors"
 output_dir: "~/Documents/Tools/paygen/output"
 
-# TUI preferences
-theme: "catppuccin_mocha" # Color scheme
-transparent_background: true
+# Web interface settings
+web_host: "0.0.0.0" # Bind to all interfaces
+web_port: 1337 # Web server port
+web_debug: false # Flask debug mode
 
 # Build preferences
 keep_source_files: false # If true, save rendered source code alongside compiled binaries

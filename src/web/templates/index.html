@@ -117,9 +117,6 @@
             <span id="category-count">Categories: 0</span>
         </div>
         <div class="header-actions">
-            <button id="obfuscate-ps-btn" class="btn btn-secondary">
-                <span class="btn-icon">🔒</span> Obfuscate PS
-            </button>
             <button id="history-btn" class="btn btn-secondary">
                 <span class="btn-icon">📜</span> History
             </button>
@@ -231,55 +228,6 @@
                 <button id="back-history-btn" class="btn btn-secondary" style="display: none; margin-right: auto;">Back</button>
                 <button id="clear-history-btn" class="btn btn-danger">Clear All</button>
                 <button id="close-history-btn" class="btn btn-secondary">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: PowerShell Obfuscator -->
-    <div id="obfuscate-ps-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>PowerShell Obfuscator</h2>
-                <button class="modal-close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="obfuscate-ps-container">
-                    <div class="obfuscate-ps-input-section">
-                        <label class="obfuscate-ps-label">PowerShell Command</label>
-                        <textarea id="obfuscate-ps-input" class="obfuscate-ps-textarea" placeholder="Enter your PowerShell command here..."></textarea>
-                    </div>
-                    <div class="obfuscate-ps-controls">
-                        <div class="obfuscate-ps-level-container">
-                            <label class="obfuscate-ps-label">Obfuscation Level</label>
-                            <select id="obfuscate-ps-level" class="obfuscate-ps-select">
-                                <option value="high">High - Maximum obfuscation</option>
-                                <option value="medium" selected>Medium - Balanced obfuscation</option>
-                                <option value="low">Low - Minimal obfuscation</option>
-                            </select>
-                        </div>
-                        <button id="obfuscate-ps-generate-btn" class="btn btn-primary obfuscate-ps-generate-btn">
-                            <span class="btn-icon">🔒</span> Generate
-                        </button>
-                    </div>
-                    <div class="obfuscate-ps-output-section" id="obfuscate-ps-output-section" style="display: none;">
-                        <div class="obfuscate-ps-output-header">
-                            <label class="obfuscate-ps-label">Obfuscated Output</label>
-                            <button id="obfuscate-ps-copy-btn" class="btn btn-secondary btn-sm">
-                                <span class="btn-icon">📋</span> Copy
-                            </button>
-                        </div>
-                        <div id="obfuscate-ps-output" class="obfuscate-ps-output">
-                            <!-- Obfuscated output will be displayed here -->
-                        </div>
-                    </div>
-                    <div class="obfuscate-ps-loading" id="obfuscate-ps-loading" style="display: none;">
-                        <div class="loading-spinner"></div>
-                        <p>Obfuscating PowerShell...</p>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button id="close-obfuscate-ps-btn" class="btn btn-secondary">Close</button>
             </div>
         </div>
     </div>

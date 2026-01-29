@@ -1,8 +1,7 @@
 """
 Flask Web Application for Paygen
 
-Provides a web-based GUI for payload generation while reusing
-all core functionality from the TUI version.
+Provides a web-based interface for payload generation and management.
 """
 
 import os
