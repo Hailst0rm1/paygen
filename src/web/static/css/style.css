@@ -931,6 +931,9 @@ code {
 .param-form-checkbox {
     margin-right: 0.5rem;
     cursor: pointer;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--mauve);
 }
 
 .param-form-checkbox-label {
@@ -939,6 +942,16 @@ code {
     color: var(--text);
     cursor: pointer;
     font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+    user-select: none;
+}
+
+.param-form-hint {
+    font-size: 0.85rem;
+    color: var(--subtext0);
+    font-style: italic;
+    margin-left: 1.5rem;
+    margin-top: 0.25rem;
 }
 
 .btn-disabled {

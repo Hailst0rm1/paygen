@@ -14,8 +14,8 @@ class ConfigManager:
         'templates_dir': '~/Documents/Tools/paygen/templates',
         'preprocessors_dir': '~/Documents/Tools/paygen/preprocessors',
         'output_dir': '~/Documents/Tools/paygen/output',
-        'theme': 'catppuccin_mocha',
-        'transparent_background': True,
+        'ps_obfuscation_yaml': '~/Documents/Tools/paygen/ps-obfuscation.yaml',
+        'ps_features_yaml': '~/Documents/Tools/paygen/ps-features.yaml',
         'keep_source_files': False,
         'show_build_debug': False,
         'remove_comments': True,
@@ -65,7 +65,8 @@ class ConfigManager:
     
     def _validate_paths(self) -> None:
         """Validate and expand paths in configuration"""
-        path_keys = ['recipes_dir', 'templates_dir', 'preprocessors_dir', 'output_dir']
+        path_keys = ['recipes_dir', 'templates_dir', 'preprocessors_dir', 'output_dir',
+                     'ps_obfuscation_yaml', 'ps_features_yaml']
         
         for key in path_keys:
             if key in self.config:
@@ -74,7 +75,8 @@ class ConfigManager:
                 self.config[key] = str(path.absolute())
                 
                 # Create directory if it doesn't exist (except output_dir which may be created later)
-                if not path.exists() and key != 'output_dir':
+                # Also skip YAML files (they're files, not directories)
+                if not path.exists() and key not in ['output_dir', 'ps_obfuscation_yaml', 'ps_features_yaml']:
                     print(f"Warning: {key} path does not exist: {path}")
     
     def get(self, key: str, default: Any = None) -> Any:
@@ -134,16 +136,6 @@ class ConfigManager:
         return self.get_path('output_dir')
     
     @property
-    def theme(self) -> str:
-        """Get theme name"""
-        return self.get('theme', 'catppuccin_mocha')
-    
-    @property
-    def transparent_background(self) -> bool:
-        """Get transparent background setting"""
-        return self.get('transparent_background', True)
-    
-    @property
     def keep_source_files(self) -> bool:
         """Get keep source files setting"""
         return self.get('keep_source_files', False)
@@ -177,6 +169,16 @@ class ConfigManager:
     def web_debug(self) -> bool:
         """Get web server debug mode"""
         return self.get('web_debug', False)
+    
+    @property
+    def ps_obfuscation_yaml(self) -> Path:
+        """Get PowerShell obfuscation YAML file path"""
+        return self.get_path('ps_obfuscation_yaml')
+    
+    @property
+    def ps_features_yaml(self) -> Path:
+        """Get PowerShell features YAML file path"""
+        return self.get_path('ps_features_yaml')
 
 
 # Global config instance

