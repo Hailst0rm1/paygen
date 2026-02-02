@@ -72,6 +72,10 @@ class PayloadBuilder:
         # Load PowerShell obfuscation methods and features
         self.ps_obfuscation_methods = self._load_ps_obfuscation_methods()
         self.ps_features = self._load_ps_features()
+        
+        # Store C# obfuscation data for cradle generation
+        self.cs_obfuscation_map = {}
+        self.source_file_path = None
     
     def _load_ps_obfuscation_methods(self) -> List[dict]:
         """Load PowerShell obfuscation methods from YAML"""
@@ -485,6 +489,9 @@ class PayloadBuilder:
             with open(source_file, 'w') as f:
                 f.write(rendered_code)
             
+            # Store source file path for metadata extraction later
+            self.source_file_path = str(source_file)
+            
             step.status = "success"
             step.output = f"Template rendered to {source_file}"
             self._update_step(step)
@@ -563,12 +570,17 @@ class PayloadBuilder:
                 
                 if success:
                     obf_step.status = "success"
-                    obf_step.output = f"Replaced {replacements} function/variable names with innocuous identifiers"
+                    obf_step.output = f"Replaced {len(replacements)} function/variable names with innocuous identifiers"
                     self._update_step(obf_step)
+                    # Store the replacement map for later use in cradle generation
+                    self.cs_obfuscation_map = replacements
                 else:
                     obf_step.status = "failed"
                     obf_step.error = "Failed to obfuscate C# names"
                     self._update_step(obf_step)
+                    self.cs_obfuscation_map = {}
+            else:
+                self.cs_obfuscation_map = {}
             
             # Step: Compile if needed
             compile_config = output_config.get('compile', {})
@@ -1044,7 +1056,7 @@ class PayloadBuilder:
             cs_file: Path to the C# source file
             
         Returns:
-            Tuple of (success: bool, replacement_count: int)
+            Tuple of (success: bool, replacements: dict)
         """
         try:
             # Read the source file
@@ -1064,7 +1076,7 @@ class PayloadBuilder:
             with open(cs_file, 'w') as f:
                 f.write(obfuscated_code)
             
-            return True, len(replacements)
+            return True, replacements
             
         except Exception as e:
-            return False, 0
+            return False, {}

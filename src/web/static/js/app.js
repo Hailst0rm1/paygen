@@ -875,6 +875,51 @@ async function showParameterForm() {
                     <div class="param-form-description">Port for the download cradle URL (80=http://, 443=https://, other=http://host:port/)</div>
                     <div class="param-form-error" id="error-ps-cradle-lport"></div>
                 </div>
+                <div class="param-form-item" id="ps-cradle-manual-override-container" style="display: none;">
+                    <label class="param-form-label">
+                        <input type="checkbox" id="ps-cradle-manual-override">
+                        Manual Override
+                        <span class="param-type">[bool]</span>
+                    </label>
+                    <div class="param-form-description">Manually specify namespace/class/entry point instead of auto-extracting from compiled payload (cannot be used with C# obfuscation)</div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-auto-detected-container" style="display: none;">
+                    <div class="param-form-description" style="color: #4a9eff; font-style: italic;">
+                        ℹ️ Namespace, class, and entry point will be automatically extracted from the compiled payload
+                    </div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-namespace-container" style="display: none;">
+                    <label class="param-form-label">
+                        .NET Namespace
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="ps-cradle-namespace" placeholder="MyNamespace">
+                    <div class="param-form-description">.NET namespace for assembly loading (e.g., MyApp)</div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-class-container" style="display: none;">
+                    <label class="param-form-label">
+                        .NET Class
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="ps-cradle-class" placeholder="Program">
+                    <div class="param-form-description">.NET class name containing the entry point (e.g., Program)</div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-entry-point-container" style="display: none;">
+                    <label class="param-form-label">
+                        Entry Point
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="ps-cradle-entry-point" placeholder="Main">
+                    <div class="param-form-description">Entry point method/function name (e.g., Main, DllMain)</div>
+                </div>
+                <div class="param-form-item" id="ps-cradle-args-container" style="display: none;">
+                    <label class="param-form-label">
+                        Arguments
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="ps-cradle-args" placeholder="arg1 arg2">
+                    <div class="param-form-description">Command-line arguments (space-separated)</div>
+                </div>
             `;
             
             // Add event listener logic for checkbox toggles (will be added after DOM update)
@@ -928,6 +973,13 @@ async function showParameterForm() {
                 if (cradleCheckbox && cradleContainer) {
                     const lhostContainer = document.getElementById('ps-cradle-lhost-container');
                     const lportContainer = document.getElementById('ps-cradle-lport-container');
+                    const manualOverrideContainer = document.getElementById('ps-cradle-manual-override-container');
+                    const autoDetectedContainer = document.getElementById('ps-cradle-auto-detected-container');
+                    const manualOverrideCheckbox = document.getElementById('ps-cradle-manual-override');
+                    const namespaceContainer = document.getElementById('ps-cradle-namespace-container');
+                    const classContainer = document.getElementById('ps-cradle-class-container');
+                    const entryPointContainer = document.getElementById('ps-cradle-entry-point-container');
+                    const argsContainer = document.getElementById('ps-cradle-args-container');
                     
                     const updateCradleVisibility = () => {
                         const checked = cradleCheckbox.checked;
@@ -937,12 +989,64 @@ async function showParameterForm() {
                         if (lhostContainer) lhostContainer.style.display = checked ? 'block' : 'none';
                         if (lportContainer) lportContainer.style.display = checked ? 'block' : 'none';
                         
-                        // Show obfuscation option if cradle is enabled and method allows obfuscation
+                        // Find selected cradle and show/hide fields based on what it uses
                         if (checked && cradleMethodSelect) {
                             const selectedCradle = psCradles.ps1.find(c => c.name === cradleMethodSelect.value);
+                            
+                            // Show obfuscation option if method allows obfuscation
                             cradleObfContainer.style.display = (selectedCradle && !selectedCradle.no_obf) ? 'block' : 'none';
+                            
+                            // Check if cradle uses any metadata fields
+                            const usesMetadata = selectedCradle && (selectedCradle.uses_namespace || selectedCradle.uses_class || selectedCradle.uses_entry_point);
+                            
+                            // Check if C# obfuscation is enabled
+                            const csObfEnabled = document.getElementById('obfuscate-cs-names')?.checked || false;
+                            
+                            // Show manual override checkbox only if metadata is needed and CS obfuscation is disabled
+                            if (manualOverrideContainer) {
+                                manualOverrideContainer.style.display = (usesMetadata && !csObfEnabled) ? 'block' : 'none';
+                            }
+                            
+                            // If CS obfuscation is enabled, uncheck manual override
+                            if (csObfEnabled && manualOverrideCheckbox) {
+                                manualOverrideCheckbox.checked = false;
+                            }
+                            
+                            // Determine if manual mode is active
+                            const manualMode = manualOverrideCheckbox?.checked || false;
+                            
+                            // Show auto-detected message or manual fields based on mode
+                            if (usesMetadata) {
+                                if (manualMode) {
+                                    // Show manual input fields
+                                    if (autoDetectedContainer) autoDetectedContainer.style.display = 'none';
+                                    if (namespaceContainer) namespaceContainer.style.display = selectedCradle.uses_namespace ? 'block' : 'none';
+                                    if (classContainer) classContainer.style.display = selectedCradle.uses_class ? 'block' : 'none';
+                                    if (entryPointContainer) entryPointContainer.style.display = selectedCradle.uses_entry_point ? 'block' : 'none';
+                                } else {
+                                    // Show auto-detected message, hide manual fields
+                                    if (autoDetectedContainer) autoDetectedContainer.style.display = 'block';
+                                    if (namespaceContainer) namespaceContainer.style.display = 'none';
+                                    if (classContainer) classContainer.style.display = 'none';
+                                    if (entryPointContainer) entryPointContainer.style.display = 'none';
+                                }
+                            } else {
+                                // Cradle doesn't use metadata
+                                if (manualOverrideContainer) manualOverrideContainer.style.display = 'none';
+                                if (autoDetectedContainer) autoDetectedContainer.style.display = 'none';
+                                if (namespaceContainer) namespaceContainer.style.display = 'none';
+                                if (classContainer) classContainer.style.display = 'none';
+                                if (entryPointContainer) entryPointContainer.style.display = 'none';
+                            }
+                            
+                            // Args field is always shown/hidden based on cradle requirements
+                            if (argsContainer) argsContainer.style.display = selectedCradle?.uses_args ? 'block' : 'none';
                         } else {
                             cradleObfContainer.style.display = 'none';
+                            if (namespaceContainer) namespaceContainer.style.display = 'none';
+                            if (classContainer) classContainer.style.display = 'none';
+                            if (entryPointContainer) entryPointContainer.style.display = 'none';
+                            if (argsContainer) argsContainer.style.display = 'none';
                         }
                         
                         // Revalidate when visibility changes
@@ -953,6 +1057,18 @@ async function showParameterForm() {
                     if (cradleMethodSelect) {
                         cradleMethodSelect.addEventListener('change', updateCradleVisibility);
                     }
+                    
+                    // Manual override checkbox listener
+                    if (manualOverrideCheckbox) {
+                        manualOverrideCheckbox.addEventListener('change', updateCradleVisibility);
+                    }
+                    
+                    // C# obfuscation checkbox listener (to disable manual override when enabled)
+                    const csObfCheckbox = document.getElementById('obfuscate-cs-names');
+                    if (csObfCheckbox) {
+                        csObfCheckbox.addEventListener('change', updateCradleVisibility);
+                    }
+                    
                     updateCradleVisibility();
                     
                     // Add validation listeners for cradle fields
@@ -1044,6 +1160,51 @@ async function showParameterForm() {
                     <div class="param-form-description">Port for the download cradle URL (80=http://, 443=https://, other=http://host:port/)</div>
                     <div class="param-form-error" id="error-cs-cradle-lport"></div>
                 </div>
+                <div class="param-form-item" id="cs-cradle-manual-override-container" style="display: none;">
+                    <label class="param-form-label">
+                        <input type="checkbox" id="cs-cradle-manual-override">
+                        Manual Override
+                        <span class="param-type">[bool]</span>
+                    </label>
+                    <div class="param-form-description">Manually specify namespace/class/entry point instead of auto-extracting from compiled payload (cannot be used with C# obfuscation)</div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-auto-detected-container" style="display: none;">
+                    <div class="param-form-description" style="color: #4a9eff; font-style: italic;">
+                        ℹ️ Namespace, class, and entry point will be automatically extracted from the compiled payload
+                    </div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-namespace-container" style="display: none;">
+                    <label class="param-form-label">
+                        .NET Namespace
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="cs-cradle-namespace" placeholder="MyNamespace">
+                    <div class="param-form-description">.NET namespace for assembly loading (e.g., MyApp)</div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-class-container" style="display: none;">
+                    <label class="param-form-label">
+                        .NET Class
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="cs-cradle-class" placeholder="Program">
+                    <div class="param-form-description">.NET class name containing the entry point (e.g., Program)</div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-entry-point-container" style="display: none;">
+                    <label class="param-form-label">
+                        Entry Point
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="cs-cradle-entry-point" placeholder="Main">
+                    <div class="param-form-description">Entry point method/function name (e.g., Main, DllMain)</div>
+                </div>
+                <div class="param-form-item" id="cs-cradle-args-container" style="display: none;">
+                    <label class="param-form-label">
+                        Arguments
+                        <span class="param-type">[string]</span>
+                    </label>
+                    <input type="text" class="param-form-input" id="cs-cradle-args" placeholder="arg1 arg2">
+                    <div class="param-form-description">Command-line arguments (space-separated)</div>
+                </div>
             `;
             
             // Add event listener for C# cradle toggle
@@ -1056,6 +1217,13 @@ async function showParameterForm() {
                 if (cradleCheckbox && cradleContainer) {
                     const lhostContainer = document.getElementById('cs-cradle-lhost-container');
                     const lportContainer = document.getElementById('cs-cradle-lport-container');
+                    const manualOverrideContainer = document.getElementById('cs-cradle-manual-override-container');
+                    const autoDetectedContainer = document.getElementById('cs-cradle-auto-detected-container');
+                    const manualOverrideCheckbox = document.getElementById('cs-cradle-manual-override');
+                    const namespaceContainer = document.getElementById('cs-cradle-namespace-container');
+                    const classContainer = document.getElementById('cs-cradle-class-container');
+                    const entryPointContainer = document.getElementById('cs-cradle-entry-point-container');
+                    const argsContainer = document.getElementById('cs-cradle-args-container');
                     
                     const updateCradleVisibility = () => {
                         const checked = cradleCheckbox.checked;
@@ -1065,12 +1233,67 @@ async function showParameterForm() {
                         if (lhostContainer) lhostContainer.style.display = checked ? 'block' : 'none';
                         if (lportContainer) lportContainer.style.display = checked ? 'block' : 'none';
                         
-                        // Show obfuscation option if cradle is enabled and method allows obfuscation
+                        // Find selected cradle and show/hide fields based on what it uses
                         if (checked && cradleMethodSelect) {
                             const selectedCradle = availableCradles.find(c => c.name === cradleMethodSelect.value);
+                            
+                            // Show obfuscation option if method allows obfuscation
                             cradleObfContainer.style.display = (selectedCradle && !selectedCradle.no_obf) ? 'block' : 'none';
+                            
+                            // Check if cradle uses any metadata fields
+                            const usesMetadata = selectedCradle && (selectedCradle.uses_namespace || selectedCradle.uses_class || selectedCradle.uses_entry_point);
+                            
+                            // Check if C# obfuscation is enabled
+                            const csObfEnabled = document.getElementById('obfuscate-cs-names')?.checked || false;
+                            
+                            // Show manual override checkbox only if metadata is needed and CS obfuscation is disabled
+                            if (manualOverrideContainer) {
+                                manualOverrideContainer.style.display = (usesMetadata && !csObfEnabled) ? 'block' : 'none';
+                            }
+                            
+                            // If CS obfuscation is enabled, uncheck manual override
+                            if (csObfEnabled && manualOverrideCheckbox) {
+                                manualOverrideCheckbox.checked = false;
+                            }
+                            
+                            // Determine if manual mode is active
+                            const manualMode = manualOverrideCheckbox?.checked || false;
+                            
+                            // Show auto-detected message or manual fields based on mode
+                            if (usesMetadata) {
+                                if (manualMode) {
+                                    // Show manual input fields
+                                    if (autoDetectedContainer) autoDetectedContainer.style.display = 'none';
+                                    if (namespaceContainer) namespaceContainer.style.display = selectedCradle.uses_namespace ? 'block' : 'none';
+                                    if (classContainer) classContainer.style.display = selectedCradle.uses_class ? 'block' : 'none';
+                                    if (entryPointContainer) entryPointContainer.style.display = selectedCradle.uses_entry_point ? 'block' : 'none';
+                                } else {
+                                    // Show auto-detected message, hide manual fields
+                                    if (autoDetectedContainer) autoDetectedContainer.style.display = 'block';
+                                    if (namespaceContainer) namespaceContainer.style.display = 'none';
+                                    if (classContainer) classContainer.style.display = 'none';
+                                    if (entryPointContainer) entryPointContainer.style.display = 'none';
+                                }
+                            } else {
+                                // Cradle doesn't use metadata
+                                if (manualOverrideContainer) manualOverrideContainer.style.display = 'none';
+                                if (autoDetectedContainer) autoDetectedContainer.style.display = 'none';
+                                if (namespaceContainer) namespaceContainer.style.display = 'none';
+                                if (classContainer) classContainer.style.display = 'none';
+                                if (entryPointContainer) entryPointContainer.style.display = 'none';
+                            }
+                            
+                            // Args field is always shown/hidden based on cradle requirements
+                            if (argsContainer) argsContainer.style.display = selectedCradle?.uses_args ? 'block' : 'none';
                         } else {
+                            // Hide all extra fields if no cradle selected
                             cradleObfContainer.style.display = 'none';
+                            if (manualOverrideContainer) manualOverrideContainer.style.display = 'none';
+                            if (autoDetectedContainer) autoDetectedContainer.style.display = 'none';
+                            if (namespaceContainer) namespaceContainer.style.display = 'none';
+                            if (classContainer) classContainer.style.display = 'none';
+                            if (entryPointContainer) entryPointContainer.style.display = 'none';
+                            if (argsContainer) argsContainer.style.display = 'none';
                         }
                         
                         // Revalidate when visibility changes
@@ -1081,6 +1304,18 @@ async function showParameterForm() {
                     if (cradleMethodSelect) {
                         cradleMethodSelect.addEventListener('change', updateCradleVisibility);
                     }
+                    
+                    // Manual override checkbox listener
+                    if (manualOverrideCheckbox) {
+                        manualOverrideCheckbox.addEventListener('change', updateCradleVisibility);
+                    }
+                    
+                    // C# obfuscation checkbox listener (to disable manual override when enabled)
+                    const csObfCheckbox = document.getElementById('obfuscate-cs-names');
+                    if (csObfCheckbox) {
+                        csObfCheckbox.addEventListener('change', updateCradleVisibility);
+                    }
+                    
                     updateCradleVisibility();
                     
                     // Add validation listeners for cradle fields
@@ -1564,6 +1799,33 @@ async function generatePayload() {
             buildOptions.ps_cradle_obf_method = psCradleObfMethod ? psCradleObfMethod.value : '';
             buildOptions.cradle_lhost = psCradleLhost.value.trim();
             buildOptions.cradle_lport = psCradleLport ? parseInt(psCradleLport.value) || 80 : 80;
+            
+            // Check manual override state
+            const psCradleManualOverride = document.getElementById('ps-cradle-manual-override');
+            buildOptions.cradle_manual_override = psCradleManualOverride ? psCradleManualOverride.checked : false;
+            
+            // Collect optional assembly loading fields (only if manual override is enabled)
+            if (buildOptions.cradle_manual_override) {
+                const psCradleNamespace = document.getElementById('ps-cradle-namespace');
+                const psCradleClass = document.getElementById('ps-cradle-class');
+                const psCradleEntryPoint = document.getElementById('ps-cradle-entry-point');
+                
+                if (psCradleNamespace && psCradleNamespace.offsetParent !== null) {
+                    buildOptions.cradle_namespace = psCradleNamespace.value.trim();
+                }
+                if (psCradleClass && psCradleClass.offsetParent !== null) {
+                    buildOptions.cradle_class = psCradleClass.value.trim();
+                }
+                if (psCradleEntryPoint && psCradleEntryPoint.offsetParent !== null) {
+                    buildOptions.cradle_entry_point = psCradleEntryPoint.value.trim();
+                }
+            }
+            
+            // Collect args field (always collected if visible)
+            const psCradleArgs = document.getElementById('ps-cradle-args');
+            if (psCradleArgs && psCradleArgs.offsetParent !== null) {
+                buildOptions.cradle_args = psCradleArgs.value.trim();
+            }
         }
     }
     
@@ -1610,6 +1872,37 @@ async function generatePayload() {
             if (!buildOptions.cradle_lhost) {
                 buildOptions.cradle_lhost = csCradleLhost ? csCradleLhost.value : '';
                 buildOptions.cradle_lport = csCradleLport ? parseInt(csCradleLport.value) || 80 : 80;
+            }
+            
+            // Check manual override state if not already set by PS cradle
+            if (buildOptions.cradle_manual_override === undefined) {
+                const csCradleManualOverride = document.getElementById('cs-cradle-manual-override');
+                buildOptions.cradle_manual_override = csCradleManualOverride ? csCradleManualOverride.checked : false;
+            }
+            
+            // Collect optional assembly loading fields (if not already set by PS cradle and manual override is enabled)
+            if (!buildOptions.cradle_namespace && buildOptions.cradle_manual_override) {
+                const csCradleNamespace = document.getElementById('cs-cradle-namespace');
+                const csCradleClass = document.getElementById('cs-cradle-class');
+                const csCradleEntryPoint = document.getElementById('cs-cradle-entry-point');
+                
+                if (csCradleNamespace && csCradleNamespace.offsetParent !== null) {
+                    buildOptions.cradle_namespace = csCradleNamespace.value.trim();
+                }
+                if (csCradleClass && csCradleClass.offsetParent !== null) {
+                    buildOptions.cradle_class = csCradleClass.value.trim();
+                }
+                if (csCradleEntryPoint && csCradleEntryPoint.offsetParent !== null) {
+                    buildOptions.cradle_entry_point = csCradleEntryPoint.value.trim();
+                }
+            }
+            
+            // Collect args field (only if not already set by PS cradle)
+            if (!buildOptions.cradle_args) {
+                const csCradleArgs = document.getElementById('cs-cradle-args');
+                if (csCradleArgs && csCradleArgs.offsetParent !== null) {
+                    buildOptions.cradle_args = csCradleArgs.value.trim();
+                }
             }
         }
     }

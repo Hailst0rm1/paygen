@@ -350,7 +350,73 @@ def obfuscate_powershell_in_launch_instructions(launch_instructions: str, method
     return modified_instructions, commands_executed
 
 
-def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, obf_method: str = '') -> Tuple[str, str]:
+def extract_csharp_metadata(source_file: Path, obfuscation_map: dict = None) -> dict:
+    """Extract namespace, class, and entry point from C# source file
+    
+    Args:
+        source_file: Path to C# source file (already contains obfuscated names if obfuscation was applied)
+        obfuscation_map: Not used - kept for API compatibility
+        
+    Returns:
+        Dictionary with 'namespace', 'class', and 'entry_point' keys
+    """
+    import re
+    
+    metadata = {
+        'namespace': '',
+        'class': '',
+        'entry_point': 'Main'  # Default entry point
+    }
+    
+    try:
+        with open(source_file, 'r') as f:
+            code = f.read()
+        
+        # Extract namespace (already obfuscated if obfuscation was applied)
+        namespace_match = re.search(r'\bnamespace\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', code)
+        if namespace_match:
+            metadata['namespace'] = namespace_match.group(1)
+        
+        # Extract class name (look for class with Main method)
+        # Pattern matches any valid C# identifier (already obfuscated if obfuscation was applied)
+        class_matches = re.finditer(r'\bclass\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', code)
+        for match in class_matches:
+            class_name = match.group(1)
+            # Check if this class contains a Main method
+            class_start = match.start()
+            # Find the class body (between first { after class declaration and matching })
+            brace_start = code.find('{', class_start)
+            if brace_start != -1:
+                # Count braces to find matching closing brace
+                brace_count = 1
+                pos = brace_start + 1
+                while pos < len(code) and brace_count > 0:
+                    if code[pos] == '{':
+                        brace_count += 1
+                    elif code[pos] == '}':
+                        brace_count -= 1
+                    pos += 1
+                
+                if brace_count == 0:
+                    class_body = code[brace_start:pos]
+                    # Check if Main method exists in this class (or any entry point method)
+                    if re.search(r'\b(static\s+)?(void|int)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)\s*{', class_body):
+                        metadata['class'] = class_name
+                        
+                        # Extract the actual entry point method name from this class
+                        entry_match = re.search(r'\b(static\s+)?(void|int)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)\s*{', class_body)
+                        if entry_match:
+                            metadata['entry_point'] = entry_match.group(3)
+                        break
+        
+    except Exception as e:
+        pass
+    
+    return metadata
+
+
+def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, obf_method: str = '', 
+                   namespace: str = '', class_name: str = '', entry_point: str = '', args: str = '') -> Tuple[str, str]:
     """Generate a download cradle from ps-features.yaml
     
     Args:
@@ -359,6 +425,10 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
         lport: Listening port
         output_file: Output filename for the payload
         obf_method: Optional obfuscation method to apply
+        namespace: .NET namespace for assembly loading
+        class_name: .NET class name for assembly loading
+        entry_point: Entry point method/function name
+        args: Command-line arguments for assembly invocation
         
     Returns:
         Tuple of (cradle_code, command_used)
@@ -385,6 +455,10 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
     cradle_code = cradle_feature.get('code', '').strip()
     cradle_code = cradle_code.replace('{url}', url)
     cradle_code = cradle_code.replace('{output_file}', output_file)
+    cradle_code = cradle_code.replace('{namespace}', namespace)
+    cradle_code = cradle_code.replace('{class}', class_name)
+    cradle_code = cradle_code.replace('{entry_point}', entry_point)
+    cradle_code = cradle_code.replace('{args}', args)
     
     command_used = ''
     
@@ -782,21 +856,29 @@ def get_ps_cradles():
     
     for feature in ps_features:
         feature_type = feature.get('type', '')
+        code = feature.get('code', '')
+        
+        # Determine which variables this cradle uses
+        uses_namespace = '{namespace}' in code
+        uses_class = '{class}' in code
+        uses_entry_point = '{entry_point}' in code
+        uses_args = '{args}' in code
+        
+        cradle_info = {
+            'name': feature.get('name'),
+            'no_obf': feature.get('no-obf', False),
+            'uses_namespace': uses_namespace,
+            'uses_class': uses_class,
+            'uses_entry_point': uses_entry_point,
+            'uses_args': uses_args
+        }
+        
         if feature_type == 'cradle-ps1':
-            cradles['ps1'].append({
-                'name': feature.get('name'),
-                'no_obf': feature.get('no-obf', False)
-            })
+            cradles['ps1'].append(cradle_info)
         elif feature_type == 'cradle-exe':
-            cradles['exe'].append({
-                'name': feature.get('name'),
-                'no_obf': feature.get('no-obf', False)
-            })
+            cradles['exe'].append(cradle_info)
         elif feature_type == 'cradle-dll':
-            cradles['dll'].append({
-                'name': feature.get('name'),
-                'no_obf': feature.get('no-obf', False)
-            })
+            cradles['dll'].append(cradle_info)
     
     return jsonify({'cradles': cradles})
 
@@ -1134,9 +1216,33 @@ def generate_payload():
                         lhost = build_options.get('cradle_lhost', '')
                         lport = build_options.get('cradle_lport', 80)
                         
+                        # Check if manual override is enabled
+                        manual_override = build_options.get('cradle_manual_override', False)
+                        
+                        # Get metadata from build or manual input
+                        namespace = ''
+                        class_name = ''
+                        entry_point = ''
+                        args = build_options.get('cradle_args', '')
+                        
+                        if manual_override:
+                            # Use manually provided values
+                            namespace = build_options.get('cradle_namespace', '')
+                            class_name = build_options.get('cradle_class', '')
+                            entry_point = build_options.get('cradle_entry_point', '')
+                        else:
+                            # Auto-extract from build if source file exists
+                            if builder.source_file_path and os.path.exists(builder.source_file_path):
+                                metadata = extract_csharp_metadata(
+                                    builder.source_file_path,
+                                    builder.cs_obfuscation_map if builder.cs_obfuscation_map else None
+                                )
+                                namespace = metadata.get('namespace', '')
+                                class_name = metadata.get('class', '')
+                                entry_point = metadata.get('entry_point', '')
+                        
                         if cradle_method and lhost:
                             # Get output filename from the build
-                            import os
                             output_filename = os.path.basename(output_file)
                             
                             # Generate cradle
@@ -1158,7 +1264,11 @@ def generate_payload():
                                 lhost,
                                 lport,
                                 output_filename,
-                                cradle_obf_method
+                                cradle_obf_method,
+                                namespace,
+                                class_name,
+                                entry_point,
+                                args
                             )
                             
                             if cradle_code:

