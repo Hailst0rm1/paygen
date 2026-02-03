@@ -240,7 +240,7 @@ class RecipeValidator:
     
     VALID_EFFECTIVENESS = ['low', 'medium', 'high']
     VALID_OUTPUT_TYPES = ['template', 'command']
-    VALID_PREPROCESSING_TYPES = ['command', 'script', 'option']
+    VALID_PREPROCESSING_TYPES = ['command', 'script', 'option', 'shellcode']
     
     @classmethod
     def validate_recipe(cls, recipe_data: Dict[str, Any]) -> bool:
@@ -372,6 +372,13 @@ class RecipeValidator:
                         raise ValidationError(f"Command option {j} in step {i} missing 'command' field")
                     if option_type == 'script' and 'script' not in option:
                         raise ValidationError(f"Script option {j} in step {i} missing 'script' field")
+            
+            # Validate shellcode type
+            elif step_type == 'shellcode':
+                if 'name' not in step:
+                    raise ValidationError(f"Shellcode preprocessing step {i} missing 'name' field")
+                if 'output_var' not in step:
+                    raise ValidationError(f"Shellcode preprocessing step {i} missing 'output_var' field")
             
             # Validate regular command/script types
             elif step_type in ['command', 'script']:

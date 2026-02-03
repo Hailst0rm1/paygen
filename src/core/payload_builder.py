@@ -35,6 +35,7 @@ JINJA_ENV = create_jinja_env()
 
 from .compiler import Compiler
 from .config import ConfigManager
+from .shellcode_loader import ShellcodeLoader
 
 
 class BuildStep:
@@ -318,6 +319,8 @@ class PayloadBuilder:
             return self._run_command_preprocessing(step_config)
         elif step_type == 'script':
             return self._run_script_preprocessing(step_config)
+        elif step_type == 'shellcode':
+            return self._run_shellcode_preprocessing(step_config)
         else:
             return False, "", f"Unknown preprocessing type: {step_type}"
     
@@ -413,6 +416,82 @@ class PayloadBuilder:
             return False, "", "Script timed out after 5 minutes"
         except Exception as e:
             return False, "", f"Script execution error: {str(e)}"
+    
+    def _run_shellcode_preprocessing(self, step_config: dict) -> Tuple[bool, str, str]:
+        """
+        Run shellcode-based preprocessing
+        
+        Args:
+            step_config: Step configuration
+            
+        Returns:
+            Tuple of (success: bool, shellcode: bytes, stderr: str)
+        """
+        output_var = step_config.get('output_var', 'raw_shellcode')
+        
+        # Load shellcode configurations
+        try:
+            shellcodes_path = self.config.shellcodes_config
+            if not shellcodes_path.exists():
+                return False, b"", f"Shellcodes configuration file not found: {shellcodes_path}"
+            
+            loader = ShellcodeLoader(shellcodes_path)
+        except Exception as e:
+            return False, b"", f"Failed to load shellcodes configuration: {str(e)}"
+        
+        # Get the selected shellcode name from variables
+        shellcode_selection_var = f"{output_var}_shellcode_name"
+        selected_shellcode_name = self.variables.get(shellcode_selection_var)
+        
+        if not selected_shellcode_name:
+            return False, b"", f"No shellcode selected. Expected variable '{shellcode_selection_var}' to contain shellcode name."
+        
+        # Get the shellcode configuration
+        shellcode_config = loader.get_shellcode(selected_shellcode_name)
+        if not shellcode_config:
+            return False, b"", f"Shellcode configuration not found: {selected_shellcode_name}"
+        
+        # Store the shellcode config for later use (e.g., for listener generation)
+        self.variables[f"{output_var}_shellcode_config"] = {
+            'name': shellcode_config.name,
+            'listener': shellcode_config.listener
+        }
+        
+        # Render the shellcode command with current variables
+        command_template = shellcode_config.shellcode
+        template = JINJA_ENV.from_string(command_template)
+        command = template.render(**self.variables)
+        
+        # Execute command
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=False,  # Get bytes output for shellcode
+                timeout=300
+            )
+            
+            success = result.returncode == 0
+            stdout = result.stdout  # Keep as bytes
+            stderr = result.stderr.decode('utf-8', errors='replace') if result.stderr else ""
+            
+            if not success:
+                # Include command in error output for debugging
+                error_msg = f"Command failed with exit code {result.returncode}\n"
+                error_msg += f"Command: {command}\n"
+                if stdout:
+                    error_msg += f"Stdout: {stdout.decode('utf-8', errors='replace')}\n"
+                if stderr:
+                    error_msg += f"Stderr: {stderr}"
+                return False, b"", error_msg
+            
+            return success, stdout, stderr
+            
+        except subprocess.TimeoutExpired:
+            return False, b"", f"Shellcode generation command timed out after 5 minutes\nCommand: {command}"
+        except Exception as e:
+            return False, b"", f"Shellcode generation error: {str(e)}\nCommand: {command}"
     
     def _build_template_payload(self, recipe: dict, output_config: dict) -> Tuple[bool, str, List[BuildStep]]:
         """
@@ -1020,11 +1099,37 @@ class PayloadBuilder:
         try:
             # Load bypass code from ps-features.yaml
             bypass_feature = self._get_feature_by_name(bypass_method, 'amsi')
-            if not bypass_feature or 'code' not in bypass_feature:
+            if not bypass_feature:
                 return False, ''
             
-            bypass_code = bypass_feature.get('code', '').strip()
+            # Check for either 'code' or 'command' field
+            if 'code' not in bypass_feature and 'command' not in bypass_feature:
+                return False, ''
+            
+            # Get bypass code - either from 'code' template or 'command' execution
             command_used = ''
+            if 'command' in bypass_feature:
+                # Execute command to get bypass code
+                import subprocess
+                command_template = bypass_feature.get('command', '').strip()
+                try:
+                    result = subprocess.run(
+                        command_template,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        cwd=str(self.config.templates_dir)
+                    )
+                    if result.returncode == 0:
+                        bypass_code = result.stdout.strip()
+                        command_used = command_template
+                    else:
+                        return False, f"AMSI bypass command failed (exit {result.returncode}): {command_template}"
+                except Exception as e:
+                    return False, f"AMSI bypass command error: {str(e)}"
+            else:
+                bypass_code = bypass_feature.get('code', '').strip()
             
             # Apply obfuscation to bypass code if requested and allowed
             if obf_method and not bypass_feature.get('no-obf', False):

@@ -16,6 +16,7 @@ class ConfigManager:
         'output_dir': '~/Documents/Tools/paygen/output',
         'ps_obfuscation_yaml': '~/Documents/Tools/paygen/ps-obfuscation.yaml',
         'ps_features_yaml': '~/Documents/Tools/paygen/ps-features.yaml',
+        'shellcodes_config': '~/Documents/Tools/paygen/shellcodes.yaml',
         'keep_source_files': False,
         'show_build_debug': False,
         'remove_comments': True,
@@ -66,7 +67,7 @@ class ConfigManager:
     def _validate_paths(self) -> None:
         """Validate and expand paths in configuration"""
         path_keys = ['recipes_dir', 'templates_dir', 'preprocessors_dir', 'output_dir',
-                     'ps_obfuscation_yaml', 'ps_features_yaml']
+                     'ps_obfuscation_yaml', 'ps_features_yaml', 'shellcodes_config']
         
         for key in path_keys:
             if key in self.config:
@@ -76,7 +77,7 @@ class ConfigManager:
                 
                 # Create directory if it doesn't exist (except output_dir which may be created later)
                 # Also skip YAML files (they're files, not directories)
-                if not path.exists() and key not in ['output_dir', 'ps_obfuscation_yaml', 'ps_features_yaml']:
+                if not path.exists() and key not in ['output_dir', 'ps_obfuscation_yaml', 'ps_features_yaml', 'shellcodes_config']:
                     print(f"Warning: {key} path does not exist: {path}")
     
     def get(self, key: str, default: Any = None) -> Any:
@@ -179,6 +180,11 @@ class ConfigManager:
     def ps_features_yaml(self) -> Path:
         """Get PowerShell features YAML file path"""
         return self.get_path('ps_features_yaml')
+    
+    @property
+    def shellcodes_config(self) -> Path:
+        """Get shellcodes configuration YAML file path"""
+        return self.get_path('shellcodes_config')
 
 
 # Global config instance

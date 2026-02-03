@@ -665,6 +665,61 @@ async function showParameterForm() {
     
     // Add preprocessing options section first
     const preprocessingOptions = selectedRecipe.preprocessing?.filter(p => p.type === 'option') || [];
+    const shellcodeSteps = selectedRecipe.preprocessing?.filter(p => p.type === 'shellcode') || [];
+    
+    // Handle shellcode preprocessing steps
+    if (shellcodeSteps.length > 0) {
+        html += `
+            <div class="param-form-section-title">Shellcode Configuration</div>
+        `;
+        
+        // Load shellcode configurations
+        let shellcodes = [];
+        try {
+            const response = await fetch('/api/shellcodes');
+            const data = await response.json();
+            shellcodes = data.shellcodes || [];
+        } catch (error) {
+            console.error('Failed to load shellcode configurations:', error);
+        }
+        
+        for (let shellcodeIdx = 0; shellcodeIdx < shellcodeSteps.length; shellcodeIdx++) {
+            const shellcodeStep = shellcodeSteps[shellcodeIdx];
+            const outputVar = shellcodeStep.output_var || 'raw_shellcode';
+            
+            html += `
+                <div class="param-form-item">
+                    <label class="param-form-label">
+                        ${shellcodeStep.name || 'Shellcode Generation Method'}
+                        <span class="param-type">[shellcode]</span>
+                    </label>
+                    <select class="param-form-select shellcode-selection" 
+                            data-output-var="${outputVar}" 
+                            id="shellcode-select-${shellcodeIdx}">
+                        <option value="">-- Select Shellcode Method --</option>
+            `;
+            
+            shellcodes.forEach((shellcode, idx) => {
+                html += `<option value="${escapeHtml(shellcode.name)}" ${idx === 0 ? 'selected' : ''}>${escapeHtml(shellcode.name)}</option>`;
+            });
+            
+            html += `
+                    </select>
+                    <div class="param-form-description">Select the shellcode generation method</div>
+                </div>
+                
+                <!-- Container for shellcode-specific parameters -->
+                <div id="shellcode-params-${shellcodeIdx}" class="shellcode-params-container">
+                </div>
+            `;
+        }
+        
+        if (preprocessingOptions.length > 0) {
+            html += `<div class="param-form-separator"></div>`;
+        }
+    }
+    
+    // Handle preprocessing options
     if (preprocessingOptions.length > 0) {
         html += `
             <div class="param-form-section-title">Preprocessing Options</div>
@@ -1467,6 +1522,22 @@ async function showParameterForm() {
     
     container.innerHTML = html;
     
+    // Add event listeners for shellcode selection changes
+    const shellcodeSelects = document.querySelectorAll('.shellcode-selection');
+    shellcodeSelects.forEach((select, idx) => {
+        select.addEventListener('change', async function() {
+            await loadShellcodeParameters(this.value, idx);
+        });
+        
+        // Load initial parameters for the first (default) selection
+        if (select.selectedIndex > 0) {
+            const selectedValue = select.options[select.selectedIndex].value;
+            if (selectedValue) {
+                loadShellcodeParameters(selectedValue, idx);
+            }
+        }
+    });
+    
     // Add event listeners for preprocessing option changes
     const preprocessingSelects = document.querySelectorAll('.preprocessing-option');
     preprocessingSelects.forEach((select, idx) => {
@@ -1498,6 +1569,136 @@ async function showParameterForm() {
 }
 
 // Update visibility of conditional parameters based on preprocessing option selection
+function updateConditionalParameters() {
+    if (!selectedRecipe) return;
+    
+    // Get all selected preprocessing options
+    const selectedOptions = new Set();
+    const preprocessingOptions = selectedRecipe.preprocessing?.filter(p => p.type === 'option') || [];
+    
+    preprocessingOptions.forEach((optionStep, idx) => {
+        const selectElement = document.getElementById(`preprocessing-option-${idx}`);
+        if (selectElement) {
+            const selectedIndex = parseInt(selectElement.value);
+            const options = optionStep.options || [];
+            if (selectedIndex >= 0 && selectedIndex < options.length) {
+                const selectedOption = options[selectedIndex];
+                selectedOptions.add(selectedOption.name);
+            }
+        }
+    });
+    
+    // Show/hide conditional parameters based on selected options
+    const conditionalParams = document.querySelectorAll('.param-conditional');
+    conditionalParams.forEach(paramDiv => {
+        const requiredFor = paramDiv.getAttribute('data-required-for');
+        if (requiredFor && selectedOptions.has(requiredFor)) {
+            paramDiv.style.display = 'block';
+        } else if (requiredFor) {
+            paramDiv.style.display = 'none';
+        }
+    });
+}
+
+// Load shellcode-specific parameters dynamically
+async function loadShellcodeParameters(shellcodeName, shellcodeIdx) {
+    if (!shellcodeName) {
+        // Clear parameters if no shellcode selected
+        const container = document.getElementById(`shellcode-params-${shellcodeIdx}`);
+        if (container) {
+            container.innerHTML = '';
+        }
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/shellcode/${encodeURIComponent(shellcodeName)}`);
+        const shellcode = await response.json();
+        
+        if (shellcode.error) {
+            console.error('Failed to load shellcode:', shellcode.error);
+            return;
+        }
+        
+        const container = document.getElementById(`shellcode-params-${shellcodeIdx}`);
+        if (!container) return;
+        
+        let html = '';
+        
+        if (shellcode.parameters && shellcode.parameters.length > 0) {
+            shellcode.parameters.forEach(param => {
+                const isRequired = param.required || false;
+                const paramName = `shellcode_${shellcodeIdx}_${param.name}`;
+                
+                html += `
+                    <div class="param-form-item">
+                        <label class="param-form-label">
+                            ${param.name}
+                            ${isRequired ? '<span class="param-required">*</span>' : ''}
+                            <span class="param-type">[${param.type}]</span>
+                        </label>
+                `;
+                
+                if (param.type === 'choice' && param.choices) {
+                    html += `
+                        <select class="param-form-select" data-param="${paramName}">
+                            <option value="">-- Select --</option>
+                            ${param.choices.map(c => `
+                                <option value="${c}" ${param.default === c ? 'selected' : ''}>${c}</option>
+                            `).join('')}
+                        </select>
+                    `;
+                } else if (param.type === 'bool') {
+                    html += `
+                        <select class="param-form-select" data-param="${paramName}">
+                            <option value="true" ${param.default === true ? 'selected' : ''}>True</option>
+                            <option value="false" ${param.default === false ? 'selected' : ''}>False</option>
+                        </select>
+                    `;
+                } else {
+                    const defaultVal = param.default !== undefined ? param.default : '';
+                    html += `
+                        <input type="text" 
+                               class="param-form-input" 
+                               data-param="${paramName}"
+                               data-type="${param.type}"
+                               data-required="${isRequired}"
+                               value="${escapeHtml(String(defaultVal))}"
+                               placeholder="${param.description || ''}">
+                        <div class="param-form-error" id="error-${paramName}"></div>
+                    `;
+                }
+                
+                html += `
+                        <div class="param-form-description">${escapeHtml(param.description || '')}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        container.innerHTML = html;
+        
+        // Add event listeners for validation on the new inputs
+        const inputs = container.querySelectorAll('.param-form-input');
+        inputs.forEach(input => {
+            input.addEventListener('input', () => {
+                validateParameter(input);
+                validateAllParameters();
+            });
+            input.addEventListener('blur', () => {
+                validateParameter(input);
+                validateAllParameters();
+            });
+        });
+        
+        // Revalidate all parameters
+        validateAllParameters();
+    } catch (error) {
+        console.error('Failed to load shellcode parameters:', error);
+    }
+}
+
+// Update visibility of conditional parameters based on preprocessing option selection (OLD FUNCTION)
 function updateConditionalParameters() {
     if (!selectedRecipe) return;
     
@@ -1555,8 +1756,22 @@ function validateParameter(input) {
     const value = input.value.trim();
     const errorElement = document.getElementById(`error-${paramName}`);
     
-    // Find parameter definition
-    const param = selectedRecipe.parameters.find(p => p.name === paramName);
+    // For shellcode parameters, validate based on data-type and data-required attributes
+    const paramType = input.dataset.type;
+    const isRequired = input.dataset.required === 'true';
+    
+    // Find parameter definition from recipe (for regular parameters)
+    let param = selectedRecipe.parameters?.find(p => p.name === paramName);
+    
+    // If not found in recipe params, it might be a shellcode param - use data attributes
+    if (!param && paramType) {
+        param = {
+            type: paramType,
+            required: isRequired,
+            name: paramName
+        };
+    }
+    
     if (!param) return true;
     
     let error = null;
@@ -1733,6 +1948,44 @@ async function generatePayload() {
         if (selectElement) {
             const selectedIndex = parseInt(selectElement.value);
             preprocessingSelections[optionStep.name] = selectedIndex;
+        }
+    });
+    
+    // Collect shellcode selections and parameters
+    const shellcodeSteps = selectedRecipe.preprocessing?.filter(p => p.type === 'shellcode') || [];
+    shellcodeSteps.forEach((shellcodeStep, idx) => {
+        const outputVar = shellcodeStep.output_var || 'raw_shellcode';
+        const selectElement = document.getElementById(`shellcode-select-${idx}`);
+        
+        if (selectElement && selectElement.value) {
+            // Store the selected shellcode name
+            const selectionKey = `${outputVar}_shellcode_selection`;
+            preprocessingSelections[selectionKey] = selectElement.value;
+            
+            // Collect shellcode-specific parameters
+            const shellcodeParamsContainer = document.getElementById(`shellcode-params-${idx}`);
+            if (shellcodeParamsContainer) {
+                const shellcodeInputs = shellcodeParamsContainer.querySelectorAll('.param-form-input, .param-form-select');
+                shellcodeInputs.forEach(input => {
+                    const paramName = input.dataset.param;
+                    if (paramName && paramName.startsWith(`shellcode_${idx}_`)) {
+                        // Extract the actual parameter name (remove prefix)
+                        const actualParamName = paramName.substring(`shellcode_${idx}_`.length);
+                        let value = input.value.trim();
+                        
+                        // Convert types
+                        const paramType = input.dataset.type;
+                        if (value === 'true') value = true;
+                        if (value === 'false') value = false;
+                        if (paramType === 'integer' && value) value = parseInt(value);
+                        if (paramType === 'port' && value) value = parseInt(value);
+                        
+                        if (value !== '') {
+                            parameters[actualParamName] = value;
+                        }
+                    }
+                });
+            }
         }
     });
     

