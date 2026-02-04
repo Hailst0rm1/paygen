@@ -27,6 +27,9 @@ class HistoryEntry:
     parameters: Dict[str, Any]
     launch_instructions: str
     
+    # Build options (optional)
+    build_options: Dict[str, Any] = None
+    
     # Build logs (optional)
     build_steps: List[Dict[str, str]] = None  # List of step info
     
@@ -34,6 +37,8 @@ class HistoryEntry:
         """Initialize optional fields"""
         if self.build_steps is None:
             self.build_steps = []
+        if self.build_options is None:
+            self.build_options = {}
     
     @property
     def formatted_timestamp(self) -> str:
@@ -110,7 +115,8 @@ class HistoryManager:
         output_file: str,
         parameters: Dict[str, Any],
         launch_instructions: str,
-        build_steps: List[Dict[str, str]] = None
+        build_steps: List[Dict[str, str]] = None,
+        build_options: Dict[str, Any] = None
     ) -> HistoryEntry:
         """
         Add a new history entry
@@ -122,6 +128,7 @@ class HistoryManager:
             parameters: Parameters used
             launch_instructions: Launch instructions
             build_steps: List of build step info (optional)
+            build_options: Build options used (optional)
             
         Returns:
             Created HistoryEntry
@@ -133,7 +140,8 @@ class HistoryManager:
             output_file=output_file,
             parameters=parameters,
             launch_instructions=launch_instructions,
-            build_steps=build_steps or []
+            build_steps=build_steps or [],
+            build_options=build_options or {}
         )
         
         # Add to beginning (newest first)

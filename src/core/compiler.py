@@ -23,7 +23,7 @@ class Compiler:
         source_file: Path,
         command: str,
         variables: Dict[str, any] = None
-    ) -> Tuple[bool, str, str]:
+    ) -> Tuple[bool, str, str, str]:
         """
         Compile source code to binary using a command string
         
@@ -34,7 +34,7 @@ class Compiler:
             variables: Variables for Jinja2 template rendering
             
         Returns:
-            Tuple of (success: bool, stdout: str, stderr: str)
+            Tuple of (success: bool, stdout: str, stderr: str, rendered_command: str)
         """
         if variables is None:
             variables = {}
@@ -57,12 +57,12 @@ class Compiler:
             )
             
             success = result.returncode == 0
-            return success, result.stdout, result.stderr
+            return success, result.stdout, result.stderr, rendered_command
             
         except subprocess.TimeoutExpired:
-            return False, "", "Compilation timed out after 5 minutes"
+            return False, "", "Compilation timed out after 5 minutes", rendered_command
         except Exception as e:
-            return False, "", f"Compilation error: {str(e)}"
+            return False, "", f"Compilation error: {str(e)}", rendered_command
     
     def get_compiler_for_language(self, language: str) -> Optional[str]:
         """

@@ -1679,7 +1679,8 @@ def generate_payload():
                             output_file=output_file,
                             parameters=validated_params,
                             launch_instructions=final_launch_instructions or "",
-                            build_steps=history_steps
+                            build_steps=history_steps,
+                            build_options=build_options
                         )
                 else:
                     build_sessions[session_id]['status'] = 'failed'
@@ -1701,7 +1702,8 @@ def generate_payload():
                                 'status': s.status,
                                 'output': str(s.output) if s.output else '',
                                 'error': str(s.error) if s.error else ''
-                            } for s in steps]
+                            } for s in steps],
+                            build_options=build_options
                         )
         
         except Exception as e:
@@ -1730,15 +1732,21 @@ def get_build_status(session_id):
 
 @app.route('/api/history')
 def get_history():
-    """Get build history"""
+    """Get build history (summary view only)"""
     if not history_manager:
         return jsonify({'entries': [], 'stats': {'total': 0, 'success': 0, 'failed': 0}})
     
+    # Get limit from query parameter (default 100)
+    limit = request.args.get('limit', default=100, type=int)
+    
     entries = history_manager.get_entries()
     
-    # Convert to JSON-serializable format
+    # Limit entries for performance
+    limited_entries = entries[:limit] if limit > 0 else entries
+    
+    # Convert to JSON-serializable format (summary only - no launch_instructions or build_steps)
     history_data = []
-    for entry in entries:
+    for entry in limited_entries:
         history_data.append({
             'recipe_name': entry.recipe_name,
             'timestamp': entry.timestamp,
@@ -1746,15 +1754,14 @@ def get_history():
             'success': entry.success,
             'output_file': entry.output_file,
             'output_filename': os.path.basename(entry.output_file),
-            'parameters': entry.parameters,
-            'launch_instructions': entry.launch_instructions,
-            'build_steps': entry.build_steps or []
+            'param_count': len(entry.parameters)
         })
     
     stats = {
         'total': history_manager.get_entry_count(),
         'success': history_manager.get_success_count(),
-        'failed': history_manager.get_failure_count()
+        'failed': history_manager.get_failure_count(),
+        'showing': len(limited_entries)
     }
     
     return jsonify({'entries': history_data, 'stats': stats})
@@ -1777,6 +1784,72 @@ def delete_history_entry(index):
             return jsonify({'success': True})
         return jsonify({'error': 'Invalid index'}), 400
     return jsonify({'error': 'History manager not available'}), 500
+
+
+@app.route('/api/history/<int:index>')
+def get_history_entry(index):
+    """Get detailed information for a specific history entry"""
+    if not history_manager:
+        return jsonify({'error': 'History manager not available'}), 500
+    
+    entries = history_manager.get_entries()
+    if index < 0 or index >= len(entries):
+        return jsonify({'error': 'Invalid history index'}), 400
+    
+    entry = entries[index]
+    
+    return jsonify({
+        'recipe_name': entry.recipe_name,
+        'timestamp': entry.timestamp,
+        'formatted_timestamp': entry.formatted_timestamp,
+        'success': entry.success,
+        'output_file': entry.output_file,
+        'output_filename': os.path.basename(entry.output_file),
+        'parameters': entry.parameters,
+        'launch_instructions': entry.launch_instructions,
+        'build_steps': entry.build_steps or [],
+        'build_options': entry.build_options or {}
+    })
+
+
+@app.route('/api/history/<int:index>/regenerate', methods=['POST'])
+def regenerate_from_history(index):
+    """Regenerate a payload from history entry"""
+    if not history_manager:
+        return jsonify({'error': 'History manager not available'}), 500
+    
+    # Get the history entry
+    entries = history_manager.get_entries()
+    if index < 0 or index >= len(entries):
+        return jsonify({'error': 'Invalid history index'}), 400
+    
+    entry = entries[index]
+    
+    # Split parameters into regular parameters and preprocessing selections
+    # Preprocessing selections include shellcode names and option selections
+    regular_params = {}
+    preprocessing_selections = {}
+    
+    for key, value in entry.parameters.items():
+        # Check if this is a shellcode selection parameter
+        if key.endswith('_shellcode_name'):
+            # Convert to preprocessing_selections format
+            # {output_var}_shellcode_name -> {output_var}_shellcode_selection
+            output_var = key.replace('_shellcode_name', '')
+            selection_key = f"{output_var}_shellcode_selection"
+            preprocessing_selections[selection_key] = value
+        else:
+            # Regular parameter
+            regular_params[key] = value
+    
+    # Use the stored recipe_name and parameters to regenerate
+    return jsonify({
+        'success': True,
+        'recipe_name': entry.recipe_name,
+        'parameters': regular_params,
+        'preprocessing_selections': preprocessing_selections,
+        'build_options': entry.build_options or {}
+    })
 
 
 def _apply_powershell_wrapper(ps_command):

@@ -676,21 +676,24 @@ class PayloadBuilder:
                     self._update_step(compile_step)
                     return False, "", self.steps
                 
-                success, stdout, stderr = self.compiler.compile(
+                success, stdout, stderr, rendered_command = self.compiler.compile(
                     source_file,
                     command,
                     self.variables
                 )
                 
+                # Display the command that was executed
+                command_display = f"Command: {rendered_command}\n\n{stdout if stdout else ''}"
+                
                 if not success:
                     compile_step.status = "failed"
                     compile_step.error = stderr
-                    compile_step.output = stdout
+                    compile_step.output = command_display
                     self._update_step(compile_step)
                     return False, "", self.steps
                 
                 compile_step.status = "success"
-                compile_step.output = stdout
+                compile_step.output = command_display
                 self._update_step(compile_step)
                 
                 # Strip binaries if configured

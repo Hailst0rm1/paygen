@@ -2486,9 +2486,12 @@ async function showHistory() {
         const data = await response.json();
         
         // Update stats
-        const stats = data.stats || {total: 0, success: 0, failed: 0};
-        document.getElementById('history-stats').textContent = 
-            `Total: ${stats.total} | Success: ${stats.success} | Failed: ${stats.failed}`;
+        const stats = data.stats || {total: 0, success: 0, failed: 0, showing: 0};
+        let statsText = `Total: ${stats.total} | Success: ${stats.success} | Failed: ${stats.failed}`;
+        if (stats.showing < stats.total) {
+            statsText += ` | Showing: ${stats.showing} recent`;
+        }
+        document.getElementById('history-stats').textContent = statsText;
         
         const container = document.getElementById('history-container');
         
@@ -2527,18 +2530,23 @@ async function showHistory() {
             container.innerHTML = html;
         }
         
-        // Store entries for detail view
-        window.historyEntries = data.entries;
-        
         // Reset footer buttons to list mode
         const clearBtn = document.getElementById('clear-history-btn');
         const backBtn = document.getElementById('back-history-btn');
+        const regenerateBtn = document.getElementById('regenerate-history-btn');
+        const modifyBtn = document.getElementById('modify-regenerate-history-btn');
         if (clearBtn) {
             clearBtn.textContent = 'Clear All';
             clearBtn.onclick = clearHistory;
         }
         if (backBtn) {
             backBtn.style.display = 'none';
+        }
+        if (regenerateBtn) {
+            regenerateBtn.style.display = 'none';
+        }
+        if (modifyBtn) {
+            modifyBtn.style.display = 'none';
         }
         
         document.getElementById('history-modal').classList.add('active');
@@ -2550,13 +2558,20 @@ async function showHistory() {
 }
 
 // Show detailed view of a history entry
-function showHistoryDetail(index) {
-    const entry = window.historyEntries[index];
-    if (!entry) return;
-    
-    const container = document.getElementById('history-container');
-    const statusClass = entry.success ? 'success' : 'failed';
-    const statusIcon = entry.success ? '✓' : '✗';
+async function showHistoryDetail(index) {
+    // Fetch full entry details
+    try {
+        const response = await fetch(`/api/history/${index}`);
+        const entry = await response.json();
+        
+        if (entry.error) {
+            alert('Failed to load entry details');
+            return;
+        }
+        
+        const container = document.getElementById('history-container');
+        const statusClass = entry.success ? 'success' : 'failed';
+        const statusIcon = entry.success ? '✓' : '✗';
     
     let html = `
         <div class="history-detail">
@@ -2589,6 +2604,133 @@ function showHistoryDetail(index) {
                 </div>
             </div>
         `;
+    }
+    
+    // Build options section (language-specific and build options)
+    if (entry.build_options && Object.keys(entry.build_options).length > 0) {
+        // Categorize build options
+        const languageOptions = {};
+        const buildOptions = {};
+        
+        // Define which options belong to each category
+        const languageSpecificKeys = [
+            'obfuscate_cs_names', 'cs_obfuscate_names', 'cs_obfuscation_names', // C# name obfuscation variations
+            'cs_obfuscation_level',
+            'obfuscate_ps', 'ps_obfuscate', 'ps_obfuscation', // PowerShell obfuscation variations
+            'ps_obfuscate_level', 'ps_obfuscation_level',
+            'amsi_bypass', 'ps_amsi_bypass', 'amsi_bypass_method', 'ps_amsi_method', 'ps_amsi_obf_method', // AMSI bypass variations
+            'ps_cradle', 'ps_cradle_method', 'ps_cradle_obf_method',
+            'cs_cradle', 'cs_cradle_method', 'cs_cradle_obf_method',
+            'cradle_lhost', 'cradle_lport', 'cradle_manual_override',
+            'cradle_namespace', 'cradle_class', 'cradle_entry_point', 'cradle_args'
+        ];
+        
+        const buildOptionKeys = [
+            'remove_comments', 'remove_console_output', 'strip_binaries',
+            'amsi_bypass_launch', 'amsi_bypass_launch_method', 'amsi_bypass_launch_obf_method',
+            'obfuscate_launch_ps', 'obfuscate_launch_ps_level'
+        ];
+        
+        Object.entries(entry.build_options).forEach(([k, v]) => {
+            if (languageSpecificKeys.includes(k)) {
+                languageOptions[k] = v;
+            } else if (buildOptionKeys.includes(k)) {
+                buildOptions[k] = v;
+            }
+        });
+        
+        // Format option name for display (matching the UI text exactly)
+        const formatOptionName = (key) => {
+            const nameMap = {
+                // C# Language Options (all variations)
+                'obfuscate_cs_names': 'Obfuscate function/variable names',
+                'cs_obfuscate_names': 'Obfuscate function/variable names',
+                'cs_obfuscation_names': 'Obfuscate function/variable names',
+                'cs_obfuscation_level': 'C# obfuscation level',
+                'cs_cradle': 'Add download cradle',
+                
+                // PowerShell Language Options
+                'amsi_bypass': 'Insert AMSI bypass',
+                'ps_amsi_bypass': 'Insert AMSI bypass',
+                'obfuscate_ps': 'Obfuscate PowerShell script',
+                'ps_obfuscate': 'Obfuscate PowerShell script',
+                'ps_obfuscation': 'Obfuscate PowerShell script',
+                'ps_obfuscation_level': 'PowerShell obfuscation level',
+                'ps_obfuscate_level': 'PowerShell obfuscation level',
+                'ps_cradle': 'Add download cradle',
+                
+                // Build Options
+                'remove_comments': 'Remove comments from source code',
+                'remove_console_output': 'Remove console output',
+                'strip_binaries': 'Strip binary metadata',
+                'amsi_bypass_launch': 'Insert AMSI bypass in launch instructions',
+                'obfuscate_launch_ps': 'Obfuscate PowerShell in launch instructions',
+                
+                // Cradle details (shown when relevant)
+                'cradle_lhost': 'Cradle LHOST',
+                'cradle_lport': 'Cradle LPORT',
+                'ps_cradle_method': 'PowerShell cradle method',
+                'cs_cradle_method': 'C# cradle method',
+                'ps_cradle_obf_method': 'PowerShell cradle obfuscation',
+                'cs_cradle_obf_method': 'C# cradle obfuscation',
+                'amsi_bypass_method': 'AMSI bypass method',
+                'ps_amsi_method': 'AMSI bypass method',
+                'amsi_bypass_obf_method': 'AMSI bypass obfuscation',
+                'ps_amsi_obf_method': 'AMSI bypass obfuscation',
+                'amsi_bypass_launch_method': 'Launch AMSI bypass method',
+                'amsi_bypass_launch_obf_method': 'Launch AMSI bypass obfuscation',
+                'obfuscate_launch_ps_level': 'Launch PowerShell obfuscation level'
+            };
+            
+            if (nameMap[key]) return nameMap[key];
+            return key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        };
+        
+        // Format option value for display
+        const formatOptionValue = (value) => {
+            if (typeof value === 'boolean') {
+                return value ? '✓ Enabled' : '✗ Disabled';
+            }
+            return escapeHtml(String(value));
+        };
+        
+        let optionsHtml = '';
+        
+        // Language-specific options
+        if (Object.keys(languageOptions).length > 0) {
+            optionsHtml += '<div style="margin-bottom: 1rem;"><strong style="color: var(--mauve);">Language Specific Options:</strong></div>';
+            Object.entries(languageOptions).forEach(([k, v]) => {
+                optionsHtml += `
+                    <div class="history-param-row">
+                        <span class="history-param-key">${escapeHtml(formatOptionName(k))}:</span>
+                        <span class="history-param-value">${formatOptionValue(v)}</span>
+                    </div>`;
+            });
+        }
+        
+        // Build options
+        if (Object.keys(buildOptions).length > 0) {
+            if (optionsHtml) optionsHtml += '<div style="margin: 1rem 0;"></div>';
+            optionsHtml += '<div style="margin-bottom: 1rem;"><strong style="color: var(--mauve);">Build Options:</strong></div>';
+            Object.entries(buildOptions).forEach(([k, v]) => {
+                optionsHtml += `
+                    <div class="history-param-row">
+                        <span class="history-param-key">${escapeHtml(formatOptionName(k))}:</span>
+                        <span class="history-param-value">${formatOptionValue(v)}</span>
+                    </div>`;
+            });
+        }
+        
+        if (optionsHtml) {
+            html += `
+                <div class="history-detail-section">
+                    <div class="history-detail-section-title">Build Options</div>
+                    <div class="history-detail-content">
+                        ${optionsHtml}
+                    </div>
+                </div>
+            `;
+        }
     }
     
     // Build steps section
@@ -2645,6 +2787,8 @@ function showHistoryDetail(index) {
     const clearBtn = document.getElementById('clear-history-btn');
     const closeBtn = document.getElementById('close-history-btn');
     const backBtn = document.getElementById('back-history-btn');
+    const regenerateBtn = document.getElementById('regenerate-history-btn');
+    const modifyBtn = document.getElementById('modify-regenerate-history-btn');
     
     if (clearBtn) {
         clearBtn.textContent = 'Clear';
@@ -2658,7 +2802,17 @@ function showHistoryDetail(index) {
             clearBtn.textContent = 'Clear All';
             clearBtn.onclick = clearHistory;
             backBtn.style.display = 'none';
+            if (regenerateBtn) regenerateBtn.style.display = 'none';
+            if (modifyBtn) modifyBtn.style.display = 'none';
         };
+    }
+    if (regenerateBtn) {
+        regenerateBtn.style.display = 'block';
+        regenerateBtn.onclick = () => regenerateFromHistory(index);
+    }
+    if (modifyBtn) {
+        modifyBtn.style.display = 'block';
+        modifyBtn.onclick = () => modifyAndRegenerateFromHistory(index);
     }
     
     // Render launch instructions if present
@@ -2675,6 +2829,10 @@ function showHistoryDetail(index) {
             // Render launch instructions with the correct container ID
             renderLaunchInstructions(instructions, `history-launch-detail-${index}`);
         }
+    }
+    } catch (error) {
+        console.error('Failed to load history details:', error);
+        alert('Failed to load entry details');
     }
 }
 
@@ -2719,6 +2877,275 @@ async function clearHistory() {
     } catch (error) {
         console.error('Failed to clear history:', error);
         alert('Failed to clear history');
+    }
+}
+
+// Modify and regenerate from history (shows parameter form)
+async function modifyAndRegenerateFromHistory(index) {
+    try {
+        const response = await fetch(`/api/history/${index}/regenerate`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            alert('Failed to load history entry');
+            return;
+        }
+        
+        // Close history modal
+        document.getElementById('history-modal').classList.remove('active');
+        
+        // Find and select the recipe
+        const recipeName = data.recipe_name;
+        let found = false;
+        
+        for (const [category, categoryRecipes] of Object.entries(categories)) {
+            const recipe = categoryRecipes.find(r => r.name === recipeName);
+            if (recipe) {
+                await selectRecipe(category, recipeName);
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            alert(`Recipe '${recipeName}' not found. It may have been deleted.`);
+            return;
+        }
+        
+        // Wait for recipe to load
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Show parameter form
+        showParameterForm();
+        
+        // Wait for parameter form to render
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Pre-fill regular parameters
+        Object.entries(data.parameters).forEach(([paramName, paramValue]) => {
+            const input = document.querySelector(`[name="${paramName}"]`);
+            if (input) {
+                if (input.type === 'checkbox') {
+                    input.checked = paramValue === true || paramValue === 'true';
+                } else {
+                    input.value = paramValue;
+                }
+            }
+        });
+        
+        // Pre-fill preprocessing selections (shellcode dropdowns, etc.)
+        if (data.preprocessing_selections) {
+            for (const [selectionKey, selectionValue] of Object.entries(data.preprocessing_selections)) {
+                // Check if this is a shellcode selection (format: {output_var}_shellcode_selection)
+                if (selectionKey.endsWith('_shellcode_selection')) {
+                    const outputVar = selectionKey.replace('_shellcode_selection', '');
+                    // Find the shellcode select by data-output-var attribute
+                    const selectElement = document.querySelector(`.shellcode-selection[data-output-var="${outputVar}"]`);
+                    if (selectElement) {
+                        // Set the value to the shellcode name
+                        selectElement.value = selectionValue;
+                        // Trigger change event to load dynamic parameters
+                        selectElement.dispatchEvent(new Event('change'));
+                        // Wait for parameters to load
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+                }
+            }
+        }
+        
+        // Pre-fill shellcode-specific parameters (like lhost, lport)
+        // Need to wait a bit more for all parameters to fully load
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Shellcode parameters are stored without the shellcode prefix
+        // We need to find all shellcode containers and fill their params
+        Object.entries(data.parameters).forEach(([paramName, paramValue]) => {
+            // Skip parameters that are already handled elsewhere
+            if (paramName.startsWith('shellcode_')) return;
+            
+            // Try to find this parameter in all shellcode containers
+            document.querySelectorAll('.shellcode-params-container').forEach(container => {
+                // Extract shellcode index from container ID (shellcode-params-0 -> 0)
+                const containerIdMatch = container.id.match(/shellcode-params-(\d+)/);
+                if (containerIdMatch) {
+                    const idx = containerIdMatch[1];
+                    const fullParamName = `shellcode_${idx}_${paramName}`;
+                    const input = container.querySelector(`[data-param="${fullParamName}"]`);
+                    if (input) {
+                        if (input.tagName === 'SELECT') {
+                            input.value = paramValue;
+                        } else if (input.type === 'checkbox') {
+                            input.checked = paramValue === true || paramValue === 'true';
+                        } else {
+                            input.value = paramValue;
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Pre-fill build options
+        if (data.build_options) {
+            Object.entries(data.build_options).forEach(([optionKey, optionValue]) => {
+                // Map option keys to checkbox IDs
+                const checkboxId = optionKey.replace(/_/g, '-');
+                const checkbox = document.getElementById(checkboxId);
+                if (checkbox && checkbox.type === 'checkbox') {
+                    checkbox.checked = optionValue === true;
+                    // Trigger change event to show/hide dependent fields
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+                
+                // Handle select dropdowns (like obfuscation levels)
+                const selectId = optionKey.replace(/_/g, '-');
+                const select = document.getElementById(selectId);
+                if (select && select.tagName === 'SELECT') {
+                    select.value = optionValue;
+                }
+            });
+            
+            // Wait for dynamic fields (like cradle inputs) to appear
+            await new Promise(resolve => setTimeout(resolve, 400));
+            
+            // Second pass: fill in text inputs that appeared after checkboxes
+            Object.entries(data.build_options).forEach(([optionKey, optionValue]) => {
+                // Handle cradle parameters specially (shared between PS and CS)
+                if (optionKey === 'cradle_lhost') {
+                    // Fill both PS and CS cradle lhost fields
+                    const psInput = document.getElementById('ps-cradle-lhost');
+                    const csInput = document.getElementById('cs-cradle-lhost');
+                    if (psInput && psInput.offsetParent !== null) {
+                        psInput.value = optionValue;
+                        // Clear any existing error state
+                        psInput.classList.remove('param-form-input-error');
+                        const psError = document.getElementById('error-ps-cradle-lhost');
+                        if (psError) psError.textContent = '';
+                        // Trigger input event to enable generate button
+                        psInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    if (csInput && csInput.offsetParent !== null) {
+                        csInput.value = optionValue;
+                        // Clear any existing error state
+                        csInput.classList.remove('param-form-input-error');
+                        const csError = document.getElementById('error-cs-cradle-lhost');
+                        if (csError) csError.textContent = '';
+                        // Trigger input event to enable generate button
+                        csInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                } else if (optionKey === 'cradle_lport') {
+                    // Fill both PS and CS cradle lport fields
+                    const psInput = document.getElementById('ps-cradle-lport');
+                    const csInput = document.getElementById('cs-cradle-lport');
+                    if (psInput && psInput.offsetParent !== null) {
+                        psInput.value = optionValue;
+                        psInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    if (csInput && csInput.offsetParent !== null) {
+                        csInput.value = optionValue;
+                        csInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                } else {
+                    // Handle other text inputs normally
+                    const input = document.getElementById(optionKey.replace(/_/g, '-'));
+                    if (input && input.type === 'text') {
+                        input.value = optionValue;
+                    }
+                }
+            });
+        }
+        
+        showNotificationPopup(`✓ Loaded: ${recipeName} - modify parameters and generate`, 'success');
+        
+    } catch (error) {
+        console.error('Failed to load from history:', error);
+        alert('Failed to load from history');
+    }
+}
+
+// Regenerate from history
+async function regenerateFromHistory(index) {
+    try {
+        const response = await fetch(`/api/history/${index}/regenerate`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        
+        if (!data.success) {
+            alert('Failed to load history entry');
+            return;
+        }
+        
+        // Close history modal
+        document.getElementById('history-modal').classList.remove('active');
+        
+        // Find and select the recipe
+        const recipeName = data.recipe_name;
+        let found = false;
+        let recipeCategory = null;
+        
+        for (const [category, categoryRecipes] of Object.entries(categories)) {
+            const recipe = categoryRecipes.find(r => r.name === recipeName);
+            if (recipe) {
+                recipeCategory = category;
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            alert(`Recipe '${recipeName}' not found. It may have been deleted.`);
+            return;
+        }
+        
+        showNotificationPopup(`🔄 Regenerating: ${recipeName}...`, 'info');
+        
+        // Directly submit payload generation with stored parameters and preprocessing selections
+        const generateResponse = await fetch('/api/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                category: recipeCategory,
+                recipe: recipeName,
+                parameters: data.parameters,
+                preprocessing_selections: data.preprocessing_selections || {},
+                build_options: data.build_options || {}
+            })
+        });
+        
+        const generateData = await generateResponse.json();
+        
+        // Check for error (API returns session_id on success, error on failure)
+        if (generateData.error) {
+            showNotificationPopup(`✗ Generation failed: ${generateData.error}`, 'error');
+            return;
+        }
+        
+        if (!generateData.session_id) {
+            showNotificationPopup(`✗ Generation failed: No session ID returned`, 'error');
+            return;
+        }
+        
+        // Show build modal and start polling
+        const buildModal = document.getElementById('build-modal');
+        const stepsContainer = document.getElementById('build-steps-container');
+        const resultContainer = document.getElementById('build-result');
+        const closeBtn = document.getElementById('close-build-btn');
+        
+        stepsContainer.innerHTML = '';
+        resultContainer.innerHTML = '';
+        closeBtn.style.display = 'none';
+        buildModal.classList.add('active');
+        
+        // Poll for build status
+        pollBuildStatus(generateData.session_id);
+        
+    } catch (error) {
+        console.error('Failed to regenerate from history:', error);
+        alert('Failed to regenerate from history');
     }
 }
 
