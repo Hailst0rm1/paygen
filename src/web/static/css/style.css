@@ -869,6 +869,19 @@ code {
     gap: 0.5rem;
 }
 
+/* Settings Section */
+.settings-section {
+    margin-bottom: 2rem;
+}
+
+.settings-section h3 {
+    color: var(--text);
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--surface1);
+}
+
 /* Parameter Form */
 .param-form-item {
     margin-bottom: 1rem;

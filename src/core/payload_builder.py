@@ -11,6 +11,7 @@ import yaml
 import random
 import tempfile
 import os
+import uuid
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Callable
 from jinja2 import Template, Environment
@@ -257,7 +258,11 @@ class PayloadBuilder:
                         return False, "", self.steps
                     
                     step.status = "success"
-                    step.output = output
+                    # For shellcode preprocessing, output is binary bytes - display the message instead
+                    if preproc_step.get('type') == 'shellcode' and isinstance(output, bytes):
+                        step.output = error  # error contains the success message with command
+                    else:
+                        step.output = output
                     self._update_step(step)
                     
                     # Store output in variables
@@ -457,6 +462,9 @@ class PayloadBuilder:
             'listener': shellcode_config.listener
         }
         
+        # Generate a unique GUID for this shellcode generation
+        self.variables['guid'] = str(uuid.uuid4())
+        
         # Render the shellcode command with current variables
         command_template = shellcode_config.shellcode
         template = JINJA_ENV.from_string(command_template)
@@ -486,7 +494,12 @@ class PayloadBuilder:
                     error_msg += f"Stderr: {stderr}"
                 return False, b"", error_msg
             
-            return success, stdout, stderr
+            # Include command in success output
+            success_msg = f"Command: {command}\n"
+            if stderr:
+                success_msg += f"\n{stderr}"
+            
+            return success, stdout, success_msg
             
         except subprocess.TimeoutExpired:
             return False, b"", f"Shellcode generation command timed out after 5 minutes\nCommand: {command}"

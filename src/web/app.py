@@ -930,7 +930,6 @@ def init_app():
     try:
         recipe_loader = RecipeLoader(config)
         recipes = recipe_loader.load_all_recipes()
-        print(f"✓ Loaded {len(recipes)} recipes")
     except Exception as e:
         print(f"✗ Failed to load recipes: {e}", file=sys.stderr)
         sys.exit(1)
@@ -950,7 +949,6 @@ def init_app():
         if ps_obf_path.exists():
             with open(ps_obf_path, 'r') as f:
                 ps_obfuscation_methods = yaml.safe_load(f) or []
-            print(f"✓ Loaded {len(ps_obfuscation_methods)} PS obfuscation methods")
         else:
             print(f"✗ ps-obfuscation.yaml not found at {ps_obf_path}", file=sys.stderr)
             ps_obfuscation_methods = []
@@ -965,7 +963,6 @@ def init_app():
         if ps_feat_path.exists():
             with open(ps_feat_path, 'r') as f:
                 ps_features = yaml.safe_load(f) or []
-            print(f"✓ Loaded {len(ps_features)} PS features (AMSI/cradles)")
         else:
             print(f"✗ ps-features.yaml not found at {ps_feat_path}", file=sys.stderr)
             ps_features = []
@@ -2041,6 +2038,8 @@ def run_web_app(host=None, port=None, debug=None):
     print(f"{'='*60}")
     print(f"Server running at: http://{host}:{port}")
     print(f"Recipes loaded: {len(recipes)}")
+    print(f"PS obfuscation methods: {len(ps_obfuscation_methods)}")
+    print(f"PS features (AMSI/cradles): {len(ps_features)}")
     print(f"Categories: {len(set(r.category for r in recipes))}")
     print(f"{'='*60}\n")
     

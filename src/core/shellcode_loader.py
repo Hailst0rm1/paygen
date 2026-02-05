@@ -145,11 +145,17 @@ class ShellcodeLoader:
                 
                 # Validate parameter type is supported
                 param_type = param['type']
-                valid_types = ['string', 'ip', 'port', 'path', 'file', 'hex', 'bool', 'integer', 'choice']
+                valid_types = ['string', 'ip', 'port', 'path', 'file', 'hex', 'bool', 'integer', 'choice', 'option']
                 if param_type not in valid_types:
                     raise ValidationError(
                         f"Shellcode '{config['name']}' parameter '{param_name}' has invalid type '{param_type}'. "
                         f"Valid types: {valid_types}"
+                    )
+                
+                # Validate option type has options list
+                if param_type == 'option' and 'options' not in param:
+                    raise ValidationError(
+                        f"Shellcode '{config['name']}' option parameter '{param_name}' missing 'options' field"
                     )
                 
                 # Validate choice parameters have choices

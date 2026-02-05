@@ -126,6 +126,9 @@
             <button id="refresh-btn" class="btn btn-secondary">
                 <span class="btn-icon">🔄</span> Refresh
             </button>
+            <button id="settings-btn" class="btn btn-secondary">
+                <span class="btn-icon">⚙️</span> Settings
+            </button>
         </div>
     </header>
 
@@ -208,6 +211,38 @@
             </div>
             <div class="modal-footer">
                 <button id="close-build-btn" class="btn btn-secondary" style="display: none;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Settings -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <span class="modal-close" data-modal="settings-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>Default Values</h3>
+                    <div class="param-form-item">
+                        <label class="param-form-label">
+                            Default LHOST
+                            <span class="param-type">[string]</span>
+                        </label>
+                        <input type="text" 
+                               id="default-lhost" 
+                               class="param-form-input" 
+                               placeholder="e.g., 192.168.1.100"
+                               value="">
+                        <div class="param-form-description">
+                            This value will be used as the default for all LHOST parameters in recipes, shellcodes, and download cradles.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-settings-btn" type="button" class="btn btn-primary">Save Settings</button>
             </div>
         </div>
     </div>

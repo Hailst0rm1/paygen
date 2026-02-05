@@ -34,6 +34,7 @@ function setupEventListeners() {
     // Header buttons
     document.getElementById('obfuscate-ps-btn').addEventListener('click', showObfuscatePsModal);
     document.getElementById('history-btn').addEventListener('click', showHistory);
+    document.getElementById('settings-btn').addEventListener('click', showSettings);
     document.getElementById('refresh-btn').addEventListener('click', () => loadRecipes(true));
     
     // Effectiveness filter pills
@@ -82,26 +83,51 @@ function setupEventListeners() {
     document.getElementById('confirm-generate-btn').addEventListener('click', generatePayload);
     
     // Build modal close button
-    document.getElementById('close-build-btn').addEventListener('click', function() {
-        document.getElementById('build-modal').classList.remove('active');
-    });
+    const closeBuildBtn = document.getElementById('close-build-btn');
+    if (closeBuildBtn) {
+        closeBuildBtn.addEventListener('click', function() {
+            document.getElementById('build-modal').classList.remove('active');
+        });
+    }
     
     // History modal buttons
-    document.getElementById('close-history-btn').addEventListener('click', function() {
-        document.getElementById('history-modal').classList.remove('active');
-    });
+    const closeHistoryBtn = document.getElementById('close-history-btn');
+    if (closeHistoryBtn) {
+        closeHistoryBtn.addEventListener('click', function() {
+            document.getElementById('history-modal').classList.remove('active');
+        });
+    }
     
     // Clear history button handler is set dynamically in showHistory/showHistoryDetail
     // Don't add a static event listener here
     
     // PowerShell Obfuscator modal buttons
-    document.getElementById('close-obfuscate-ps-btn').addEventListener('click', function() {
-        document.getElementById('obfuscate-ps-modal').classList.remove('active');
-    });
+    const closeObfuscatePsBtn = document.getElementById('close-obfuscate-ps-btn');
+    if (closeObfuscatePsBtn) {
+        closeObfuscatePsBtn.addEventListener('click', function() {
+            document.getElementById('obfuscate-ps-modal').classList.remove('active');
+        });
+    }
     
-    document.getElementById('obfuscate-ps-generate-btn').addEventListener('click', generateObfuscatedPs);
+    const obfuscatePsGenerateBtn = document.getElementById('obfuscate-ps-generate-btn');
+    if (obfuscatePsGenerateBtn) {
+        obfuscatePsGenerateBtn.addEventListener('click', generateObfuscatedPs);
+    }
     
-    document.getElementById('obfuscate-ps-copy-btn').addEventListener('click', copyObfuscatedPs);
+    const obfuscatePsCopyBtn = document.getElementById('obfuscate-ps-copy-btn');
+    if (obfuscatePsCopyBtn) {
+        obfuscatePsCopyBtn.addEventListener('click', copyObfuscatedPs);
+    }
+    
+    // Settings modal buttons
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            saveSettings();
+        });
+    }
     
     // Close modals on background click
     document.querySelectorAll('.modal').forEach(modal => {
@@ -799,7 +825,15 @@ async function showParameterForm() {
                     </select>
                 `;
             } else {
-                const defaultVal = param.default !== undefined ? param.default : '';
+                // Check if this is an lhost parameter and use default from settings
+                let defaultVal = param.default !== undefined ? param.default : '';
+                if (param.name.toLowerCase() === 'lhost') {
+                    const settingsLhost = getDefaultLhost();
+                    if (settingsLhost) {
+                        defaultVal = settingsLhost;
+                    }
+                }
+                
                 html += `
                     <input type="text" 
                            class="param-form-input" 
@@ -1041,7 +1075,19 @@ async function showParameterForm() {
                         cradleContainer.style.display = checked ? 'block' : 'none';
                         
                         // Show lhost/lport fields when cradle is enabled
-                        if (lhostContainer) lhostContainer.style.display = checked ? 'block' : 'none';
+                        if (lhostContainer) {
+                            lhostContainer.style.display = checked ? 'block' : 'none';
+                            // Set default lhost from settings if empty
+                            if (checked) {
+                                const lhostInput = document.getElementById('ps-cradle-lhost');
+                                if (lhostInput && !lhostInput.value) {
+                                    const defaultLhost = getDefaultLhost();
+                                    if (defaultLhost) {
+                                        lhostInput.value = defaultLhost;
+                                    }
+                                }
+                            }
+                        }
                         if (lportContainer) lportContainer.style.display = checked ? 'block' : 'none';
                         
                         // Find selected cradle and show/hide fields based on what it uses
@@ -1285,7 +1331,19 @@ async function showParameterForm() {
                         cradleContainer.style.display = checked ? 'block' : 'none';
                         
                         // Show lhost/lport fields when cradle is enabled
-                        if (lhostContainer) lhostContainer.style.display = checked ? 'block' : 'none';
+                        if (lhostContainer) {
+                            lhostContainer.style.display = checked ? 'block' : 'none';
+                            // Set default lhost from settings if empty
+                            if (checked) {
+                                const lhostInput = document.getElementById('cs-cradle-lhost');
+                                if (lhostInput && !lhostInput.value) {
+                                    const defaultLhost = getDefaultLhost();
+                                    if (defaultLhost) {
+                                        lhostInput.value = defaultLhost;
+                                    }
+                                }
+                            }
+                        }
                         if (lportContainer) lportContainer.style.display = checked ? 'block' : 'none';
                         
                         // Find selected cradle and show/hide fields based on what it uses
@@ -1648,6 +1706,15 @@ async function loadShellcodeParameters(shellcodeName, shellcodeIdx) {
                             `).join('')}
                         </select>
                     `;
+                } else if (param.type === 'option' && param.options) {
+                    html += `
+                        <select class="param-form-select" data-param="${paramName}">
+                            <option value="">-- Select --</option>
+                            ${param.options.map(c => `
+                                <option value="${c}" ${param.default === c ? 'selected' : ''}>${c}</option>
+                            `).join('')}
+                        </select>
+                    `;
                 } else if (param.type === 'bool') {
                     html += `
                         <select class="param-form-select" data-param="${paramName}">
@@ -1656,7 +1723,15 @@ async function loadShellcodeParameters(shellcodeName, shellcodeIdx) {
                         </select>
                     `;
                 } else {
-                    const defaultVal = param.default !== undefined ? param.default : '';
+                    // Check if this is an lhost parameter and use default from settings
+                    let defaultVal = param.default !== undefined ? param.default : '';
+                    if (param.name.toLowerCase() === 'lhost') {
+                        const settingsLhost = getDefaultLhost();
+                        if (settingsLhost) {
+                            defaultVal = settingsLhost;
+                        }
+                    }
+                    
                     html += `
                         <input type="text" 
                                class="param-form-input" 
@@ -3280,4 +3355,36 @@ async function copyObfuscatedPs() {
         console.error('Failed to copy:', error);
         showNotificationPopup('Failed to copy to clipboard', 'error');
     }
+}
+
+// Settings Functions
+function showSettings() {
+    // Load current settings from localStorage
+    loadSettings();
+    document.getElementById('settings-modal').classList.add('active');
+}
+
+function loadSettings() {
+    const defaultLhost = localStorage.getItem('paygen_default_lhost') || '';
+    document.getElementById('default-lhost').value = defaultLhost;
+}
+
+function saveSettings() {
+    const defaultLhost = document.getElementById('default-lhost').value.trim();
+    
+    // Close modal first
+    document.getElementById('settings-modal').classList.remove('active');
+    
+    // Save to localStorage and show confirmation with IP
+    if (defaultLhost) {
+        localStorage.setItem('paygen_default_lhost', defaultLhost);
+        showNotificationPopup(`✓ Default LHOST set to: ${defaultLhost}`, 'success');
+    } else {
+        localStorage.removeItem('paygen_default_lhost');
+        showNotificationPopup('✓ Default LHOST cleared', 'success');
+    }
+}
+
+function getDefaultLhost() {
+    return localStorage.getItem('paygen_default_lhost') || '';
 }

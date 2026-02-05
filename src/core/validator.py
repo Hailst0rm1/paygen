@@ -219,7 +219,8 @@ class ParameterValidator:
                 param_def.get('range', [None, None])[0] if 'range' in param_def else None,
                 param_def.get('range', [None, None])[1] if 'range' in param_def else None
             ),
-            'choice': lambda v: cls.validate_choice(v, param_def.get('choices', []))
+            'choice': lambda v: cls.validate_choice(v, param_def.get('choices', [])),
+            'option': lambda v: cls.validate_choice(v, param_def.get('options', []))
         }
         
         validator = validators.get(param_type)

