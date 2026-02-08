@@ -454,7 +454,7 @@ function renderRecipeDetails(recipe) {
         recipe.preprocessing.forEach((step, idx) => {
             // Use name field first, fallback to script/command, then type
             let preprocessorName = step.name || step.script || step.command || step.type;
-            let preprocessorType = step.script ? 'script' : (step.command ? 'command' : 'unknown');
+            let preprocessorType = step.type || (step.script ? 'script' : (step.command ? 'command' : 'unknown'));
             
             html += `
                 <div class="preprocessing-step">
@@ -825,8 +825,11 @@ async function showParameterForm() {
                     </select>
                 `;
             } else {
-                // Check if this is an lhost parameter and use default from settings
+                // Process default value with template substitution
                 let defaultVal = param.default !== undefined ? param.default : '';
+                defaultVal = processParameterDefault(defaultVal, param.name);
+                
+                // Check if this is an lhost parameter and use default from settings
                 if (param.name.toLowerCase() === 'lhost') {
                     const settingsLhost = getDefaultLhost();
                     if (settingsLhost) {
@@ -1723,8 +1726,11 @@ async function loadShellcodeParameters(shellcodeName, shellcodeIdx) {
                         </select>
                     `;
                 } else {
-                    // Check if this is an lhost parameter and use default from settings
+                    // Process default value with template substitution
                     let defaultVal = param.default !== undefined ? param.default : '';
+                    defaultVal = processParameterDefault(defaultVal, param.name);
+                    
+                    // Check if this is an lhost parameter and use default from settings
                     if (param.name.toLowerCase() === 'lhost') {
                         const settingsLhost = getDefaultLhost();
                         if (settingsLhost) {
@@ -3387,4 +3393,21 @@ function saveSettings() {
 
 function getDefaultLhost() {
     return localStorage.getItem('paygen_default_lhost') || '';
+}
+
+function processParameterDefault(defaultValue, paramName) {
+    // Process template substitutions in default values
+    if (typeof defaultValue !== 'string') {
+        return defaultValue;
+    }
+    
+    let processed = defaultValue;
+    
+    // Replace {{ global.lhost }} with the actual global LHOST setting
+    if (processed.includes('{{ global.lhost }}') || processed.includes('{{global.lhost}}')) {
+        const globalLhost = getDefaultLhost() || '127.0.0.1';
+        processed = processed.replace(/\{\{\s*global\.lhost\s*\}\}/g, globalLhost);
+    }
+    
+    return processed;
 }

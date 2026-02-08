@@ -437,7 +437,63 @@ The web interface provides:
 - **Launch Instructions Obfuscation**: Obfuscate PowerShell code blocks in launch instructions
 - **History Management**: View all builds, detailed parameters, and delete individual entries
 - **Launch Instructions**: Formatted markdown with syntax-highlighted code blocks and copy buttons
+- **Global Settings**: Configure default values (LHOST) that persist across sessions
 - **Responsive Design**: Clean 3-panel layout with Catppuccin Mocha theme
+
+### Global Settings
+
+The web interface includes a **Settings** panel (⚙️ icon in header) for configuring default values that persist across browser sessions:
+
+#### Default LHOST
+
+Set a global default LHOST (attacker IP) that automatically populates all LHOST-related fields:
+
+**How to Configure:**
+1. Click the **⚙️ Settings** button in the header
+2. Enter your default LHOST (e.g., `192.168.1.100`)
+3. Click **Save Settings**
+
+**Where It's Applied:**
+- Recipe parameters named `lhost` (case-insensitive)
+- Shellcode parameters (`lhost` in msfvenom configs, etc.)
+- Download cradle LHOST fields (PowerShell and C#)
+
+**Behavior:**
+- Stored in browser's `localStorage` (persists across sessions)
+- Only applied if fields are empty (won't override manual entries)
+- Can be cleared anytime by removing the value and saving
+
+**Template Variables:**
+You can also reference the global LHOST in parameter defaults using template syntax:
+
+```yaml
+parameters:
+  - name: "url"
+    type: "string"
+    description: "URL hosting the payload"
+    required: true
+    default: "http://{{ global.lhost }}/payload.bin"
+```
+
+When the form loads:
+- If global LHOST is set to `192.168.1.100` → `http://192.168.1.100/payload.bin`
+- If global LHOST is not set → `http://127.0.0.1/payload.bin` (defaults to localhost)
+
+**Example Workflow:**
+```bash
+# 1. Set global LHOST once
+Settings → Default LHOST: 192.168.1.100 → Save
+
+# 2. Generate multiple payloads
+All LHOST fields auto-fill with 192.168.1.100
+Shellcode configs use 192.168.1.100
+Download cradles use 192.168.1.100
+
+# 3. Override for specific payload
+Manually change LHOST to 10.0.0.5 (overrides default)
+```
+
+This saves time when testing against the same target network while maintaining flexibility for different scenarios.
 
 ### Standalone PowerShell Obfuscator
 
