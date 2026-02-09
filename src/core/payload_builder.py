@@ -851,8 +851,17 @@ class PayloadBuilder:
         """
         import re
         
+        # ASPX files (HTML comments and C# inline code comments)
+        if file_extension in ['.aspx', '.asp']:
+            # Remove HTML comments
+            code = re.sub(r'<!--.*?-->', '', code, flags=re.DOTALL)
+            # Remove C# single-line comments (only lines that start with //)
+            code = re.sub(r'^\s*//.*?$', '', code, flags=re.MULTILINE)
+            # Remove C# multi-line comments
+            code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+        
         # C-style comments (C, C++, C#, Java, JavaScript)
-        if file_extension in ['.c', '.cpp', '.cs', '.h', '.hpp', '.java', '.js']:
+        elif file_extension in ['.c', '.cpp', '.cs', '.h', '.hpp', '.java', '.js']:
             # Remove single-line comments (only lines that start with //)
             code = re.sub(r'^\s*//.*?$', '', code, flags=re.MULTILINE)
             # Remove multi-line comments
