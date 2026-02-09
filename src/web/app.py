@@ -1107,6 +1107,7 @@ def get_recipe(category, name):
                 'category': recipe.category,
                 'description': recipe.description,
                 'effectiveness': recipe.effectiveness,
+                'platform': recipe.platform,
                 'mitre_tactic': recipe.mitre_tactic,
                 'mitre_technique': recipe.mitre_technique,
                 'artifacts': recipe.artifacts,

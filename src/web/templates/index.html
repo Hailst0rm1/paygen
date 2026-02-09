@@ -335,7 +335,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2.1"></script>
     <script>
         // Set build debug flag from backend config
         window.showBuildDebug = {{ 'true' if show_build_debug else 'false' }};
