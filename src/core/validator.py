@@ -240,6 +240,7 @@ class RecipeValidator:
     REQUIRED_OUTPUT_FIELDS = ['type']
     
     VALID_EFFECTIVENESS = ['low', 'medium', 'high']
+    VALID_PLATFORMS = ['Windows', 'Linux', 'macOS']
     VALID_OUTPUT_TYPES = ['template', 'command']
     VALID_PREPROCESSING_TYPES = ['command', 'script', 'option', 'shellcode']
     
@@ -292,6 +293,14 @@ class RecipeValidator:
                 f"Invalid effectiveness '{meta['effectiveness']}'. "
                 f"Must be one of: {cls.VALID_EFFECTIVENESS}"
             )
+        
+        # Validate platform (optional field)
+        if 'platform' in meta:
+            if meta['platform'] not in cls.VALID_PLATFORMS:
+                raise ValidationError(
+                    f"Invalid platform '{meta['platform']}'. "
+                    f"Must be one of: {cls.VALID_PLATFORMS}"
+                )
         
         # Validate MITRE (optional but if present must be valid)
         if 'mitre' in meta:

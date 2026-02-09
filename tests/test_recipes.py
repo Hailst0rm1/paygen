@@ -8,7 +8,7 @@ Tests that recipe YAML files can be loaded and validated correctly.
 import pytest
 from pathlib import Path
 from src.core.config import ConfigManager
-from src.core.recipe_loader import RecipeLoader
+from src.core.recipe_loader import RecipeLoader, Recipe
 from src.core.validator import RecipeValidator, ValidationError
 
 
@@ -218,6 +218,33 @@ class TestRecipeParameters:
         assert param is not None, "Should find parameter"
         assert param['name'] == 'lhost'
         assert param['type'] == 'ip'
+    
+    def test_recipe_with_platform(self):
+        """Test that recipes can have optional platform field."""
+        recipe = Recipe(
+            name='Test Recipe',
+            category='Test',
+            description='Test description',
+            effectiveness='high',
+            platform='Windows',
+            parameters=[],
+            output={'type': 'command', 'command': 'echo test'}
+        )
+        
+        assert recipe.platform == 'Windows'
+    
+    def test_recipe_without_platform(self):
+        """Test that recipes without platform field work correctly."""
+        recipe = Recipe(
+            name='Test Recipe',
+            category='Test',
+            description='Test description',
+            effectiveness='high',
+            parameters=[],
+            output={'type': 'command', 'command': 'echo test'}
+        )
+        
+        assert recipe.platform is None
 
 
 if __name__ == "__main__":

@@ -258,10 +258,23 @@ body {
     flex-shrink: 0;
     display: flex;
     gap: 0.5rem;
-    padding: 0 1rem 1rem 1rem;
+    padding: 0 1rem 0.5rem 1rem;
     position: sticky;
     top: 3rem;
     z-index: 9;
+    background: var(--mantle);
+}
+
+.platform-filters {
+    flex-shrink: 0;
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem 1rem 1rem;
+    position: sticky;
+    top: 5.5rem;
+    z-index: 9;
+    background: var(--mantle);
+    margin-top: -0.5rem;
 }
 
 .filter-pill {
@@ -303,6 +316,31 @@ body {
 
 .filter-pill-low:hover {
     background-color: var(--maroon);
+}
+
+.filter-pill-windows {
+    background-color: var(--blue);
+}
+
+.filter-pill-windows:hover {
+    background-color: var(--sapphire);
+}
+
+.filter-pill-linux {
+    background-color: var(--mauve);
+}
+
+.filter-pill-linux:hover {
+    background-color: var(--lavender);
+}
+
+.filter-pill-macos {
+    background-color: var(--text);
+    color: var(--crust);
+}
+
+.filter-pill-macos:hover {
+    background-color: var(--subtext0);
 }
 
 #categories-container {
@@ -422,6 +460,33 @@ body {
 .effectiveness-value {
     padding-left: 1rem;
     margin-bottom: 0.5rem;
+}
+
+.platform-value {
+    padding-left: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.platform-badge {
+    display: inline-block;
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--base);
+}
+
+.platform-windows {
+    background-color: var(--blue);
+}
+
+.platform-linux {
+    background-color: var(--mauve);
+}
+
+.platform-macos {
+    background-color: var(--text);
+    color: var(--crust);
 }
 
 .compiler-row {

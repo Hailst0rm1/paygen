@@ -12,6 +12,7 @@ meta:
     by modern antivirus solutions without additional obfuscation.
 
   effectiveness: low
+  platform: "Windows"
 
   mitre:
     tactic: "TA0002 - Execution"

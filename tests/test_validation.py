@@ -175,5 +175,78 @@ class TestIntegerValidation:
             validator.validate_integer("1.5")
 
 
+class TestPlatformValidation:
+    """Test platform validation in recipe metadata."""
+    
+    def test_valid_platforms(self):
+        """Test valid platform values."""
+        from src.core.validator import RecipeValidator
+        
+        # Recipe with valid Windows platform
+        recipe_data = {
+            'meta': {
+                'name': 'Test Recipe',
+                'category': 'Test',
+                'description': 'Test description',
+                'effectiveness': 'high',
+                'platform': 'Windows'
+            },
+            'parameters': [],
+            'output': {
+                'type': 'command',
+                'command': 'echo test'
+            }
+        }
+        assert RecipeValidator.validate_recipe(recipe_data)
+        
+        # Test other valid platforms
+        recipe_data['meta']['platform'] = 'Linux'
+        assert RecipeValidator.validate_recipe(recipe_data)
+        
+        recipe_data['meta']['platform'] = 'macOS'
+        assert RecipeValidator.validate_recipe(recipe_data)
+    
+    def test_platform_is_optional(self):
+        """Test that platform field is optional."""
+        from src.core.validator import RecipeValidator
+        
+        # Recipe without platform field should be valid
+        recipe_data = {
+            'meta': {
+                'name': 'Test Recipe',
+                'category': 'Test',
+                'description': 'Test description',
+                'effectiveness': 'high'
+            },
+            'parameters': [],
+            'output': {
+                'type': 'command',
+                'command': 'echo test'
+            }
+        }
+        assert RecipeValidator.validate_recipe(recipe_data)
+    
+    def test_invalid_platform(self):
+        """Test invalid platform values."""
+        from src.core.validator import RecipeValidator
+        
+        recipe_data = {
+            'meta': {
+                'name': 'Test Recipe',
+                'category': 'Test',
+                'description': 'Test description',
+                'effectiveness': 'high',
+                'platform': 'InvalidPlatform'
+            },
+            'parameters': [],
+            'output': {
+                'type': 'command',
+                'command': 'echo test'
+            }
+        }
+        with pytest.raises(ValidationError):
+            RecipeValidator.validate_recipe(recipe_data)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

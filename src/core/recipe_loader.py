@@ -18,6 +18,7 @@ class Recipe:
     category: str
     description: str
     effectiveness: str  # low, medium, high
+    platform: Optional[str] = None  # Windows, Linux, macOS
     mitre_tactic: Optional[str] = None
     mitre_technique: Optional[str] = None
     artifacts: List[str] = field(default_factory=list)
@@ -171,6 +172,7 @@ class RecipeLoader:
                 category=meta.get('category', 'Misc'),
                 description=meta['description'],
                 effectiveness=meta['effectiveness'],
+                platform=meta.get('platform'),
                 mitre_tactic=mitre.get('tactic'),
                 mitre_technique=mitre.get('technique'),
                 artifacts=meta.get('artifacts', []),

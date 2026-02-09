@@ -9,6 +9,7 @@ meta:
     "shellcode" type for cleaner configuration and automatic listener generation.
 
   effectiveness: "medium"
+  platform: "Windows"
 
   mitre:
     tactic: "TA0005 - Defense Evasion"

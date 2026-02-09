@@ -5,6 +5,7 @@ let recipes = {};
 let selectedRecipe = null;
 let categories = {};
 let activeEffectivenessFilters = new Set();
+let activePlatformFilters = new Set();
 
 // Notification popup
 function showNotificationPopup(message, type = 'info') {
@@ -38,7 +39,7 @@ function setupEventListeners() {
     document.getElementById('refresh-btn').addEventListener('click', () => loadRecipes(true));
     
     // Effectiveness filter pills
-    document.querySelectorAll('.filter-pill').forEach(pill => {
+    document.querySelectorAll('.filter-pill[data-effectiveness]').forEach(pill => {
         pill.addEventListener('click', function() {
             const effectiveness = this.dataset.effectiveness;
             
@@ -48,6 +49,26 @@ function setupEventListeners() {
                 this.classList.remove('active');
             } else {
                 activeEffectivenessFilters.add(effectiveness);
+                this.classList.add('active');
+            }
+            
+            // Re-render with current search query
+            const searchInput = document.getElementById('recipe-search');
+            renderCategories(searchInput ? searchInput.value : '');
+        });
+    });
+    
+    // Platform filter pills
+    document.querySelectorAll('.filter-pill[data-platform]').forEach(pill => {
+        pill.addEventListener('click', function() {
+            const platform = this.dataset.platform;
+            
+            // Toggle this filter on/off
+            if (activePlatformFilters.has(platform)) {
+                activePlatformFilters.delete(platform);
+                this.classList.remove('active');
+            } else {
+                activePlatformFilters.add(platform);
                 this.classList.add('active');
             }
             
@@ -218,7 +239,15 @@ function renderCategories(filterQuery = '') {
             const matchesEffectiveness = activeEffectivenessFilters.size === 0 || 
                                         activeEffectivenessFilters.has(recipe.effectiveness.toLowerCase());
             
-            return matchesSearch && matchesEffectiveness;
+            // Check if recipe matches platform filter
+            // If no platform filters are active, show all recipes
+            // If recipe has no platform specified, it works on all platforms (always show it)
+            // If recipe has a platform, only show if it matches the filter
+            const matchesPlatform = activePlatformFilters.size === 0 || 
+                                   !recipe.platform || 
+                                   activePlatformFilters.has(recipe.platform);
+            
+            return matchesSearch && matchesEffectiveness && matchesPlatform;
         });
         
         if (matchingRecipes.length > 0) {
@@ -383,6 +412,25 @@ function renderRecipeDetails(recipe) {
         </div>
     `;
     html += '<div class="separator"></div>';
+    
+    // Platform
+    if (recipe.platform) {
+        html += '<div class="section-header">Platform:</div>';
+        const platformIcons = {
+            'Windows': '🪟',
+            'Linux': '🐧',
+            'macOS': '🍎'
+        };
+        const icon = platformIcons[recipe.platform] || '';
+        html += `
+            <div class="platform-value">
+                <span class="platform-badge platform-${recipe.platform.toLowerCase()}">
+                    ${icon} ${escapeHtml(recipe.platform)}
+                </span>
+            </div>
+        `;
+        html += '<div class="separator"></div>';
+    }
     
     // Description
     html += '<div class="section-header">Description:</div>';
