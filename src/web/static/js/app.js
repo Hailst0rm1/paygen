@@ -2554,6 +2554,12 @@ async function pollBuildStatus(sessionId) {
                         });
                     }
                     
+                    // Also substitute {{ global.lhost }} if present
+                    if (instructions.includes('{{ global.lhost }}') || instructions.includes('{{global.lhost}}')) {
+                        const globalLhost = getDefaultLhost() || '127.0.0.1';
+                        instructions = instructions.replace(/\{\{\s*global\.lhost\s*\}\}/g, globalLhost);
+                    }
+                    
                     resultContainer.innerHTML += `
                         <div style="margin-top: 1rem; background: var(--surface0); padding: 1rem; border-radius: 4px; border-left: 3px solid var(--blue);">
                             <div style="color: var(--blue); font-weight: bold; margin-bottom: 0.5rem;">Launch Instructions:</div>
