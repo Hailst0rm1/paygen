@@ -12,7 +12,7 @@ import re
 
 def process_conditional_blocks(code: str, variables: dict) -> str:
     """Process conditional blocks - copied from app.py"""
-    pattern = r'\{if\s+(\w+)\}(.*?)\{fi\}'
+    pattern = r'\{\{\s*if\s+(\w+)\s*\}\}(.*?)\{\{\s*fi\s*\}\}'
     
     def replace_conditional(match):
         var_name = match.group(1)

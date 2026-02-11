@@ -139,6 +139,56 @@ function setupEventListeners() {
     if (obfuscatePsCopyBtn) {
         obfuscatePsCopyBtn.addEventListener('click', copyObfuscatedPs);
     }
+
+    // Download button for PS obfuscator
+    const obfuscatePsDownloadBtn = document.getElementById('obfuscate-ps-download-btn');
+    if (obfuscatePsDownloadBtn) {
+        obfuscatePsDownloadBtn.addEventListener('click', downloadObfuscatedPs);
+    }
+
+    // File input for PS obfuscator
+    const obfuscatePsFileInput = document.getElementById('obfuscate-ps-file-input');
+    if (obfuscatePsFileInput) {
+        obfuscatePsFileInput.addEventListener('change', handlePsFileUpload);
+    }
+
+    // Path input for PS obfuscator
+    const obfuscatePsFilePath = document.getElementById('obfuscate-ps-file-path');
+    if (obfuscatePsFilePath) {
+        // Load file when Enter is pressed in path input
+        obfuscatePsFilePath.addEventListener('keydown', async function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                await loadPsFileFromPath();
+            }
+        });
+        // Also add a blur event to load when focus leaves the field
+        obfuscatePsFilePath.addEventListener('blur', async function() {
+            const path = obfuscatePsFilePath.value.trim();
+            if (path && path !== currentLoadedPath) {
+                await loadPsFileFromPath();
+            }
+        });
+    }
+
+    // Cradle toggle for PS obfuscator
+    const obfuscatePsCradleToggle = document.getElementById('obfuscate-ps-cradle-toggle');
+    if (obfuscatePsCradleToggle) {
+        obfuscatePsCradleToggle.addEventListener('change', function() {
+            const container = document.getElementById('obfuscate-ps-cradle-options');
+            if (container) {
+                container.style.display = obfuscatePsCradleToggle.checked ? 'block' : 'none';
+            }
+        });
+    }
+
+    // Drag and drop for PS obfuscator
+    const obfuscatePsDropzone = document.getElementById('obfuscate-ps-dropzone');
+    if (obfuscatePsDropzone) {
+        obfuscatePsDropzone.addEventListener('dragover', handlePsDragOver);
+        obfuscatePsDropzone.addEventListener('dragleave', handlePsDragLeave);
+        obfuscatePsDropzone.addEventListener('drop', handlePsDrop);
+    }
     
     // Settings modal buttons
     const saveSettingsBtn = document.getElementById('save-settings-btn');
@@ -232,7 +282,21 @@ function renderCategories(filterQuery = '') {
     Object.keys(categories).forEach(categoryName => {
         const matchingRecipes = categories[categoryName].filter(recipe => {
             // Check if recipe matches search query
-            const matchesSearch = !filterQuery || recipe.name.toLowerCase().includes(filterQuery.toLowerCase());
+            // Search in both name and description for more comprehensive results
+            let matchesSearch = true;
+            if (filterQuery) {
+                const queryLower = filterQuery.toLowerCase();
+                const nameLower = recipe.name.toLowerCase();
+                const descLower = (recipe.description || '').toLowerCase();
+                
+                // Split query into words to support partial matching of multi-word searches
+                const queryWords = queryLower.split(/\s+/).filter(w => w.length > 0);
+                
+                // Check if all query words are found in either name or description
+                matchesSearch = queryWords.every(word => 
+                    nameLower.includes(word) || descLower.includes(word)
+                );
+            }
             
             // Check if recipe matches effectiveness filter
             // If no filters are active, show all recipes
@@ -3293,6 +3357,10 @@ function escapeHtml(text) {
 
 // ===== PowerShell Obfuscator Functions =====
 
+// Global variable to track current loaded filename
+let currentPsFilename = null;
+let currentLoadedPath = null;
+
 // Show PowerShell Obfuscator modal
 async function showObfuscatePsModal() {
     const modal = document.getElementById('obfuscate-ps-modal');
@@ -3300,11 +3368,15 @@ async function showObfuscatePsModal() {
     const outputSection = document.getElementById('obfuscate-ps-output-section');
     const loadingDiv = document.getElementById('obfuscate-ps-loading');
     const levelSelect = document.getElementById('obfuscate-ps-level');
+    const pathInput = document.getElementById('obfuscate-ps-file-path');
     
     // Reset modal state
     inputTextarea.value = '';
     outputSection.style.display = 'none';
     loadingDiv.style.display = 'none';
+    currentPsFilename = null;
+    currentLoadedPath = null;
+    pathInput.value = '';
     
     // Load obfuscation methods from YAML
     try {
@@ -3322,11 +3394,157 @@ async function showObfuscatePsModal() {
         return;
     }
     
+    // Load PS cradles for the dropdown
+    try {
+        const response = await fetch('/api/ps-cradles');
+        const data = await response.json();
+        const cradleSelect = document.getElementById('obfuscate-ps-cradle-method');
+        
+        if (data.cradles && data.cradles.ps1) {
+            cradleSelect.innerHTML = data.cradles.ps1.map(c => 
+                `<option value="${c.name}">${c.name}</option>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load PS cradles:', error);
+    }
+    
+    // Load obfuscation methods for cradle obfuscation dropdown
+    try {
+        const response = await fetch('/api/ps-obfuscation-methods');
+        const data = await response.json();
+        const cradleObfSelect = document.getElementById('obfuscate-ps-cradle-obf-method');
+        
+        cradleObfSelect.innerHTML = '<option value="">None</option>' + 
+            data.methods.map(m => 
+                `<option value="${m.name}">${m.name}</option>`
+            ).join('');
+    } catch (error) {
+        console.error('Failed to load obfuscation methods for cradle:', error);
+    }
+    
+    // Populate lhost with global.lhost if available
+    const cradleLhostInput = document.getElementById('obfuscate-ps-cradle-lhost');
+    if (cradleLhostInput) {
+        const globalLhost = getDefaultLhost() || '127.0.0.1';
+        cradleLhostInput.value = globalLhost;
+    }
+    
     // Show modal
     modal.classList.add('active');
     
     // Focus on input
     setTimeout(() => inputTextarea.focus(), 100);
+}
+
+// Handle file upload via browse button
+async function handlePsFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    await loadPsFile(file);
+}
+
+// Handle drag over
+function handlePsDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const dropzone = document.getElementById('obfuscate-ps-dropzone');
+    dropzone.classList.add('drag-over');
+}
+
+// Handle drag leave
+function handlePsDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const dropzone = document.getElementById('obfuscate-ps-dropzone');
+    dropzone.classList.remove('drag-over');
+}
+
+// Handle drop
+async function handlePsDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const dropzone = document.getElementById('obfuscate-ps-dropzone');
+    dropzone.classList.remove('drag-over');
+    
+    const files = event.dataTransfer.files;
+    if (files.length === 0) return;
+    
+    const file = files[0];
+    
+    // Validate file type
+    if (!file.name.endsWith('.ps1') && !file.name.endsWith('.txt')) {
+        showNotificationPopup('Please drop a .ps1 or .txt file', 'error');
+        return;
+    }
+    
+    await loadPsFile(file);
+}
+
+// Load file content and set filename
+async function loadPsFile(file) {
+    try {
+        const content = await file.text();
+        const inputTextarea = document.getElementById('obfuscate-ps-input');
+        const pathInput = document.getElementById('obfuscate-ps-file-path');
+        
+        inputTextarea.value = content;
+        currentPsFilename = file.name;
+        
+        // Show filename in path input if available
+        if (file.path) {
+            pathInput.value = file.path;
+            currentLoadedPath = file.path;
+        } else {
+            pathInput.value = file.name;
+            currentLoadedPath = file.name;
+        }
+        
+        showNotificationPopup(`Loaded ${file.name}`, 'success');
+    } catch (error) {
+        console.error('Failed to load file:', error);
+        showNotificationPopup('Failed to load file', 'error');
+    }
+}
+
+// Load file from path (typed in path input)
+async function loadPsFileFromPath() {
+    const pathInput = document.getElementById('obfuscate-ps-file-path');
+    const path = pathInput.value.trim();
+    
+    if (!path) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/read-file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ path: path })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to read file');
+        }
+        
+        const inputTextarea = document.getElementById('obfuscate-ps-input');
+        inputTextarea.value = data.content;
+        
+        // Extract filename from path
+        const filename = path.split('/').pop().split('\\\\').pop();
+        currentPsFilename = filename;
+        currentLoadedPath = path;
+        
+        showNotificationPopup(`Loaded ${filename}`, 'success');
+    } catch (error) {
+        console.error('Failed to load file from path:', error);
+        showNotificationPopup(error.message || 'Failed to load file', 'error');
+    }
 }
 
 // Generate obfuscated PowerShell
@@ -3376,8 +3594,33 @@ async function generateObfuscatedPs() {
         // Display obfuscated code with syntax highlighting
         outputDiv.innerHTML = `<pre class="line-numbers"><code class="language-powershell">${escapeHtml(data.obfuscated)}</code></pre>`;
         
+        // Re-add copy button after innerHTML replacement
+        const copyBtn = document.createElement('button');
+        copyBtn.id = 'obfuscate-ps-copy-btn';
+        copyBtn.className = 'btn btn-secondary btn-sm obfuscate-ps-copy-btn-positioned';
+        copyBtn.innerHTML = '<span class="btn-icon">📋</span> Copy';
+        copyBtn.addEventListener('click', copyObfuscatedPs);
+        outputDiv.appendChild(copyBtn);
+        
         // Apply syntax highlighting
         Prism.highlightAllUnder(outputDiv);
+        
+        // Set filename for download
+        const filenameInput = document.getElementById('obfuscate-ps-download-filename');
+        if (currentPsFilename) {
+            // If loaded from file, append "-o" before extension
+            const lastDot = currentPsFilename.lastIndexOf('.');
+            if (lastDot > 0) {
+                const name = currentPsFilename.substring(0, lastDot);
+                const ext = currentPsFilename.substring(lastDot);
+                filenameInput.value = `${name}-o${ext}`;
+            } else {
+                filenameInput.value = `${currentPsFilename}-o.ps1`;
+            }
+        } else {
+            // If typed manually, leave empty (user must provide filename)
+            filenameInput.value = '';
+        }
         
         // Show output section
         loadingDiv.style.display = 'none';
@@ -3414,6 +3657,142 @@ async function copyObfuscatedPs() {
     } catch (error) {
         console.error('Failed to copy:', error);
         showNotificationPopup('Failed to copy to clipboard', 'error');
+    }
+}
+
+// Download obfuscated PowerShell as file (save to output_dir)
+async function downloadObfuscatedPs() {
+    const outputDiv = document.getElementById('obfuscate-ps-output');
+    const codeElement = outputDiv.querySelector('code');
+    const filenameInput = document.getElementById('obfuscate-ps-download-filename');
+    const downloadBtn = document.getElementById('obfuscate-ps-download-btn');
+    const statusDiv = document.getElementById('obfuscate-ps-download-status');
+    const cradleToggle = document.getElementById('obfuscate-ps-cradle-toggle');
+    const cradleMethodSelect = document.getElementById('obfuscate-ps-cradle-method');
+    
+    if (!codeElement) {
+        showNotificationPopup('No obfuscated code to download', 'error');
+        return;
+    }
+    
+    const code = codeElement.textContent;
+    let filename = filenameInput.value.trim();
+    
+    // Validate filename
+    if (!filename) {
+        showNotificationPopup('Please enter a filename', 'error');
+        filenameInput.focus();
+        return;
+    }
+    
+    // Ensure .ps1 extension
+    if (!filename.endsWith('.ps1')) {
+        filename += '.ps1';
+    }
+    
+    // Disable button during save
+    downloadBtn.disabled = true;
+    statusDiv.style.display = 'none';
+    
+    try {
+        // Save to output_dir on server
+        const response = await fetch('/api/obfuscate-ps-save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: code,
+                filename: filename
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save file');
+        }
+        
+        let statusMessage = `✓ Saved to: ${data.path}`;
+        
+        // Generate cradle if checkbox is checked
+        if (cradleToggle && cradleToggle.checked) {
+            const cradleMethod = cradleMethodSelect.value;
+            const cradleObfMethod = document.getElementById('obfuscate-ps-cradle-obf-method').value;
+            const cradleLhost = document.getElementById('obfuscate-ps-cradle-lhost').value.trim();
+            const cradleLport = document.getElementById('obfuscate-ps-cradle-lport').value;
+            
+            if (!cradleLhost) {
+                statusMessage += '\n⚠ Skipped cradle: LHOST is required';
+            } else if (cradleMethod) {
+                try {
+                    const cradleResponse = await fetch('/api/obfuscate-ps-generate-cradle', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            filename: filename,
+                            cradle_method: cradleMethod,
+                            cradle_obf_method: cradleObfMethod,
+                            lhost: cradleLhost,
+                            lport: parseInt(cradleLport) || 80
+                        })
+                    });
+                    
+                    const cradleData = await cradleResponse.json();
+                    
+                    if (cradleResponse.ok) {
+                        // Display cradle in code block
+                        const cradleOutputSection = document.getElementById('obfuscate-ps-cradle-output-section');
+                        const cradleOutputDiv = document.getElementById('obfuscate-ps-cradle-output');
+                        
+                        cradleOutputDiv.innerHTML = `<pre class="line-numbers"><code class="language-powershell">${escapeHtml(cradleData.cradle_code)}</code></pre>`;
+                        
+                        // Re-add copy button for cradle
+                        const cradleCopyBtn = document.createElement('button');
+                        cradleCopyBtn.id = 'obfuscate-ps-cradle-copy-btn';
+                        cradleCopyBtn.className = 'btn btn-secondary btn-sm obfuscate-ps-copy-btn-positioned';
+                        cradleCopyBtn.innerHTML = '<span class="btn-icon">📋</span> Copy';
+                        cradleCopyBtn.addEventListener('click', function() {
+                            const cradleCode = cradleOutputDiv.querySelector('code');
+                            if (cradleCode) {
+                                navigator.clipboard.writeText(cradleCode.textContent);
+                                showNotificationPopup('Cradle copied to clipboard!', 'success');
+                            }
+                        });
+                        cradleOutputDiv.appendChild(cradleCopyBtn);
+                        
+                        // Apply syntax highlighting
+                        Prism.highlightAllUnder(cradleOutputDiv);
+                        
+                        // Show cradle section
+                        cradleOutputSection.style.display = 'block';
+                        
+                        statusMessage += '\n✓ Cradle generated successfully';
+                    } else {
+                        statusMessage += `\n✗ Cradle generation failed: ${cradleData.error}`;
+                    }
+                } catch (cradleError) {
+                    console.error('Failed to generate cradle:', cradleError);
+                    statusMessage += `\n✗ Cradle generation failed: ${cradleError.message}`;
+                }
+            }
+        }
+        
+        // Show success in panel (replace \n with <br> for HTML line breaks)
+        statusDiv.innerHTML = statusMessage.replace(/\n/g, '<br>');
+        statusDiv.style.display = 'block';
+        statusDiv.style.borderColor = 'var(--teal)';
+        statusDiv.style.color = 'var(--teal)';
+    } catch (error) {
+        console.error('Failed to save file:', error);
+        statusDiv.textContent = `✗ Error: ${error.message}`;
+        statusDiv.style.display = 'block';
+        statusDiv.style.borderColor = 'var(--red)';
+        statusDiv.style.color = 'var(--red)';
+    } finally {
+        downloadBtn.disabled = false;
     }
 }
 

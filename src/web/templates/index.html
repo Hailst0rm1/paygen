@@ -287,7 +287,22 @@
                 <div class="obfuscate-ps-container">
                     <div class="obfuscate-ps-input-section">
                         <label class="obfuscate-ps-label">PowerShell Command</label>
-                        <textarea id="obfuscate-ps-input" class="obfuscate-ps-textarea" placeholder="Enter your PowerShell command here..."></textarea>
+                        <div id="obfuscate-ps-dropzone" class="obfuscate-ps-dropzone">
+                            <textarea id="obfuscate-ps-input" class="obfuscate-ps-textarea" placeholder="Enter your PowerShell command here or drag & drop a .ps1 file..."></textarea>
+                            <div class="obfuscate-ps-dropzone-overlay" id="obfuscate-ps-dropzone-overlay">
+                                <div class="obfuscate-ps-dropzone-content">
+                                    <span class="btn-icon" style="font-size: 3rem;">📄</span>
+                                    <p>Drop your PowerShell file here</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="obfuscate-ps-file-controls">
+                            <input type="text" id="obfuscate-ps-file-path" class="obfuscate-ps-file-path" placeholder="/path/to/file.ps1">
+                            <label class="btn btn-secondary btn-sm obfuscate-ps-browse-btn">
+                                <span class="btn-icon">📁</span> Browse
+                                <input type="file" id="obfuscate-ps-file-input" accept=".ps1,.txt" style="display: none;">
+                            </label>
+                        </div>
                     </div>
                     <div class="obfuscate-ps-wrapper-section" style="padding: 0.75rem; background-color: var(--surface1); border-radius: 4px; margin-bottom: 1rem;">
                         <label class="param-form-checkbox-label">
@@ -313,11 +328,54 @@
                         </button>
                     </div>
                     <div class="obfuscate-ps-output-section" id="obfuscate-ps-output-section" style="display: none;">
-                        <div class="obfuscate-ps-output-header">
-                            <label class="obfuscate-ps-label">Obfuscated Output</label>
-                            <button id="obfuscate-ps-copy-btn" class="btn btn-secondary btn-sm">
-                                <span class="btn-icon">📋</span> Copy
+                        <label class="obfuscate-ps-label">Obfuscated Output</label>
+                        <div class="obfuscate-ps-download-controls">
+                            <label class="obfuscate-ps-label" style="font-size: 0.85rem; margin-bottom: 0; white-space: nowrap;">Filename:</label>
+                            <input type="text" id="obfuscate-ps-download-filename" class="obfuscate-ps-filename-input" placeholder="output.ps1">
+                            <button id="obfuscate-ps-download-btn" class="btn btn-secondary btn-sm">
+                                <span class="btn-icon">💾</span> Download
                             </button>
+                        </div>
+                        <div class="obfuscate-ps-cradle-section" style="padding: 0.75rem; background-color: var(--surface1); border-radius: 4px; margin-bottom: 0.75rem;">
+                            <label class="param-form-checkbox-label">
+                                <input type="checkbox" id="obfuscate-ps-cradle-toggle" class="param-form-checkbox">
+                                Add download cradle
+                            </label>
+                            <div class="param-form-hint">Generate a download cradle for launching the payload</div>
+                            <div id="obfuscate-ps-cradle-options" style="display: none; margin-top: 0.75rem;">
+                                <div class="param-form-item">
+                                    <label class="param-form-label">Cradle Method <span style="color: var(--overlay2);">[choice]</span></label>
+                                    <select id="obfuscate-ps-cradle-method" class="param-form-select">
+                                        <!-- Options loaded dynamically -->
+                                    </select>
+                                    <div class="param-form-hint">PowerShell cradle method for downloading</div>
+                                </div>
+                                <div class="param-form-item">
+                                    <label class="param-form-label">Obfuscate Cradle <span style="color: var(--overlay2);">[choice]</span></label>
+                                    <select id="obfuscate-ps-cradle-obf-method" class="param-form-select">
+                                        <option value="">None</option>
+                                        <!-- Options loaded dynamically -->
+                                    </select>
+                                    <div class="param-form-hint">Obfuscation to apply to the cradle</div>
+                                </div>
+                                <div class="param-form-item">
+                                    <label class="param-form-label">Cradle Listener Host <span style="color: var(--red);">*</span> <span style="color: var(--overlay2);">[string]</span></label>
+                                    <input type="text" id="obfuscate-ps-cradle-lhost" class="param-form-input" placeholder="192.168.1.100">
+                                    <div class="param-form-hint">IP address or hostname for the download cradle URL</div>
+                                </div>
+                                <div class="param-form-item">
+                                    <label class="param-form-label">Cradle Listener Port <span style="color: var(--red);">*</span> <span style="color: var(--overlay2);">[number]</span></label>
+                                    <input type="number" id="obfuscate-ps-cradle-lport" class="param-form-input" value="80" min="1" max="65535">
+                                    <div class="param-form-hint">Port for the download cradle URL (80=http://, 443=https://, other=http://host:port/)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="obfuscate-ps-download-status" class="obfuscate-ps-download-status" style="display: none;"></div>
+                        <div id="obfuscate-ps-cradle-output-section" style="display: none; margin-top: 1rem;">
+                            <label class="obfuscate-ps-label">Download Cradle</label>
+                            <div id="obfuscate-ps-cradle-output" class="obfuscate-ps-output">
+                                <!-- Cradle output will be displayed here -->
+                            </div>
                         </div>
                         <div id="obfuscate-ps-output" class="obfuscate-ps-output">
                             <!-- Obfuscated output will be displayed here -->
@@ -335,7 +393,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=2.1"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2.2"></script>
     <script>
         // Set build debug flag from backend config
         window.showBuildDebug = {{ 'true' if show_build_debug else 'false' }};

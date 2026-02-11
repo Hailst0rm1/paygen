@@ -156,14 +156,13 @@ def inject_amsi_bypass_launch_instructions(launch_instructions: str, bypass_meth
                     rand_deadcode = random.randint(0, 100)
                     rand_seed = random.randint(0, 10000)
                     
-                    command = obf_method_data.get('command', '').format(
-                        temp=tmp_in_path,
-                        out=tmp_out_path,
-                        hex_key=rand_hex,
-                        string_dict=rand_stringdict,
-                        dead_code=rand_deadcode,
-                        seed=rand_seed
-                    )
+                    command = obf_method_data.get('command', '')
+                    command = command.replace('{{ temp }}', tmp_in_path)
+                    command = command.replace('{{ out }}', tmp_out_path)
+                    command = command.replace('{{ hex_key }}', rand_hex)
+                    command = command.replace('{{ string_dict }}', str(rand_stringdict))
+                    command = command.replace('{{ dead_code }}', str(rand_deadcode))
+                    command = command.replace('{{ seed }}', str(rand_seed))
                     
                     result = subprocess.run(
                         command,
@@ -312,14 +311,12 @@ def obfuscate_powershell_in_launch_instructions(launch_instructions: str, method
             rand_seed = random.randint(0, 10000)
             
             # Format command
-            command = command_template.format(
-                temp=tmp_in_path,
-                out=tmp_out_path,
-                hex_key=rand_hex,
-                string_dict=rand_stringdict,
-                dead_code=rand_deadcode,
-                seed=rand_seed
-            )
+            command = command_template.replace('{{ temp }}', tmp_in_path)
+            command = command.replace('{{ out }}', tmp_out_path)
+            command = command.replace('{{ hex_key }}', rand_hex)
+            command = command.replace('{{ string_dict }}', str(rand_stringdict))
+            command = command.replace('{{ dead_code }}', str(rand_deadcode))
+            command = command.replace('{{ seed }}', str(rand_seed))
             
             # Execute obfuscation
             result = subprocess.run(
@@ -443,7 +440,7 @@ def extract_csharp_metadata(source_file: Path, obfuscation_map: dict = None) -> 
 
 
 def process_conditional_blocks(code: str, variables: dict) -> str:
-    """Process conditional blocks in the format {if varname}content{fi}
+    """Process conditional blocks in the format {{ if varname }}content{{ fi }}
     
     If the variable is empty or None, the entire block (including content) is removed.
     If the variable has a value, the block markers are removed and content is kept.
@@ -457,8 +454,8 @@ def process_conditional_blocks(code: str, variables: dict) -> str:
     """
     import re
     
-    # Pattern to match {if varname}...{fi}
-    pattern = r'\{if\s+(\w+)\}(.*?)\{fi\}'
+    # Pattern to match {{ if varname }}...{{ fi }}
+    pattern = r'\{\{\s*if\s+(\w+)\s*\}\}(.*?)\{\{\s*fi\s*\}\}'
     
     def replace_conditional(match):
         var_name = match.group(1)
@@ -484,7 +481,8 @@ def process_conditional_blocks(code: str, variables: dict) -> str:
 
 
 def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, obf_method: str = '', 
-                   namespace: str = '', class_name: str = '', entry_point: str = '', args: str = '') -> Tuple[str, str]:
+                   namespace: str = '', class_name: str = '', entry_point: str = '', args: str = '', 
+                   output_path: str = '') -> Tuple[str, str]:
     """Generate a download cradle from ps-features.yaml
     
     Args:
@@ -497,6 +495,7 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
         class_name: .NET class name for assembly loading
         entry_point: Entry point method/function name
         args: Command-line arguments for assembly invocation
+        output_path: Full path to the output directory
         
     Returns:
         Tuple of (cradle_code, command_used)
@@ -532,14 +531,15 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
         'class': class_name,
         'entry_point': entry_point,
         'output_file': output_file,
+        'output_path': output_path,
         'url': url,
         'lhost': lhost,
         'lport': str(lport)
     }
     
-    # Check if this is a command-based cradle or code-based cradle
+    # Execute command if present (for side effects like creating files)
+    command_used = ''
     if 'command' in cradle_feature:
-        # Command-based: Execute the command and use its output
         command_template = cradle_feature.get('command', '').strip()
         
         # Process conditional blocks in command
@@ -547,7 +547,7 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
         
         # Replace variables in command
         for key, value in variables.items():
-            command_template = command_template.replace(f'{{{key}}}', value)
+            command_template = command_template.replace('{{ ' + key + ' }}', value)
         
         try:
             # Execute the command
@@ -559,15 +559,16 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
                 timeout=120
             )
             
-            if result.returncode == 0:
-                cradle_code = result.stdout.strip()
-                command_used = command_template
-            else:
+            command_used = command_template
+            
+            # If command fails, return error
+            if result.returncode != 0:
                 error_msg = f"Command execution failed (exit code {result.returncode})\n"
                 error_msg += f"Command: {command_template}\n"
                 if result.stderr:
                     error_msg += f"Error: {result.stderr}"
                 return '', error_msg
+                
         except subprocess.TimeoutExpired:
             error_msg = f"Command execution timed out after 120s\n"
             error_msg += f"Command: {command_template}"
@@ -576,7 +577,9 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
             error_msg = f"Command execution error: {str(e)}\n"
             error_msg += f"Command: {command_template}"
             return '', error_msg
-    else:
+    
+    # Use code field if present, otherwise use command output
+    if 'code' in cradle_feature:
         # Code-based: Use as template
         cradle_code = cradle_feature.get('code', '').strip()
         
@@ -584,16 +587,22 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
         cradle_code = process_conditional_blocks(cradle_code, variables)
         
         # Then do standard variable replacement
-        cradle_code = cradle_code.replace('{url}', url)
-        cradle_code = cradle_code.replace('{output_file}', output_file)
-        cradle_code = cradle_code.replace('{namespace}', namespace)
-        cradle_code = cradle_code.replace('{class}', class_name)
-        cradle_code = cradle_code.replace('{entry_point}', entry_point)
-        cradle_code = cradle_code.replace('{args}', args)
-        cradle_code = cradle_code.replace('{lhost}', lhost)
-        cradle_code = cradle_code.replace('{lport}', str(lport))
-        
-        command_used = ''
+        cradle_code = cradle_code.replace('{{ url }}', url)
+        cradle_code = cradle_code.replace('{{ output_file }}', output_file)
+        cradle_code = cradle_code.replace('{{ output_path }}', output_path)
+        cradle_code = cradle_code.replace('{{ namespace }}', namespace)
+        cradle_code = cradle_code.replace('{{ class }}', class_name)
+        cradle_code = cradle_code.replace('{{ entry_point }}', entry_point)
+        cradle_code = cradle_code.replace('{{ args }}', args)
+        cradle_code = cradle_code.replace('{{ lhost }}', lhost)
+        cradle_code = cradle_code.replace('{{ lport }}', str(lport))
+    elif 'command' in cradle_feature:
+        # Command-only: Use command stdout as output
+        cradle_code = result.stdout.strip()
+    else:
+        # No code or command field
+        error_msg = f"Cradle '{cradle_name}' must have either 'code' or 'command' field"
+        return '', error_msg
     
     # Apply obfuscation if requested and allowed
     if obf_method and not cradle_feature.get('no-obf', False):
@@ -620,14 +629,13 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
                 rand_deadcode = random.randint(0, 100)
                 rand_seed = random.randint(0, 10000)
                 
-                command = obf_method_data.get('command', '').format(
-                    temp=tmp_in_path,
-                    out=tmp_out_path,
-                    hex_key=rand_hex,
-                    string_dict=rand_stringdict,
-                    dead_code=rand_deadcode,
-                    seed=rand_seed
-                )
+                command = obf_method_data.get('command', '')
+                command = command.replace('{{ temp }}', tmp_in_path)
+                command = command.replace('{{ out }}', tmp_out_path)
+                command = command.replace('{{ hex_key }}', rand_hex)
+                command = command.replace('{{ string_dict }}', str(rand_stringdict))
+                command = command.replace('{{ dead_code }}', str(rand_deadcode))
+                command = command.replace('{{ seed }}', str(rand_seed))
                 
                 command_used = command
                 
@@ -1535,6 +1543,7 @@ def generate_payload():
                         if cradle_method and lhost:
                             # Get output filename from the build
                             output_filename = os.path.basename(output_file)
+                            output_directory = os.path.dirname(output_file)
                             
                             # Generate cradle
                             cradle_step_name = f'Generating download cradle ({cradle_method})'
@@ -1559,7 +1568,8 @@ def generate_payload():
                                 namespace,
                                 class_name,
                                 entry_point,
-                                args
+                                args,
+                                output_directory
                             )
                             
                             if cradle_code:
@@ -1880,6 +1890,161 @@ def _apply_powershell_wrapper(ps_command):
     return wrapper
 
 
+@app.route('/api/obfuscate-ps-generate-cradle', methods=['POST'])
+def generate_ps_obfuscator_cradle():
+    """Generate a PowerShell cradle for the obfuscated PS file
+    
+    Request JSON:
+        filename: Name of the obfuscated PS file saved in output_dir
+        cradle_method: Name of the cradle method to use
+        cradle_obf_method: Optional obfuscation method for the cradle
+        lhost: Listener host for the cradle URL
+        lport: Listener port for the cradle URL
+        
+    Returns:
+        JSON with cradle code
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        filename = data.get('filename', '')
+        cradle_method = data.get('cradle_method', '')
+        cradle_obf_method = data.get('cradle_obf_method', '')
+        lhost = data.get('lhost', '127.0.0.1')
+        lport = data.get('lport', 80)
+        
+        if not filename:
+            return jsonify({'error': 'Filename is required'}), 400
+        
+        if not cradle_method:
+            return jsonify({'error': 'Cradle method is required'}), 400
+        
+        if not lhost:
+            return jsonify({'error': 'LHOST is required'}), 400
+        
+        # Generate the cradle
+        cradle_code, command_used = generate_cradle(
+            cradle_name=cradle_method,
+            lhost=lhost,
+            lport=lport,
+            output_file=filename,
+            obf_method=cradle_obf_method,
+            namespace='',
+            class_name='',
+            entry_point='',
+            args='',
+            output_path=str(config.output_dir)
+        )
+        
+        if not cradle_code:
+            return jsonify({'error': f'Failed to generate cradle: {command_used}'}), 500
+        
+        return jsonify({
+            'success': True,
+            'cradle_code': cradle_code
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/read-file', methods=['POST'])
+def read_file():
+    """Read a file from the filesystem
+    
+    Request JSON:
+        path: File path to read
+        
+    Returns:
+        JSON with file content
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        file_path = data.get('path', '').strip()
+        
+        if not file_path:
+            return jsonify({'error': 'File path is required'}), 400
+        
+        # Convert to Path object and expand user home directory
+        file_path = Path(file_path).expanduser()
+        
+        # Check if file exists
+        if not file_path.exists():
+            return jsonify({'error': f'File not found: {file_path}'}), 404
+        
+        # Check if it's a file
+        if not file_path.is_file():
+            return jsonify({'error': f'Path is not a file: {file_path}'}), 400
+        
+        # Read file content
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            # Try with latin-1 encoding if UTF-8 fails
+            with open(file_path, 'r', encoding='latin-1') as f:
+                content = f.read()
+        
+        return jsonify({
+            'success': True,
+            'content': content,
+            'path': str(file_path)
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/obfuscate-ps-save', methods=['POST'])
+def save_obfuscated_powershell():
+    """Save obfuscated PowerShell to output directory
+    
+    Request JSON:
+        content: Obfuscated PowerShell content
+        filename: Desired filename
+        
+    Returns:
+        JSON with success status and file path
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        content = data.get('content', '')
+        filename = data.get('filename', 'output-o.ps1')
+        
+        if not content:
+            return jsonify({'error': 'Content is required'}), 400
+        
+        # Ensure filename has .ps1 extension
+        if not filename.endswith('.ps1'):
+            filename += '.ps1'
+        
+        # Save to output directory
+        output_path = config.output_dir / filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        return jsonify({
+            'success': True,
+            'path': str(output_path),
+            'filename': filename
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/obfuscate-ps', methods=['POST'])
 def obfuscate_powershell():
     """Obfuscate PowerShell command using YAML-based methods
@@ -1943,14 +2108,23 @@ def obfuscate_powershell():
             rand_deadcode = random.randint(0, 100)
             rand_seed = random.randint(0, 10000)
             
-            # Build command from template
+            # Build command from template (support both {var} and {{var}} syntax with optional spaces)
             command_template = obf_method.get('command', '')
-            command = command_template.replace('{temp}', tmp_in_path)
-            command = command.replace('{out}', tmp_out_path)
-            command = command.replace('{hex_key}', rand_hex)
-            command = command.replace('{string_dict}', str(rand_stringdict))
-            command = command.replace('{dead_code}', str(rand_deadcode))
-            command = command.replace('{seed}', str(rand_seed))
+            import re
+            # Replace {{ var }} style (with optional spaces)
+            command = re.sub(r'\{\{\s*temp\s*\}\}', tmp_in_path, command_template)
+            command = re.sub(r'\{\{\s*out\s*\}\}', tmp_out_path, command)
+            command = re.sub(r'\{\{\s*hex_key\s*\}\}', rand_hex, command)
+            command = re.sub(r'\{\{\s*string_dict\s*\}\}', str(rand_stringdict), command)
+            command = re.sub(r'\{\{\s*dead_code\s*\}\}', str(rand_deadcode), command)
+            command = re.sub(r'\{\{\s*seed\s*\}\}', str(rand_seed), command)
+            # Then replace { var } style (with optional spaces)
+            command = re.sub(r'\{\s*temp\s*\}', tmp_in_path, command)
+            command = re.sub(r'\{\s*out\s*\}', tmp_out_path, command)
+            command = re.sub(r'\{\s*hex_key\s*\}', rand_hex, command)
+            command = re.sub(r'\{\s*string_dict\s*\}', str(rand_stringdict), command)
+            command = re.sub(r'\{\s*dead_code\s*\}', str(rand_deadcode), command)
+            command = re.sub(r'\{\s*seed\s*\}', str(rand_seed), command)
             
             # Execute obfuscation
             result = subprocess.run(

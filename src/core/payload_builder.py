@@ -855,17 +855,17 @@ class PayloadBuilder:
         if file_extension in ['.aspx', '.asp']:
             # Remove HTML comments
             code = re.sub(r'<!--.*?-->', '', code, flags=re.DOTALL)
-            # Remove C# single-line comments (only lines that start with //)
-            code = re.sub(r'^\s*//.*?$', '', code, flags=re.MULTILINE)
-            # Remove C# multi-line comments
+            # Remove C# multi-line comments first
             code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+            # Remove C# single-line comments (both at start of line and inline)
+            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
         
         # C-style comments (C, C++, C#, Java, JavaScript)
         elif file_extension in ['.c', '.cpp', '.cs', '.h', '.hpp', '.java', '.js']:
-            # Remove single-line comments (only lines that start with //)
-            code = re.sub(r'^\s*//.*?$', '', code, flags=re.MULTILINE)
-            # Remove multi-line comments
+            # Remove multi-line comments first
             code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+            # Remove single-line comments (both at start of line and inline)
+            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
         
         # Python comments
         elif file_extension in ['.py']:
@@ -941,12 +941,12 @@ class PayloadBuilder:
                 filtered_lines.append(line)
             code = '\n'.join(filtered_lines)
         
-        # PowerShell - Remove Write-Host, Write-Verbose, Write-Debug (but NOT Write-Output as it's used for returns)
+        # PowerShell - Remove Write-Host, Write-Output, Write-Verbose, Write-Debug, Write-Information, echo
         elif file_extension in ['.ps1']:
             lines = code.split('\n')
             filtered_lines = []
             for line in lines:
-                if re.match(r'^\s*(Write-Host|Write-Verbose|Write-Debug|Write-Information|echo)\s+', line.strip()):
+                if re.match(r'^\s*(Write-Host|Write-Output|Write-Verbose|Write-Debug|Write-Information|echo)\s+', line.strip()):
                     continue
                 filtered_lines.append(line)
             code = '\n'.join(filtered_lines)
