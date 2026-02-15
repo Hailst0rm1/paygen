@@ -516,13 +516,20 @@ def generate_cradle(cradle_name: str, lhost: str, lport: int, output_file: str, 
         error_msg = f"Cradle '{cradle_name}' is missing 'code' or 'command' field (found: {list(cradle_feature.keys())})"
         return '', error_msg
     
-    # Build base URL based on port (without output_file)
-    if lport == 443:
-        url = f'https://{lhost}'
-    elif lport == 80:
-        url = f'http://{lhost}'
-    else:
-        url = f'http://{lhost}:{lport}'
+    # Check if {{ url }} variable is used in the cradle
+    cradle_code_template = cradle_feature.get('code', '')
+    cradle_command_template = cradle_feature.get('command', '')
+    needs_url = '{{ url }}' in cradle_code_template or '{{ url }}' in cradle_command_template
+    
+    # Build base URL based on port (without output_file) - only if needed
+    url = ''
+    if needs_url:
+        if lport == 443:
+            url = f'https://{lhost}'
+        elif lport == 80:
+            url = f'http://{lhost}'
+        else:
+            url = f'http://{lhost}:{lport}'
     
     # Prepare variables for substitution
     variables = {
