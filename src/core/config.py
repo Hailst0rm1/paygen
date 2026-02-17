@@ -123,9 +123,9 @@ class ConfigManager:
     
     @property
     def templates_dir(self) -> Path:
-        """Get templates directory path"""
+        """Get templates directory path (used for AMSI bypasses and legacy templates)"""
         return self.get_path('templates_dir')
-    
+
     @property
     def preprocessors_dir(self) -> Path:
         """Get preprocessors directory path"""

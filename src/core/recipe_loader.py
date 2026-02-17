@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, asdict
 
 from .validator import RecipeValidator, ValidationError
 from .config import get_config
+from .recipe_manager import RecipeManager
 
 
 @dataclass
@@ -31,6 +32,7 @@ class Recipe:
     
     # File metadata
     file_path: Optional[Path] = None
+    version_count: int = 1
     
     @property
     def effectiveness_level(self) -> int:
@@ -104,11 +106,12 @@ class RecipeLoader:
     
     def __init__(self, config=None):
         """Initialize recipe loader
-        
+
         Args:
             config: Optional ConfigManager instance
         """
         self.config = config or get_config()
+        self.recipe_manager = RecipeManager(self.config)
         self.recipes: List[Recipe] = []
         self.recipes_by_category: Dict[str, List[Recipe]] = {}
     
@@ -144,28 +147,31 @@ class RecipeLoader:
     
     def load_recipe(self, file_path: Path) -> Optional[Recipe]:
         """Load a single recipe from YAML file
-        
+
+        Supports both versioned format (versions as top-level key) and
+        legacy format (meta/parameters/output as top-level keys).
+
         Args:
             file_path: Path to recipe YAML file
-            
+
         Returns:
             Recipe object or None if validation fails
         """
         try:
-            with open(file_path, 'r') as f:
-                data = yaml.safe_load(f)
-            
+            # Use recipe_manager to handle versioned/legacy loading
+            data, version_count = self.recipe_manager.load_versioned_recipe(file_path)
+
             if not data:
                 print(f"Warning: Empty recipe file: {file_path}")
                 return None
-            
+
             # Validate recipe structure
             RecipeValidator.validate_recipe(data)
-            
+
             # Extract meta information
             meta = data['meta']
             mitre = meta.get('mitre', {})
-            
+
             # Create Recipe object
             recipe = Recipe(
                 name=meta['name'],
@@ -180,11 +186,12 @@ class RecipeLoader:
                 parameters=data.get('parameters', []),
                 preprocessing=data.get('preprocessing', []),
                 output=data.get('output', {}),
-                file_path=file_path
+                file_path=file_path,
+                version_count=version_count
             )
-            
+
             return recipe
-            
+
         except ValidationError as e:
             print(f"Validation error in {file_path}: {e}")
             return None

@@ -138,6 +138,9 @@
         <aside class="panel panel-left">
             <div class="panel-header">
                 <h2>Recipes</h2>
+                <div class="panel-header-actions">
+                    <button id="create-recipe-btn" class="icon-btn" title="Create New Recipe">+</button>
+                </div>
             </div>
             <div class="panel-content" id="categories-panel">
                 <input type="text" id="recipe-search" class="recipe-search-input" placeholder="Search recipes... (press /)">
@@ -393,7 +396,173 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v=2.2"></script>
+    <!-- Modal: Recipe Editor -->
+    <div id="recipe-editor-modal" class="modal">
+        <div class="modal-content editor-modal">
+            <div class="modal-header">
+                <h2 id="editor-modal-title">Create Recipe</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="editor-tabs">
+                <button class="editor-tab active" data-tab="meta">Meta</button>
+                <button class="editor-tab" data-tab="parameters">Parameters</button>
+                <button class="editor-tab" data-tab="preprocessing">Preprocessing</button>
+                <button class="editor-tab" data-tab="output">Output</button>
+            </div>
+            <div class="modal-body">
+                <!-- Meta Tab -->
+                <div class="editor-tab-content active" data-tab="meta">
+                    <div class="editor-field-row">
+                        <div class="editor-field">
+                            <label>Name *</label>
+                            <input type="text" id="editor-name" placeholder="Recipe name">
+                        </div>
+                        <div class="editor-field">
+                            <label>Category *</label>
+                            <input type="text" id="editor-category" list="editor-categories" placeholder="e.g., Process Injection">
+                            <datalist id="editor-categories"></datalist>
+                        </div>
+                    </div>
+                    <div class="editor-field">
+                        <label>Description *</label>
+                        <textarea id="editor-description" rows="4" placeholder="Describe what this recipe does..."></textarea>
+                    </div>
+                    <div class="editor-field-row">
+                        <div class="editor-field">
+                            <label>Platform</label>
+                            <select id="editor-platform">
+                                <option value="">None</option>
+                                <option value="Windows">Windows</option>
+                                <option value="Linux">Linux</option>
+                                <option value="macOS">macOS</option>
+                            </select>
+                        </div>
+                        <div class="editor-field">
+                            <label>Effectiveness *</label>
+                            <select id="editor-effectiveness">
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="editor-field-row">
+                        <div class="editor-field">
+                            <label>MITRE Tactic</label>
+                            <input type="text" id="editor-mitre-tactic" placeholder="e.g., TA0005 - Defense Evasion">
+                        </div>
+                        <div class="editor-field">
+                            <label>MITRE Technique</label>
+                            <input type="text" id="editor-mitre-technique" placeholder="e.g., T1055 - Process Injection">
+                        </div>
+                    </div>
+                    <div class="editor-field">
+                        <label>Artifacts</label>
+                        <div id="editor-artifacts-list"></div>
+                        <button class="editor-list-add" id="editor-add-artifact">+ Add Artifact</button>
+                    </div>
+                </div>
+
+                <!-- Parameters Tab -->
+                <div class="editor-tab-content" data-tab="parameters">
+                    <div id="editor-params-list"></div>
+                    <button class="editor-list-add" id="editor-add-param">+ Add Parameter</button>
+                </div>
+
+                <!-- Preprocessing Tab -->
+                <div class="editor-tab-content" data-tab="preprocessing">
+                    <div id="editor-preproc-list"></div>
+                    <button class="editor-list-add" id="editor-add-preproc">+ Add Preprocessing Step</button>
+                </div>
+
+                <!-- Output Tab -->
+                <div class="editor-tab-content" data-tab="output">
+                    <div class="editor-field">
+                        <label>Output Type *</label>
+                        <select id="editor-output-type">
+                            <option value="template">Template</option>
+                            <option value="command">Command</option>
+                        </select>
+                    </div>
+                    <div id="editor-template-fields">
+                        <div class="editor-field">
+                            <label>Template Extension *</label>
+                            <select id="editor-template-ext">
+                                <option value=".cs">.cs (C#)</option>
+                                <option value=".ps1">.ps1 (PowerShell)</option>
+                                <option value=".py">.py (Python)</option>
+                                <option value=".c">.c (C)</option>
+                                <option value=".cpp">.cpp (C++)</option>
+                                <option value=".sh">.sh (Bash)</option>
+                                <option value=".hta">.hta (HTA)</option>
+                            </select>
+                        </div>
+                        <div class="editor-field">
+                            <label>Template Code *</label>
+                            <textarea id="editor-template-code" class="code-textarea" rows="12" placeholder="Paste your template code here..."></textarea>
+                        </div>
+                    </div>
+                    <div id="editor-command-fields" style="display:none;">
+                        <div class="editor-field">
+                            <label>Command *</label>
+                            <textarea id="editor-command" class="code-textarea" rows="4" placeholder="e.g., msfvenom -p windows/x64/..."></textarea>
+                        </div>
+                    </div>
+                    <div class="editor-field">
+                        <label>Compile Enabled</label>
+                        <label class="param-form-checkbox-label">
+                            <input type="checkbox" id="editor-compile-enabled" class="param-form-checkbox">
+                            Enable compilation step
+                        </label>
+                    </div>
+                    <div id="editor-compile-fields" style="display:none;">
+                        <div class="editor-field">
+                            <label>Compile Command</label>
+                            <input type="text" id="editor-compile-command" placeholder="e.g., mcs -out:{{ output_path }}/{{ output_file }} ...">
+                        </div>
+                    </div>
+                    <div class="editor-field">
+                        <label>Launch Instructions</label>
+                        <textarea id="editor-launch-instructions" rows="6" placeholder="Instructions for running the generated payload..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="editor-footer">
+                <input type="text" id="editor-version-comment" class="editor-comment-input" placeholder="Version comment (e.g., Initial version)">
+                <div class="editor-footer-buttons">
+                    <button id="editor-cancel-btn" class="btn btn-secondary">Cancel</button>
+                    <button id="editor-validate-btn" class="btn btn-secondary">Validate</button>
+                    <button id="editor-save-btn" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Version History -->
+    <div id="version-history-modal" class="modal">
+        <div class="modal-content version-modal">
+            <div class="modal-header">
+                <h2 id="version-modal-title">Version History</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="version-list" class="version-list">
+                    <!-- Version entries will be inserted here -->
+                </div>
+                <div id="version-detail" class="version-detail" style="display:none;">
+                    <pre><code id="version-detail-code"></code></pre>
+                </div>
+                <div id="version-detail-actions" class="version-detail-actions" style="display:none;">
+                    <button id="version-restore-btn" class="btn btn-primary btn-sm">Restore This Version</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="version-close-btn" class="btn btn-secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=3.0"></script>
     <script>
         // Set build debug flag from backend config
         window.showBuildDebug = {{ 'true' if show_build_debug else 'false' }};

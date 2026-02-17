@@ -1795,3 +1795,293 @@ code {
     padding: 0.4rem 0.8rem !important;
     font-size: 0.85rem !important;
 }
+
+/* Recipe Editor Modal */
+.modal-content.editor-modal {
+    max-width: 900px;
+    max-height: 90vh;
+}
+
+.editor-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--surface1);
+    background-color: var(--mantle);
+}
+
+.editor-tab {
+    padding: 0.6rem 1.2rem;
+    background: none;
+    border: none;
+    color: var(--subtext0);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+}
+
+.editor-tab:hover {
+    color: var(--text);
+    background-color: var(--surface0);
+}
+
+.editor-tab.active {
+    color: var(--mauve);
+    border-bottom-color: var(--mauve);
+}
+
+.editor-tab-content {
+    display: none;
+    padding: 1rem 0;
+}
+
+.editor-tab-content.active {
+    display: block;
+}
+
+.editor-field {
+    margin-bottom: 1rem;
+}
+
+.editor-field label {
+    display: block;
+    color: var(--text);
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+}
+
+.editor-field input,
+.editor-field select,
+.editor-field textarea {
+    width: 100%;
+    padding: 0.5rem;
+    background-color: var(--mantle);
+    border: 1px solid var(--surface1);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.editor-field input:focus,
+.editor-field select:focus,
+.editor-field textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+}
+
+.editor-field textarea {
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.editor-field textarea.code-textarea {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    min-height: 200px;
+}
+
+.editor-field-row {
+    display: flex;
+    gap: 1rem;
+}
+
+.editor-field-row .editor-field {
+    flex: 1;
+}
+
+.editor-field-hint {
+    color: var(--subtext0);
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+    font-style: italic;
+}
+
+/* Dynamic list items (parameters, preprocessing, artifacts) */
+.editor-list-item {
+    background-color: var(--surface0);
+    border: 1px solid var(--surface1);
+    border-radius: 4px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    position: relative;
+}
+
+.editor-list-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.editor-list-item-title {
+    font-weight: 500;
+    color: var(--blue);
+    font-size: 0.9rem;
+}
+
+.editor-list-remove {
+    background: none;
+    border: none;
+    color: var(--red);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+
+.editor-list-remove:hover {
+    background-color: rgba(243, 139, 168, 0.15);
+}
+
+.editor-list-add {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    background-color: var(--surface0);
+    border: 1px dashed var(--surface2);
+    border-radius: 4px;
+    color: var(--subtext0);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    margin-top: 0.5rem;
+}
+
+.editor-list-add:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+    background-color: var(--surface1);
+}
+
+.editor-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--surface1);
+}
+
+.editor-footer .editor-comment-input {
+    flex: 1;
+    padding: 0.5rem;
+    background-color: var(--mantle);
+    border: 1px solid var(--surface1);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.editor-footer .editor-comment-input:focus {
+    outline: none;
+    border-color: var(--blue);
+}
+
+.editor-footer-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Version History Modal */
+.modal-content.version-modal {
+    max-width: 750px;
+    max-height: 80vh;
+}
+
+.version-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.version-item {
+    background-color: var(--mantle);
+    border: 1px solid var(--surface1);
+    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.version-item:hover {
+    background-color: var(--surface0);
+    border-color: var(--blue);
+}
+
+.version-item.active {
+    border-color: var(--mauve);
+    background-color: var(--surface0);
+}
+
+.version-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.version-item-number {
+    font-weight: 600;
+    color: var(--mauve);
+    font-size: 0.95rem;
+}
+
+.version-item-timestamp {
+    color: var(--subtext0);
+    font-size: 0.8rem;
+}
+
+.version-item-comment {
+    color: var(--text);
+    font-size: 0.85rem;
+    margin-top: 0.3rem;
+}
+
+.version-detail {
+    margin-top: 1rem;
+    background-color: var(--mantle);
+    border: 1px solid var(--surface1);
+    border-radius: 4px;
+    padding: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.version-detail pre {
+    margin: 0;
+    padding: 0.5rem;
+    background-color: var(--crust) !important;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    overflow-x: auto;
+}
+
+.version-detail-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+/* Recipe action buttons in middle panel */
+.recipe-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.recipe-actions .btn {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+}
+
+/* Panel header button group */
+.panel-header-actions {
+    display: flex;
+    gap: 0.3rem;
+    align-items: center;
+}

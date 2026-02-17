@@ -24,9 +24,10 @@ from flask_cors import CORS
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.core.config import get_config
 from src.core.recipe_loader import RecipeLoader
+from src.core.recipe_manager import RecipeManager
 from src.core.payload_builder import PayloadBuilder, BuildStep
 from src.core.history import HistoryManager
-from src.core.validator import ParameterValidator, ValidationError
+from src.core.validator import ParameterValidator, RecipeValidator, ValidationError
 
 
 # Global state
@@ -42,6 +43,7 @@ build_locks: Dict[str, threading.Lock] = {}
 # Configuration and data
 config = None
 recipe_loader = None
+recipe_manager = None
 recipes = []
 history_manager = None
 ps_obfuscation_methods = []
@@ -930,7 +932,7 @@ def obfuscate_csharp_identifiers(code: str) -> tuple:
 
 def init_app():
     """Initialize the Flask application with paygen configuration"""
-    global config, recipe_loader, recipes, history_manager, ps_obfuscation_methods, ps_features
+    global config, recipe_loader, recipe_manager, recipes, history_manager, ps_obfuscation_methods, ps_features
     
     # Load configuration
     try:
@@ -944,6 +946,7 @@ def init_app():
     # Load recipes
     try:
         recipe_loader = RecipeLoader(config)
+        recipe_manager = RecipeManager(config)
         recipes = recipe_loader.load_all_recipes()
     except Exception as e:
         print(f"✗ Failed to load recipes: {e}", file=sys.stderr)
@@ -1081,7 +1084,8 @@ def get_recipes():
             'output': recipe.output,
             'launch_instructions': recipe.launch_instructions,
             'is_template_based': recipe.is_template_based,
-            'is_command_based': recipe.is_command_based
+            'is_command_based': recipe.is_command_based,
+            'version_count': recipe.version_count
         }
         categories[category].append(recipe_dict)
     
@@ -1131,9 +1135,10 @@ def get_recipe(category, name):
                 'output': recipe.output,
                 'launch_instructions': recipe.launch_instructions,
                 'is_template_based': recipe.is_template_based,
-                'is_command_based': recipe.is_command_based
+                'is_command_based': recipe.is_command_based,
+                'version_count': recipe.version_count
             })
-    
+
     return jsonify({'error': 'Recipe not found'}), 404
 
 
@@ -1150,25 +1155,39 @@ def get_recipe_code(category, name):
             output_type = recipe.output.get('type', '')
             
             if output_type == 'template' or recipe.is_template_based:
-                # Load template file
-                template_path = config.templates_dir / recipe.output.get('template', '')
+                template_value = recipe.output.get('template', '')
+                template_ext = recipe.output.get('template_ext', '')
+
+                language_map = {
+                    '.cs': 'csharp',
+                    '.ps1': 'powershell',
+                    '.py': 'python',
+                    '.c': 'c',
+                    '.cpp': 'cpp',
+                    '.sh': 'bash',
+                    '.js': 'javascript',
+                    '.hta': 'html'
+                }
+
+                # Check if inline template (multiline)
+                if '\n' in str(template_value):
+                    language = language_map.get(template_ext.lower(), 'text')
+                    return jsonify({
+                        'type': 'template',
+                        'code': template_value,
+                        'language': language,
+                        'path': 'inline'
+                    })
+
+                # Legacy file path reference
+                template_path = config.templates_dir / template_value
                 try:
                     with open(template_path, 'r') as f:
                         code = f.read()
-                    
-                    # Detect language from extension
+
                     ext = template_path.suffix.lower()
-                    language_map = {
-                        '.cs': 'csharp',
-                        '.ps1': 'powershell',
-                        '.py': 'python',
-                        '.c': 'c',
-                        '.cpp': 'cpp',
-                        '.sh': 'bash',
-                        '.js': 'javascript'
-                    }
                     language = language_map.get(ext, 'text')
-                    
+
                     return jsonify({
                         'type': 'template',
                         'code': code,
@@ -1190,6 +1209,145 @@ def get_recipe_code(category, name):
             return jsonify({'error': 'Unknown output type'}), 400
     
     return jsonify({'error': 'Recipe not found'}), 404
+
+
+# --- Recipe CRUD & Versioning Endpoints ---
+
+@app.route('/api/recipes/create', methods=['POST'])
+def create_recipe():
+    """Create a new recipe from JSON data"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No JSON data provided'}), 400
+
+    comment = data.pop('_comment', 'Initial version')
+    recipe_data = data.get('recipe', data)
+
+    try:
+        file_path = recipe_manager.create_recipe(recipe_data, comment=comment)
+        # Reload recipes
+        recipe_loader.load_all_recipes()
+        return jsonify({
+            'success': True,
+            'message': f'Recipe created successfully',
+            'file_path': str(file_path)
+        }), 201
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to create recipe: {e}'}), 500
+
+
+@app.route('/api/recipes/validate', methods=['POST'])
+def validate_recipe():
+    """Validate recipe JSON without saving"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No JSON data provided'}), 400
+
+    recipe_data = data.get('recipe', data)
+
+    try:
+        RecipeValidator.validate_recipe(recipe_data)
+        return jsonify({'valid': True, 'message': 'Recipe is valid'})
+    except ValidationError as e:
+        return jsonify({'valid': False, 'error': str(e)}), 400
+
+
+@app.route('/api/recipe/<category>/<name>', methods=['PUT'])
+def update_recipe(category, name):
+    """Update an existing recipe, appending a new version"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No JSON data provided'}), 400
+
+    comment = data.pop('_comment', 'Updated')
+    recipe_data = data.get('recipe', data)
+
+    try:
+        file_path = recipe_manager.update_recipe(category, name, recipe_data, comment=comment)
+        # Reload recipes
+        recipe_loader.load_all_recipes()
+        return jsonify({
+            'success': True,
+            'message': 'Recipe updated successfully',
+            'file_path': str(file_path)
+        })
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to update recipe: {e}'}), 500
+
+
+@app.route('/api/recipe/<category>/<name>', methods=['DELETE'])
+def delete_recipe(category, name):
+    """Delete a recipe file"""
+    try:
+        recipe_manager.delete_recipe(category, name)
+        # Reload recipes
+        recipe_loader.load_all_recipes()
+        return jsonify({'success': True, 'message': 'Recipe deleted successfully'})
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': f'Failed to delete recipe: {e}'}), 500
+
+
+@app.route('/api/recipe/<category>/<name>/raw')
+def get_recipe_raw(category, name):
+    """Get reconstructed recipe data for editing"""
+    try:
+        recipe_data = recipe_manager.get_recipe_raw(category, name)
+        return jsonify(recipe_data)
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': f'Failed to get recipe data: {e}'}), 500
+
+
+@app.route('/api/recipe/<category>/<name>/versions')
+def get_recipe_versions(category, name):
+    """List version metadata for a recipe"""
+    try:
+        versions = recipe_manager.get_versions(category, name)
+        return jsonify({'versions': versions})
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': f'Failed to get versions: {e}'}), 500
+
+
+@app.route('/api/recipe/<category>/<name>/versions/<int:ver>')
+def get_recipe_version_content(category, name, ver):
+    """Get reconstructed recipe state at a given version"""
+    try:
+        content = recipe_manager.get_version_content(category, name, ver)
+        return jsonify(content)
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': f'Failed to get version content: {e}'}), 500
+
+
+@app.route('/api/recipe/<category>/<name>/versions/<int:ver>/restore', methods=['POST'])
+def restore_recipe_version(category, name, ver):
+    """Restore a previous version as new current"""
+    data = request.json or {}
+    comment = data.get('comment', f'Restored to version {ver}')
+
+    try:
+        file_path = recipe_manager.restore_version(category, name, ver, comment=comment)
+        # Reload recipes
+        recipe_loader.load_all_recipes()
+        return jsonify({
+            'success': True,
+            'message': f'Version {ver} restored successfully',
+            'file_path': str(file_path)
+        })
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': f'Failed to restore version: {e}'}), 500
 
 
 @app.route('/api/validate-parameter', methods=['POST'])

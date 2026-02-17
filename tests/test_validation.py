@@ -248,5 +248,83 @@ class TestPlatformValidation:
             RecipeValidator.validate_recipe(recipe_data)
 
 
+class TestInlineTemplateValidation:
+    """Test inline template validation."""
+
+    def test_inline_template_with_ext(self):
+        """Test that inline template with template_ext is valid."""
+        from src.core.validator import RecipeValidator
+        recipe_data = {
+            'meta': {
+                'name': 'Inline Test',
+                'category': 'Test',
+                'description': 'Test inline template',
+                'effectiveness': 'medium'
+            },
+            'parameters': [],
+            'output': {
+                'type': 'template',
+                'template_ext': '.cs',
+                'template': 'using System;\nConsole.WriteLine("hello");'
+            }
+        }
+        assert RecipeValidator.validate_recipe(recipe_data)
+
+    def test_inline_template_missing_ext(self):
+        """Test that inline template without template_ext raises error."""
+        from src.core.validator import RecipeValidator
+        recipe_data = {
+            'meta': {
+                'name': 'Inline Test',
+                'category': 'Test',
+                'description': 'Test inline template',
+                'effectiveness': 'medium'
+            },
+            'parameters': [],
+            'output': {
+                'type': 'template',
+                'template': 'using System;\nConsole.WriteLine("hello");'
+            }
+        }
+        with pytest.raises(ValidationError, match="template_ext"):
+            RecipeValidator.validate_recipe(recipe_data)
+
+    def test_file_path_template_no_ext_required(self):
+        """Test that file path template (single line) doesn't require template_ext."""
+        from src.core.validator import RecipeValidator
+        recipe_data = {
+            'meta': {
+                'name': 'File Template Test',
+                'category': 'Test',
+                'description': 'Test file path template',
+                'effectiveness': 'medium'
+            },
+            'parameters': [],
+            'output': {
+                'type': 'template',
+                'template': 'process_injection/injector.cs'
+            }
+        }
+        assert RecipeValidator.validate_recipe(recipe_data)
+
+    def test_command_output_missing_command(self):
+        """Test that command output without command field raises error."""
+        from src.core.validator import RecipeValidator
+        recipe_data = {
+            'meta': {
+                'name': 'Command Test',
+                'category': 'Test',
+                'description': 'Test command output',
+                'effectiveness': 'low'
+            },
+            'parameters': [],
+            'output': {
+                'type': 'command'
+            }
+        }
+        with pytest.raises(ValidationError, match="missing 'command' field"):
+            RecipeValidator.validate_recipe(recipe_data)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -602,13 +602,22 @@ function renderRecipeDetails(recipe) {
     }
     
     html += '</div>'; // Close recipe-meta
-    
-    // Generate button (pinned to bottom)
+
+    // Generate button (pinned to bottom) with recipe actions
+    html += `<div style="flex-shrink:0;">`;
+    html += `<div class="recipe-actions" style="padding: 0.5rem 1rem 0 1rem;">`;
+    html += `<button class="btn btn-secondary btn-sm" onclick="openEditorForEdit()">Edit</button>`;
+    if (recipe.version_count && recipe.version_count > 0) {
+        html += `<button class="btn btn-secondary btn-sm" onclick="openVersionHistory()">Versions (${recipe.version_count})</button>`;
+    }
+    html += `<button class="btn btn-danger btn-sm" onclick="deleteCurrentRecipe()">Delete</button>`;
+    html += `</div>`;
     html += `
         <button class="btn btn-generate" onclick="showParameterForm()">
             <span class="btn-icon">🚀</span> Generate Payload
         </button>
     `;
+    html += `</div>`;
     
     panel.innerHTML = html;
     
@@ -3833,14 +3842,580 @@ function processParameterDefault(defaultValue, paramName) {
     if (typeof defaultValue !== 'string') {
         return defaultValue;
     }
-    
+
     let processed = defaultValue;
-    
+
     // Replace {{ global.lhost }} with the actual global LHOST setting
     if (processed.includes('{{ global.lhost }}') || processed.includes('{{global.lhost}}')) {
         const globalLhost = getDefaultLhost() || '127.0.0.1';
         processed = processed.replace(/\{\{\s*global\.lhost\s*\}\}/g, globalLhost);
     }
-    
+
     return processed;
 }
+
+
+// ===== RECIPE EDITOR =====
+
+let editorMode = 'create'; // 'create' or 'edit'
+let editorOriginalCategory = '';
+let editorOriginalName = '';
+
+function openEditor(mode, recipeData) {
+    editorMode = mode;
+    const modal = document.getElementById('recipe-editor-modal');
+    const title = document.getElementById('editor-modal-title');
+
+    title.textContent = mode === 'create' ? 'Create Recipe' : 'Edit Recipe';
+
+    // Populate category datalist
+    const datalist = document.getElementById('editor-categories');
+    datalist.innerHTML = '';
+    if (categories) {
+        Object.keys(categories).forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            datalist.appendChild(opt);
+        });
+    }
+
+    if (recipeData) {
+        populateEditor(recipeData);
+    } else {
+        clearEditor();
+    }
+
+    // Show first tab
+    switchEditorTab('meta');
+    modal.classList.add('active');
+}
+
+function clearEditor() {
+    document.getElementById('editor-name').value = '';
+    document.getElementById('editor-category').value = '';
+    document.getElementById('editor-description').value = '';
+    document.getElementById('editor-platform').value = '';
+    document.getElementById('editor-effectiveness').value = 'medium';
+    document.getElementById('editor-mitre-tactic').value = '';
+    document.getElementById('editor-mitre-technique').value = '';
+    document.getElementById('editor-artifacts-list').innerHTML = '';
+    document.getElementById('editor-params-list').innerHTML = '';
+    document.getElementById('editor-preproc-list').innerHTML = '';
+    document.getElementById('editor-output-type').value = 'template';
+    document.getElementById('editor-template-ext').value = '.cs';
+    document.getElementById('editor-template-code').value = '';
+    document.getElementById('editor-command').value = '';
+    document.getElementById('editor-compile-enabled').checked = false;
+    document.getElementById('editor-compile-command').value = '';
+    document.getElementById('editor-launch-instructions').value = '';
+    document.getElementById('editor-version-comment').value = editorMode === 'create' ? 'Initial version' : '';
+    toggleOutputFields();
+    toggleCompileFields();
+}
+
+function populateEditor(data) {
+    const meta = data.meta || {};
+    const mitre = meta.mitre || {};
+    const output = data.output || {};
+    const compile = output.compile || {};
+
+    document.getElementById('editor-name').value = meta.name || '';
+    document.getElementById('editor-category').value = meta.category || '';
+    document.getElementById('editor-description').value = meta.description || '';
+    document.getElementById('editor-platform').value = meta.platform || '';
+    document.getElementById('editor-effectiveness').value = meta.effectiveness || 'medium';
+    document.getElementById('editor-mitre-tactic').value = mitre.tactic || '';
+    document.getElementById('editor-mitre-technique').value = mitre.technique || '';
+
+    editorOriginalCategory = meta.category || '';
+    editorOriginalName = meta.name || '';
+
+    // Artifacts
+    const artifactsList = document.getElementById('editor-artifacts-list');
+    artifactsList.innerHTML = '';
+    (meta.artifacts || []).forEach(a => addArtifactRow(a));
+
+    // Parameters
+    const paramsList = document.getElementById('editor-params-list');
+    paramsList.innerHTML = '';
+    (data.parameters || []).forEach(p => addParamRow(p));
+
+    // Preprocessing
+    const preprocList = document.getElementById('editor-preproc-list');
+    preprocList.innerHTML = '';
+    (data.preprocessing || []).forEach(p => addPreprocRow(p));
+
+    // Output
+    document.getElementById('editor-output-type').value = output.type || 'template';
+    if (output.type === 'template') {
+        document.getElementById('editor-template-ext').value = output.template_ext || '.cs';
+        const tmpl = output.template || '';
+        document.getElementById('editor-template-code').value = tmpl;
+    } else {
+        document.getElementById('editor-command').value = output.command || '';
+    }
+
+    document.getElementById('editor-compile-enabled').checked = compile.enabled || false;
+    document.getElementById('editor-compile-command').value = compile.command || '';
+    document.getElementById('editor-launch-instructions').value = output.launch_instructions || '';
+    document.getElementById('editor-version-comment').value = '';
+
+    toggleOutputFields();
+    toggleCompileFields();
+}
+
+function switchEditorTab(tabName) {
+    document.querySelectorAll('.editor-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+    document.querySelectorAll('.editor-tab-content').forEach(c => c.classList.toggle('active', c.dataset.tab === tabName));
+}
+
+function toggleOutputFields() {
+    const type = document.getElementById('editor-output-type').value;
+    document.getElementById('editor-template-fields').style.display = type === 'template' ? '' : 'none';
+    document.getElementById('editor-command-fields').style.display = type === 'command' ? '' : 'none';
+}
+
+function toggleCompileFields() {
+    const enabled = document.getElementById('editor-compile-enabled').checked;
+    document.getElementById('editor-compile-fields').style.display = enabled ? '' : 'none';
+}
+
+// Artifact rows
+function addArtifactRow(value) {
+    const list = document.getElementById('editor-artifacts-list');
+    const div = document.createElement('div');
+    div.className = 'editor-list-item';
+    div.innerHTML = `
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+            <input type="text" class="param-form-input artifact-input" value="${escapeHtml(value || '')}" placeholder="Artifact description">
+            <button class="editor-list-remove" onclick="this.parentElement.parentElement.remove()">&times;</button>
+        </div>
+    `;
+    list.appendChild(div);
+}
+
+// Parameter rows
+function addParamRow(param) {
+    const list = document.getElementById('editor-params-list');
+    const div = document.createElement('div');
+    div.className = 'editor-list-item';
+    const p = param || {};
+    div.innerHTML = `
+        <div class="editor-list-item-header">
+            <span class="editor-list-item-title">Parameter</span>
+            <button class="editor-list-remove" onclick="this.closest('.editor-list-item').remove()">&times;</button>
+        </div>
+        <div class="editor-field-row">
+            <div class="editor-field"><label>Name *</label><input type="text" class="param-form-input p-name" value="${escapeHtml(p.name || '')}"></div>
+            <div class="editor-field"><label>Type</label>
+                <select class="param-form-select p-type">
+                    <option value="string" ${p.type==='string'?'selected':''}>string</option>
+                    <option value="ip" ${p.type==='ip'?'selected':''}>ip</option>
+                    <option value="port" ${p.type==='port'?'selected':''}>port</option>
+                    <option value="path" ${p.type==='path'?'selected':''}>path</option>
+                    <option value="file" ${p.type==='file'?'selected':''}>file</option>
+                    <option value="hex" ${p.type==='hex'?'selected':''}>hex</option>
+                    <option value="bool" ${p.type==='bool'?'selected':''}>bool</option>
+                    <option value="integer" ${p.type==='integer'?'selected':''}>integer</option>
+                    <option value="choice" ${p.type==='choice'?'selected':''}>choice</option>
+                </select>
+            </div>
+        </div>
+        <div class="editor-field"><label>Description</label><input type="text" class="param-form-input p-desc" value="${escapeHtml(p.description || '')}"></div>
+        <div class="editor-field-row">
+            <div class="editor-field"><label>Default</label><input type="text" class="param-form-input p-default" value="${escapeHtml(String(p.default || ''))}"></div>
+            <div class="editor-field"><label>Required</label>
+                <select class="param-form-select p-required">
+                    <option value="true" ${p.required===true||p.required==='true'?'selected':''}>Yes</option>
+                    <option value="false" ${p.required===false||p.required==='false'?'selected':''}>No</option>
+                </select>
+            </div>
+        </div>
+        ${p.required_for ? `<div class="editor-field"><label>Required For</label><input type="text" class="param-form-input p-required-for" value="${escapeHtml(p.required_for || '')}"></div>` : ''}
+    `;
+    list.appendChild(div);
+}
+
+// Preprocessing rows
+function addPreprocRow(step) {
+    const list = document.getElementById('editor-preproc-list');
+    const div = document.createElement('div');
+    div.className = 'editor-list-item';
+    const s = step || {};
+    div.innerHTML = `
+        <div class="editor-list-item-header">
+            <span class="editor-list-item-title">Step: ${escapeHtml(s.name || 'New Step')}</span>
+            <button class="editor-list-remove" onclick="this.closest('.editor-list-item').remove()">&times;</button>
+        </div>
+        <div class="editor-field-row">
+            <div class="editor-field"><label>Type</label>
+                <select class="param-form-select pp-type">
+                    <option value="command" ${s.type==='command'?'selected':''}>command</option>
+                    <option value="script" ${s.type==='script'?'selected':''}>script</option>
+                    <option value="shellcode" ${s.type==='shellcode'?'selected':''}>shellcode</option>
+                    <option value="option" ${s.type==='option'?'selected':''}>option</option>
+                </select>
+            </div>
+            <div class="editor-field"><label>Name</label><input type="text" class="param-form-input pp-name" value="${escapeHtml(s.name || '')}"></div>
+        </div>
+        <div class="editor-field"><label>Output Variable</label><input type="text" class="param-form-input pp-output-var" value="${escapeHtml(s.output_var || '')}"></div>
+        ${s.type === 'command' ? `<div class="editor-field"><label>Command</label><textarea class="param-form-input pp-command" rows="2">${escapeHtml(s.command || '')}</textarea></div>` : ''}
+        ${s.type === 'script' ? `<div class="editor-field"><label>Script</label><input type="text" class="param-form-input pp-script" value="${escapeHtml(s.script || '')}"></div>` : ''}
+    `;
+    list.appendChild(div);
+}
+
+function collectEditorData() {
+    const meta = {
+        name: document.getElementById('editor-name').value.trim(),
+        category: document.getElementById('editor-category').value.trim() || 'Misc',
+        description: document.getElementById('editor-description').value.trim(),
+        effectiveness: document.getElementById('editor-effectiveness').value
+    };
+
+    const platform = document.getElementById('editor-platform').value;
+    if (platform) meta.platform = platform;
+
+    const tactic = document.getElementById('editor-mitre-tactic').value.trim();
+    const technique = document.getElementById('editor-mitre-technique').value.trim();
+    if (tactic || technique) {
+        meta.mitre = {};
+        if (tactic) meta.mitre.tactic = tactic;
+        if (technique) meta.mitre.technique = technique;
+    }
+
+    // Artifacts
+    const artifacts = [];
+    document.querySelectorAll('#editor-artifacts-list .artifact-input').forEach(inp => {
+        const v = inp.value.trim();
+        if (v) artifacts.push(v);
+    });
+    if (artifacts.length) meta.artifacts = artifacts;
+
+    // Parameters
+    const parameters = [];
+    document.querySelectorAll('#editor-params-list .editor-list-item').forEach(item => {
+        const p = {
+            name: item.querySelector('.p-name').value.trim(),
+            type: item.querySelector('.p-type').value,
+            description: item.querySelector('.p-desc')?.value.trim() || '',
+            required: item.querySelector('.p-required').value === 'true'
+        };
+        const def = item.querySelector('.p-default')?.value.trim();
+        if (def !== '') {
+            // Try to parse as number for port/integer types
+            if (p.type === 'port' || p.type === 'integer') {
+                p.default = parseInt(def, 10) || def;
+            } else {
+                p.default = def;
+            }
+        }
+        const reqFor = item.querySelector('.p-required-for');
+        if (reqFor && reqFor.value.trim()) {
+            p.required_for = reqFor.value.trim();
+        }
+        if (p.name) parameters.push(p);
+    });
+
+    // Preprocessing
+    const preprocessing = [];
+    document.querySelectorAll('#editor-preproc-list .editor-list-item').forEach(item => {
+        const s = {
+            type: item.querySelector('.pp-type').value,
+            name: item.querySelector('.pp-name').value.trim(),
+            output_var: item.querySelector('.pp-output-var')?.value.trim() || ''
+        };
+        const cmd = item.querySelector('.pp-command');
+        if (cmd) s.command = cmd.value.trim();
+        const script = item.querySelector('.pp-script');
+        if (script) s.script = script.value.trim();
+        if (s.name || s.type) preprocessing.push(s);
+    });
+
+    // Output
+    const outputType = document.getElementById('editor-output-type').value;
+    const output = { type: outputType };
+
+    if (outputType === 'template') {
+        output.template_ext = document.getElementById('editor-template-ext').value;
+        output.template = document.getElementById('editor-template-code').value;
+    } else {
+        output.command = document.getElementById('editor-command').value.trim();
+    }
+
+    if (document.getElementById('editor-compile-enabled').checked) {
+        output.compile = {
+            enabled: true,
+            command: document.getElementById('editor-compile-command').value.trim()
+        };
+    }
+
+    const launchInstr = document.getElementById('editor-launch-instructions').value.trim();
+    if (launchInstr) output.launch_instructions = launchInstr;
+
+    return { meta, parameters, preprocessing, output };
+}
+
+async function saveRecipe() {
+    const recipeData = collectEditorData();
+    const comment = document.getElementById('editor-version-comment').value.trim() || (editorMode === 'create' ? 'Initial version' : 'Updated');
+
+    try {
+        let resp;
+        if (editorMode === 'create') {
+            resp = await fetch('/api/recipes/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recipe: recipeData, _comment: comment })
+            });
+        } else {
+            resp = await fetch(`/api/recipe/${encodeURIComponent(editorOriginalCategory)}/${encodeURIComponent(editorOriginalName)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ recipe: recipeData, _comment: comment })
+            });
+        }
+
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            closeModal('recipe-editor-modal');
+            showNotificationPopup(editorMode === 'create' ? 'Recipe created!' : 'Recipe updated!', 'success');
+            await loadRecipes();
+            // Re-select the recipe
+            const newCat = recipeData.meta.category || 'Misc';
+            const newName = recipeData.meta.name;
+            selectRecipe(newCat, newName);
+        } else {
+            showNotificationPopup(result.error || 'Failed to save recipe', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error saving recipe: ' + e.message, 'error');
+    }
+}
+
+async function validateRecipeEditor() {
+    const recipeData = collectEditorData();
+    try {
+        const resp = await fetch('/api/recipes/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recipe: recipeData })
+        });
+        const result = await resp.json();
+        if (result.valid) {
+            showNotificationPopup('Recipe is valid!', 'success');
+        } else {
+            showNotificationPopup('Validation error: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Validation error: ' + e.message, 'error');
+    }
+}
+
+async function openEditorForEdit() {
+    if (!selectedRecipe) return;
+    const cat = selectedRecipe.category || 'Misc';
+    const name = selectedRecipe.name;
+    try {
+        const resp = await fetch(`/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/raw`);
+        const data = await resp.json();
+        if (resp.ok) {
+            openEditor('edit', data);
+        } else {
+            showNotificationPopup(data.error || 'Failed to load recipe for editing', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error loading recipe: ' + e.message, 'error');
+    }
+}
+
+async function deleteCurrentRecipe() {
+    if (!selectedRecipe) return;
+    if (!confirm(`Delete recipe "${selectedRecipe.name}"? This cannot be undone.`)) return;
+
+    const cat = selectedRecipe.category || 'Misc';
+    const name = selectedRecipe.name;
+    try {
+        const resp = await fetch(`/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup('Recipe deleted', 'success');
+            selectedRecipe = null;
+            await loadRecipes();
+            document.getElementById('recipe-details').innerHTML = '<div class="placeholder"><p>Select a recipe to view details</p></div>';
+            document.getElementById('code-preview').innerHTML = '<div class="placeholder"><p>Select a recipe to view code</p></div>';
+        } else {
+            showNotificationPopup(result.error || 'Failed to delete', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error deleting recipe: ' + e.message, 'error');
+    }
+}
+
+// Helper to close modal by ID
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.remove('active');
+}
+
+
+// ===== VERSION HISTORY =====
+
+let versionSelectedVersion = null;
+
+async function openVersionHistory() {
+    if (!selectedRecipe) return;
+    const cat = selectedRecipe.category || 'Misc';
+    const name = selectedRecipe.name;
+
+    document.getElementById('version-modal-title').textContent = `Versions - ${name}`;
+    document.getElementById('version-detail').style.display = 'none';
+    document.getElementById('version-detail-actions').style.display = 'none';
+    versionSelectedVersion = null;
+
+    try {
+        const resp = await fetch(`/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/versions`);
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            showNotificationPopup(data.error || 'Failed to load versions', 'error');
+            return;
+        }
+
+        const list = document.getElementById('version-list');
+        list.innerHTML = '';
+
+        (data.versions || []).forEach(v => {
+            const div = document.createElement('div');
+            div.className = 'version-item';
+            div.dataset.version = v.version;
+            div.innerHTML = `
+                <div class="version-item-header">
+                    <span class="version-item-number">v${v.version}</span>
+                    <span class="version-item-timestamp">${v.timestamp || ''}</span>
+                </div>
+                <div class="version-item-comment">${escapeHtml(v.comment || '')}</div>
+            `;
+            div.addEventListener('click', () => selectVersion(cat, name, v.version, div));
+            list.appendChild(div);
+        });
+
+        document.getElementById('version-history-modal').classList.add('active');
+    } catch (e) {
+        showNotificationPopup('Error loading versions: ' + e.message, 'error');
+    }
+}
+
+async function selectVersion(cat, name, version, element) {
+    // Highlight selection
+    document.querySelectorAll('.version-item').forEach(el => el.classList.remove('active'));
+    element.classList.add('active');
+    versionSelectedVersion = version;
+
+    try {
+        const resp = await fetch(`/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/versions/${version}`);
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            showNotificationPopup(data.error || 'Failed to load version', 'error');
+            return;
+        }
+
+        const detail = document.getElementById('version-detail');
+        const code = document.getElementById('version-detail-code');
+        // Show as formatted YAML-like JSON
+        code.textContent = JSON.stringify(data, null, 2);
+        detail.style.display = '';
+        document.getElementById('version-detail-actions').style.display = '';
+    } catch (e) {
+        showNotificationPopup('Error loading version: ' + e.message, 'error');
+    }
+}
+
+async function restoreVersion() {
+    if (!selectedRecipe || !versionSelectedVersion) return;
+    const cat = selectedRecipe.category || 'Misc';
+    const name = selectedRecipe.name;
+    const comment = prompt('Version comment for restore:', `Restored to version ${versionSelectedVersion}`);
+    if (comment === null) return;
+
+    try {
+        const resp = await fetch(
+            `/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/versions/${versionSelectedVersion}/restore`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ comment })
+            }
+        );
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup(`Version ${versionSelectedVersion} restored!`, 'success');
+            closeModal('version-history-modal');
+            await loadRecipes();
+            selectRecipe(cat, name);
+        } else {
+            showNotificationPopup(result.error || 'Failed to restore version', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error restoring version: ' + e.message, 'error');
+    }
+}
+
+
+// ===== EDITOR & VERSION EVENT WIRING =====
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Create recipe button
+    const createBtn = document.getElementById('create-recipe-btn');
+    if (createBtn) createBtn.addEventListener('click', () => openEditor('create', null));
+
+    // Editor tab switching
+    document.querySelectorAll('.editor-tab').forEach(tab => {
+        tab.addEventListener('click', () => switchEditorTab(tab.dataset.tab));
+    });
+
+    // Output type toggle
+    const outputType = document.getElementById('editor-output-type');
+    if (outputType) outputType.addEventListener('change', toggleOutputFields);
+
+    // Compile toggle
+    const compileEnabled = document.getElementById('editor-compile-enabled');
+    if (compileEnabled) compileEnabled.addEventListener('change', toggleCompileFields);
+
+    // Add artifact
+    const addArtifact = document.getElementById('editor-add-artifact');
+    if (addArtifact) addArtifact.addEventListener('click', () => addArtifactRow(''));
+
+    // Add parameter
+    const addParam = document.getElementById('editor-add-param');
+    if (addParam) addParam.addEventListener('click', () => addParamRow(null));
+
+    // Add preprocessing
+    const addPreproc = document.getElementById('editor-add-preproc');
+    if (addPreproc) addPreproc.addEventListener('click', () => addPreprocRow(null));
+
+    // Save/Validate/Cancel
+    const saveBtn = document.getElementById('editor-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', saveRecipe);
+
+    const validateBtn = document.getElementById('editor-validate-btn');
+    if (validateBtn) validateBtn.addEventListener('click', validateRecipeEditor);
+
+    const cancelBtn = document.getElementById('editor-cancel-btn');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => closeModal('recipe-editor-modal'));
+
+    // Version history
+    const restoreBtn = document.getElementById('version-restore-btn');
+    if (restoreBtn) restoreBtn.addEventListener('click', restoreVersion);
+
+    const versionCloseBtn = document.getElementById('version-close-btn');
+    if (versionCloseBtn) versionCloseBtn.addEventListener('click', () => closeModal('version-history-modal'));
+
+    // Modal close buttons for new modals
+    document.querySelectorAll('#recipe-editor-modal .modal-close, #version-history-modal .modal-close').forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.closest('.modal').classList.remove('active');
+        });
+    });
+});

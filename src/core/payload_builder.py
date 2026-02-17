@@ -523,19 +523,32 @@ class PayloadBuilder:
         step.status = "running"
         self._update_step(step)
         
-        template_path = output_config.get('template', '')
-        full_template_path = self.config.templates_dir / template_path
-        
-        if not full_template_path.exists():
-            step.status = "failed"
-            step.error = f"Template not found: {full_template_path}"
-            self._update_step(step)
-            return False, "", self.steps
-        
-        try:
-            # Read and render template
+        template_value = output_config.get('template', '')
+        template_ext = output_config.get('template_ext', '')
+
+        # Determine if template is inline (multiline) or a file path
+        if '\n' in str(template_value):
+            # Inline template - use directly
+            template_content = template_value
+            if not template_ext:
+                step.status = "failed"
+                step.error = "Inline template requires 'template_ext' field (e.g., '.cs', '.ps1')"
+                self._update_step(step)
+                return False, "", self.steps
+        else:
+            # Legacy file path reference
+            full_template_path = self.config.templates_dir / template_value
+            if not full_template_path.exists():
+                step.status = "failed"
+                step.error = f"Template not found: {full_template_path}"
+                self._update_step(step)
+                return False, "", self.steps
             with open(full_template_path, 'r') as f:
                 template_content = f.read()
+            if not template_ext:
+                template_ext = full_template_path.suffix
+
+        try:
             
             template = JINJA_ENV.from_string(template_content)
             rendered_code = template.render(**self.variables)
@@ -547,7 +560,7 @@ class PayloadBuilder:
                 comment_step.status = "running"
                 self._update_step(comment_step)
                 
-                rendered_code = self._remove_comments(rendered_code, full_template_path.suffix)
+                rendered_code = self._remove_comments(rendered_code, template_ext)
                 
                 comment_step.status = "success"
                 comment_step.output = "Comments removed from source code"
@@ -560,7 +573,7 @@ class PayloadBuilder:
                 console_step.status = "running"
                 self._update_step(console_step)
                 
-                rendered_code = self._remove_console_output(rendered_code, full_template_path.suffix)
+                rendered_code = self._remove_console_output(rendered_code, template_ext)
                 
                 console_step.status = "success"
                 console_step.output = "Console output statements removed"
@@ -577,7 +590,7 @@ class PayloadBuilder:
             output_path.mkdir(parents=True, exist_ok=True)
             
             # Save rendered source code
-            source_file = output_path / f"{Path(output_file).stem}{full_template_path.suffix}"
+            source_file = output_path / f"{Path(output_file).stem}{template_ext}"
             with open(source_file, 'w') as f:
                 f.write(rendered_code)
             
@@ -589,7 +602,7 @@ class PayloadBuilder:
             self._update_step(step)
             
             # Step: Insert AMSI bypass if enabled (BEFORE obfuscation)
-            if (full_template_path.suffix.lower() == '.ps1' and 
+            if (template_ext.lower() == '.ps1' and
                 self.build_options.get('ps_amsi_bypass', False)):
                 
                 amsi_method = self.build_options.get('ps_amsi_method', '')
@@ -617,7 +630,7 @@ class PayloadBuilder:
                         self._update_step(amsi_step)
             
             # Step: PowerShell obfuscation if enabled
-            if (full_template_path.suffix.lower() == '.ps1' and 
+            if (template_ext.lower() == '.ps1' and
                 self.build_options.get('ps_obfuscate', False)):
                 
                 obf_method = self.build_options.get('ps_obfuscate_level', '')
@@ -650,7 +663,7 @@ class PayloadBuilder:
                         self._update_step(obf_step)
             
             # Step: C# name obfuscation if enabled (BEFORE compilation)
-            if (full_template_path.suffix.lower() == '.cs' and 
+            if (template_ext.lower() == '.cs' and
                 self.build_options.get('cs_obfuscate_names', True)):  # Default: enabled
                 
                 obf_step = BuildStep("Obfuscating C# names", "obfuscation")
@@ -851,21 +864,35 @@ class PayloadBuilder:
         """
         import re
         
+        def remove_c_style_comments(code: str) -> str:
+            """Remove C-style comments while preserving strings"""
+            # Pattern that matches:
+            # 1. Strings (both single and double quoted, with escapes)
+            # 2. Multi-line comments
+            # 3. Single-line comments
+            # We keep strings (group 1) and remove comments (groups 2-3)
+            pattern = r'("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\')|(/\*.*?\*/|//[^\r\n]*)'
+            
+            def replacer(match):
+                # If group 1 (string) matched, keep it
+                if match.group(1):
+                    return match.group(1)
+                # Otherwise it's a comment, remove it
+                return ''
+            
+            return re.sub(pattern, replacer, code, flags=re.DOTALL)
+        
         # ASPX files (HTML comments and C# inline code comments)
         if file_extension in ['.aspx', '.asp']:
             # Remove HTML comments
             code = re.sub(r'<!--.*?-->', '', code, flags=re.DOTALL)
-            # Remove C# multi-line comments first
-            code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
-            # Remove C# single-line comments (both at start of line and inline)
-            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
+            # Remove C-style comments while preserving strings
+            code = remove_c_style_comments(code)
         
         # C-style comments (C, C++, C#, Java, JavaScript)
         elif file_extension in ['.c', '.cpp', '.cs', '.h', '.hpp', '.java', '.js']:
-            # Remove multi-line comments first
-            code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
-            # Remove single-line comments (both at start of line and inline)
-            code = re.sub(r'//.*?$', '', code, flags=re.MULTILINE)
+            # Remove C-style comments while preserving strings
+            code = remove_c_style_comments(code)
         
         # Python comments
         elif file_extension in ['.py']:

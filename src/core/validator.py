@@ -417,10 +417,19 @@ class RecipeValidator:
                 f"Must be one of: {cls.VALID_OUTPUT_TYPES}"
             )
         
-        if output_type == 'template' and 'template' not in output:
-            raise ValidationError("Template output missing 'template' field")
-        
+        if output_type == 'template':
+            if 'template' not in output:
+                raise ValidationError("Template output missing 'template' field")
+            # If template is inline (multiline), require template_ext
+            template_val = output.get('template', '')
+            if '\n' in str(template_val):
+                if 'template_ext' not in output or not output['template_ext']:
+                    raise ValidationError(
+                        "Inline template requires 'template_ext' field "
+                        "(e.g., '.cs', '.ps1', '.py')"
+                    )
+
         if output_type == 'command' and 'command' not in output:
             raise ValidationError("Command output missing 'command' field")
-        
+
         return True
