@@ -103,7 +103,7 @@ class Recipe:
 
 class RecipeLoader:
     """Loads and manages recipes from YAML files"""
-    
+
     def __init__(self, config=None):
         """Initialize recipe loader
 
@@ -114,36 +114,111 @@ class RecipeLoader:
         self.recipe_manager = RecipeManager(self.config)
         self.recipes: List[Recipe] = []
         self.recipes_by_category: Dict[str, List[Recipe]] = {}
-    
+        # Cache: file_path -> (mtime, Recipe)
+        self._cache: Dict[str, tuple] = {}
+        # Index: (category, name) -> file_path
+        self._path_index: Dict[tuple, Path] = {}
+
     def load_all_recipes(self) -> List[Recipe]:
         """Load all recipes from recipes directory
-        
+
+        Uses mtime-based caching to avoid re-parsing unchanged files on
+        subsequent calls. The first call does a full load; later calls only
+        re-parse files whose mtime has changed.
+
         Returns:
             List of loaded Recipe objects
         """
         recipes_dir = self.config.recipes_dir
-        
+
         if not recipes_dir.exists():
             print(f"Warning: Recipes directory not found: {recipes_dir}")
             return []
-        
-        self.recipes = []
-        
+
         # Find all YAML files recursively
         yaml_files = list(recipes_dir.rglob('*.yaml')) + list(recipes_dir.rglob('*.yml'))
-        
+        current_paths = {str(f) for f in yaml_files}
+
+        # Remove cached entries for deleted files
+        stale_keys = [k for k in self._cache if k not in current_paths]
+        for k in stale_keys:
+            del self._cache[k]
+
+        # Load/reload only changed files
         for yaml_file in yaml_files:
+            key = str(yaml_file)
             try:
+                mtime = yaml_file.stat().st_mtime
+                cached = self._cache.get(key)
+                if cached and cached[0] == mtime:
+                    continue  # File unchanged, skip
                 recipe = self.load_recipe(yaml_file)
                 if recipe:
-                    self.recipes.append(recipe)
+                    self._cache[key] = (mtime, recipe)
+                elif key in self._cache:
+                    del self._cache[key]
             except Exception as e:
                 print(f"Warning: Failed to load recipe {yaml_file}: {e}")
-        
-        # Build category index
-        self._build_category_index()
-        
+
+        self._rebuild_from_cache()
         return self.recipes
+
+    def reload_recipe_file(self, file_path: Path) -> None:
+        """Reload a single recipe file into the cache
+
+        Used after mutations to update just the changed file without
+        scanning the entire directory over the network.
+
+        Args:
+            file_path: Path to the changed recipe file
+        """
+        key = str(file_path)
+        try:
+            if file_path.exists():
+                mtime = file_path.stat().st_mtime
+                recipe = self.load_recipe(file_path)
+                if recipe:
+                    self._cache[key] = (mtime, recipe)
+                elif key in self._cache:
+                    del self._cache[key]
+            else:
+                # File was deleted
+                self._cache.pop(key, None)
+        except Exception as e:
+            print(f"Warning: Failed to reload recipe {file_path}: {e}")
+
+        self._rebuild_from_cache()
+
+    def get_cached_recipes(self) -> List['Recipe']:
+        """Return the current in-memory recipe list without touching the filesystem
+
+        Returns:
+            List of cached Recipe objects (may be empty if never loaded)
+        """
+        return self.recipes
+
+    def invalidate_cache(self) -> None:
+        """Clear the recipe cache, forcing a full reload on next load_all_recipes call"""
+        self._cache.clear()
+        self._path_index.clear()
+
+    def get_file_path(self, category: str, name: str) -> Optional[Path]:
+        """Look up recipe file path from the cached index
+
+        Args:
+            category: Recipe category
+            name: Recipe name
+
+        Returns:
+            Path to recipe file, or None if not found
+        """
+        return self._path_index.get((category, name))
+
+    def _rebuild_from_cache(self) -> None:
+        """Rebuild recipe list and indexes from cache"""
+        self.recipes = [entry[1] for entry in self._cache.values()]
+        self._build_category_index()
+        self._build_path_index()
     
     def load_recipe(self, file_path: Path) -> Optional[Recipe]:
         """Load a single recipe from YAML file
@@ -217,7 +292,15 @@ class RecipeLoader:
             self.recipes_by_category[category].sort(
                 key=lambda r: (-r.effectiveness_level, r.name.lower())
             )
-    
+
+    def _build_path_index(self) -> None:
+        """Build index of (category, name) -> file_path for fast lookups"""
+        self._path_index = {}
+        for recipe in self.recipes:
+            key = (recipe.category, recipe.name)
+            if recipe.file_path:
+                self._path_index[key] = recipe.file_path
+
     def get_categories(self) -> List[str]:
         """Get list of all categories, sorted alphabetically
         

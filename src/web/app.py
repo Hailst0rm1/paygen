@@ -946,7 +946,7 @@ def init_app():
     # Load recipes
     try:
         recipe_loader = RecipeLoader(config)
-        recipe_manager = RecipeManager(config)
+        recipe_manager = RecipeManager(config, recipe_loader=recipe_loader)
         recipes = recipe_loader.load_all_recipes()
     except Exception as e:
         print(f"✗ Failed to load recipes: {e}", file=sys.stderr)
@@ -1059,8 +1059,7 @@ def get_ps_cradles():
 @app.route('/api/recipes')
 def get_recipes():
     """Get all recipes organized by category"""
-    # Reload recipes from disk to detect changes
-    current_recipes = recipe_loader.load_all_recipes()
+    current_recipes = recipe_loader.get_cached_recipes()
     
     # Organize recipes by category
     categories = {}
@@ -1099,8 +1098,7 @@ def get_recipes():
 @app.route('/api/recipe/<category>/<name>')
 def get_recipe(category, name):
     """Get a specific recipe by category and name"""
-    # Reload recipes from disk to detect changes
-    current_recipes = recipe_loader.load_all_recipes()
+    current_recipes = recipe_loader.get_cached_recipes()
     
     for recipe in current_recipes:
         # Handle empty categories mapped to "Misc"
@@ -1145,8 +1143,7 @@ def get_recipe(category, name):
 @app.route('/api/recipe/<category>/<name>/code')
 def get_recipe_code(category, name):
     """Get the template/command code for a recipe"""
-    # Reload recipes from disk to detect changes
-    current_recipes = recipe_loader.load_all_recipes()
+    current_recipes = recipe_loader.get_cached_recipes()
     
     for recipe in current_recipes:
         # Handle empty categories mapped to "Misc"
@@ -1225,8 +1222,7 @@ def create_recipe():
 
     try:
         file_path = recipe_manager.create_recipe(recipe_data, comment=comment)
-        # Reload recipes
-        recipe_loader.load_all_recipes()
+        recipe_loader.reload_recipe_file(file_path)
         return jsonify({
             'success': True,
             'message': f'Recipe created successfully',
@@ -1266,8 +1262,7 @@ def update_recipe(category, name):
 
     try:
         file_path = recipe_manager.update_recipe(category, name, recipe_data, comment=comment)
-        # Reload recipes
-        recipe_loader.load_all_recipes()
+        recipe_loader.reload_recipe_file(file_path)
         return jsonify({
             'success': True,
             'message': 'Recipe updated successfully',
@@ -1283,9 +1278,8 @@ def update_recipe(category, name):
 def delete_recipe(category, name):
     """Delete a recipe file"""
     try:
-        recipe_manager.delete_recipe(category, name)
-        # Reload recipes
-        recipe_loader.load_all_recipes()
+        deleted_path = recipe_manager.delete_recipe(category, name)
+        recipe_loader.reload_recipe_file(deleted_path)
         return jsonify({'success': True, 'message': 'Recipe deleted successfully'})
     except ValidationError as e:
         return jsonify({'error': str(e)}), 404
@@ -1337,8 +1331,7 @@ def restore_recipe_version(category, name, ver):
 
     try:
         file_path = recipe_manager.restore_version(category, name, ver, comment=comment)
-        # Reload recipes
-        recipe_loader.load_all_recipes()
+        recipe_loader.reload_recipe_file(file_path)
         return jsonify({
             'success': True,
             'message': f'Version {ver} restored successfully',
@@ -1355,7 +1348,7 @@ def remove_latest_version(category, name):
     """Remove the most recent version entry from a recipe"""
     try:
         file_path = recipe_manager.remove_latest_version(category, name)
-        recipe_loader.load_all_recipes()
+        recipe_loader.reload_recipe_file(file_path)
         return jsonify({
             'success': True,
             'message': 'Latest version removed',
@@ -1464,8 +1457,7 @@ def generate_payload():
     build_options = data.get('build_options', {})
     version = data.get('version')  # Optional: generate from specific version
 
-    # Reload recipes from disk to ensure we have the latest version
-    current_recipes = recipe_loader.load_all_recipes()
+    current_recipes = recipe_loader.get_cached_recipes()
 
     # Find recipe
     recipe_obj = None

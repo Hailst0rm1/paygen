@@ -14,13 +14,15 @@ from .validator import RecipeValidator, ValidationError
 class RecipeManager:
     """Manages recipe CRUD operations and in-file versioning"""
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, recipe_loader=None):
         """Initialize recipe manager
 
         Args:
             config: Optional ConfigManager instance
+            recipe_loader: Optional RecipeLoader for fast path lookups
         """
         self.config = config or get_config()
+        self._recipe_loader = recipe_loader
 
     def create_recipe(self, recipe_data: dict, comment: str = "Initial version") -> Path:
         """Create a new recipe file in versioned format
@@ -115,7 +117,7 @@ class RecipeManager:
         self._write_yaml(file_path, {'versions': versions})
         return file_path
 
-    def delete_recipe(self, category: str, name: str) -> bool:
+    def delete_recipe(self, category: str, name: str) -> Path:
         """Delete a recipe file
 
         Args:
@@ -123,7 +125,7 @@ class RecipeManager:
             name: Recipe name
 
         Returns:
-            True if deleted successfully
+            Path of the deleted file
 
         Raises:
             ValidationError: If recipe not found
@@ -133,7 +135,7 @@ class RecipeManager:
             raise ValidationError(f"Recipe not found: {category}/{name}")
 
         file_path.unlink()
-        return True
+        return file_path
 
     def get_recipe_raw(self, category: str, name: str) -> dict:
         """Get reconstructed current recipe data for editing
@@ -359,8 +361,8 @@ class RecipeManager:
     def _find_recipe_file(self, category: str, name: str) -> Optional[Path]:
         """Find a recipe file by category and name
 
-        Searches the recipes directory for a YAML file whose reconstructed
-        meta.category and meta.name match.
+        Uses the RecipeLoader's path index for O(1) lookups when available,
+        falling back to a full directory scan otherwise.
 
         Args:
             category: Recipe category
@@ -369,6 +371,13 @@ class RecipeManager:
         Returns:
             Path to recipe file or None
         """
+        # Fast path: use the loader's cached index
+        if self._recipe_loader is not None:
+            cached = self._recipe_loader.get_file_path(category, name)
+            if cached and cached.exists():
+                return cached
+
+        # Slow fallback: scan all files (only used when no loader is set)
         recipes_dir = self.config.recipes_dir
         if not recipes_dir.exists():
             return None
