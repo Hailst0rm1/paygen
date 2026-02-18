@@ -148,6 +148,10 @@ body {
     color: var(--mauve);
 }
 
+.icon-btn-danger:hover {
+    color: var(--red);
+}
+
 #code-preview-panel.fullscreen {
     position: fixed;
     top: 0;
@@ -2067,16 +2071,17 @@ code {
     margin-top: 0.75rem;
 }
 
-/* Recipe action buttons in middle panel */
-.recipe-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.recipe-actions .btn {
-    font-size: 0.85rem;
-    padding: 0.4rem 0.8rem;
+/* Version badge shown when non-latest version is selected */
+.version-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background-color: rgba(250, 179, 135, 0.15);
+    color: var(--peach);
+    border: 1px solid var(--peach);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
 }
 
 /* Panel header button group */

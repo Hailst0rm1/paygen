@@ -23,7 +23,7 @@ from flask_cors import CORS
 # Import core paygen modules
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.core.config import get_config
-from src.core.recipe_loader import RecipeLoader
+from src.core.recipe_loader import RecipeLoader, Recipe
 from src.core.recipe_manager import RecipeManager
 from src.core.payload_builder import PayloadBuilder, BuildStep
 from src.core.history import HistoryManager
@@ -1350,6 +1350,23 @@ def restore_recipe_version(category, name, ver):
         return jsonify({'error': f'Failed to restore version: {e}'}), 500
 
 
+@app.route('/api/recipe/<category>/<name>/versions/latest', methods=['DELETE'])
+def remove_latest_version(category, name):
+    """Remove the most recent version entry from a recipe"""
+    try:
+        file_path = recipe_manager.remove_latest_version(category, name)
+        recipe_loader.load_all_recipes()
+        return jsonify({
+            'success': True,
+            'message': 'Latest version removed',
+            'file_path': str(file_path)
+        })
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to remove version: {e}'}), 500
+
+
 @app.route('/api/validate-parameter', methods=['POST'])
 def validate_parameter():
     """Validate a single parameter value"""
@@ -1445,19 +1462,45 @@ def generate_payload():
     parameters = data.get('parameters', {})
     preprocessing_selections = data.get('preprocessing_selections', {})
     build_options = data.get('build_options', {})
-    
+    version = data.get('version')  # Optional: generate from specific version
+
     # Reload recipes from disk to ensure we have the latest version
     current_recipes = recipe_loader.load_all_recipes()
-    
+
     # Find recipe
     recipe_obj = None
     for r in current_recipes:
         if r.category == category and r.name == recipe_name:
             recipe_obj = r
             break
-    
+
     if not recipe_obj:
         return jsonify({'error': 'Recipe not found'}), 404
+
+    # If a specific version was requested, reconstruct the recipe at that version
+    if version is not None:
+        try:
+            version_data = recipe_manager.get_version_content(category, recipe_name, int(version))
+            meta = version_data.get('meta', {})
+            mitre = meta.get('mitre', {})
+            recipe_obj = Recipe(
+                name=meta.get('name', recipe_obj.name),
+                category=meta.get('category', recipe_obj.category),
+                description=meta.get('description', ''),
+                effectiveness=meta.get('effectiveness', 'low'),
+                platform=meta.get('platform'),
+                mitre_tactic=mitre.get('tactic'),
+                mitre_technique=mitre.get('technique'),
+                artifacts=meta.get('artifacts', []),
+                launch_instructions=version_data.get('output', {}).get('launch_instructions'),
+                parameters=version_data.get('parameters', []),
+                preprocessing=version_data.get('preprocessing', []),
+                output=version_data.get('output', {}),
+                file_path=recipe_obj.file_path,
+                version_count=recipe_obj.version_count
+            )
+        except Exception as e:
+            return jsonify({'error': f'Failed to load version {version}: {e}'}), 400
     
     # Build a set of selected option names for conditional parameter validation
     selected_option_names = set()

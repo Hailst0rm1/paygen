@@ -263,6 +263,35 @@ class RecipeManager:
         self._write_yaml(file_path, {'versions': versions})
         return file_path
 
+    def remove_latest_version(self, category: str, name: str) -> Path:
+        """Remove the most recent version entry from a recipe
+
+        Only allows removing if there are at least 2 versions (V1 cannot be removed).
+
+        Args:
+            category: Recipe category
+            name: Recipe name
+
+        Returns:
+            Path to updated recipe file
+
+        Raises:
+            ValidationError: If recipe not found or only one version exists
+        """
+        file_path = self._find_recipe_file(category, name)
+        if not file_path:
+            raise ValidationError(f"Recipe not found: {category}/{name}")
+
+        raw = self._read_yaml(file_path)
+        versions = raw.get('versions', [])
+
+        if len(versions) <= 1:
+            raise ValidationError("Cannot remove the only version")
+
+        versions.pop()
+        self._write_yaml(file_path, {'versions': versions})
+        return file_path
+
     def reconstruct_recipe(self, versions: list, up_to: int = None) -> dict:
         """Reconstruct full recipe state from version chain
 
@@ -391,6 +420,19 @@ class RecipeManager:
         safe = re.sub(r'[-\s]+', '_', safe).strip('_')
         return safe
 
+    @staticmethod
+    def _normalize_str(value: str) -> str:
+        """Normalize a string for comparison by stripping trailing whitespace per line
+        and trailing newlines. This prevents false diffs caused by YAML serialization
+        normalizing multiline block scalars differently."""
+        return '\n'.join(line.rstrip() for line in value.rstrip('\n').split('\n'))
+
+    def _values_equal(self, old_val, new_val) -> bool:
+        """Compare two values, normalizing strings to avoid YAML whitespace false diffs"""
+        if isinstance(old_val, str) and isinstance(new_val, str):
+            return self._normalize_str(old_val) == self._normalize_str(new_val)
+        return old_val == new_val
+
     def _compute_changes(self, old_data: dict, new_data: dict) -> dict:
         """Compute the minimal changes dict between old and new recipe data
 
@@ -416,10 +458,22 @@ class RecipeManager:
                 if sub_changes:
                     changes[key] = sub_changes
             elif isinstance(new_data[key], list):
-                # Lists are compared as a whole; if different, store full replacement
-                if new_data[key] != old_data[key]:
+                # Lists: compare element-by-element with string normalization
+                if len(new_data[key]) != len(old_data[key]):
                     changes[key] = copy.deepcopy(new_data[key])
-            elif new_data[key] != old_data[key]:
+                else:
+                    list_changed = False
+                    for old_item, new_item in zip(old_data[key], new_data[key]):
+                        if isinstance(old_item, dict) and isinstance(new_item, dict):
+                            if self._compute_changes(old_item, new_item):
+                                list_changed = True
+                                break
+                        elif not self._values_equal(old_item, new_item):
+                            list_changed = True
+                            break
+                    if list_changed:
+                        changes[key] = copy.deepcopy(new_data[key])
+            elif not self._values_equal(new_data[key], old_data[key]):
                 # Scalar value changed
                 changes[key] = copy.deepcopy(new_data[key])
 
@@ -475,10 +529,23 @@ class RecipeManager:
     def _write_yaml(self, file_path: Path, data: dict) -> None:
         """Write data to a YAML file
 
+        Uses a custom representer for multiline strings so they are stored as
+        YAML block scalars (|) instead of escaped single-line strings.
+
         Args:
             file_path: Path to YAML file
             data: Data to write
         """
+        class _BlockDumper(yaml.Dumper):
+            pass
+
+        def _str_representer(dumper, data):
+            if '\n' in data:
+                return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+        _BlockDumper.add_representer(str, _str_representer)
+
         with open(file_path, 'w') as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=False,
-                      allow_unicode=True, width=120)
+            yaml.dump(data, f, Dumper=_BlockDumper, default_flow_style=False,
+                      sort_keys=False, allow_unicode=True, width=120)

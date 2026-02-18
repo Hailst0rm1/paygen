@@ -164,6 +164,11 @@
         <section class="panel panel-middle">
             <div class="panel-header">
                 <h2>Recipe Details</h2>
+                <div class="panel-header-actions" id="recipe-header-actions" style="display:none;">
+                    <button id="edit-recipe-btn" class="icon-btn" title="Edit Recipe">&#9998;</button>
+                    <button id="versions-recipe-btn" class="icon-btn" title="Version History" style="display:none;"><span id="versions-btn-label">&#8635;</span></button>
+                    <button id="delete-recipe-btn" class="icon-btn icon-btn-danger" title="Delete Recipe">&#10005;</button>
+                </div>
             </div>
             <div class="panel-content panel-content-with-footer" id="recipe-details">
                 <div class="placeholder">
@@ -509,10 +514,9 @@
                         </div>
                     </div>
                     <div class="editor-field">
-                        <label>Compile Enabled</label>
                         <label class="param-form-checkbox-label">
                             <input type="checkbox" id="editor-compile-enabled" class="param-form-checkbox">
-                            Enable compilation step
+                            Compile
                         </label>
                     </div>
                     <div id="editor-compile-fields" style="display:none;">
@@ -531,7 +535,6 @@
                 <input type="text" id="editor-version-comment" class="editor-comment-input" placeholder="Version comment (e.g., Initial version)">
                 <div class="editor-footer-buttons">
                     <button id="editor-cancel-btn" class="btn btn-secondary">Cancel</button>
-                    <button id="editor-validate-btn" class="btn btn-secondary">Validate</button>
                     <button id="editor-save-btn" class="btn btn-primary">Save</button>
                 </div>
             </div>
@@ -553,10 +556,12 @@
                     <pre><code id="version-detail-code"></code></pre>
                 </div>
                 <div id="version-detail-actions" class="version-detail-actions" style="display:none;">
-                    <button id="version-restore-btn" class="btn btn-primary btn-sm">Restore This Version</button>
+                    <button id="version-use-btn" class="btn btn-primary btn-sm">Use This Version</button>
                 </div>
             </div>
             <div class="modal-footer">
+                <button id="version-remove-latest-btn" class="btn btn-danger btn-sm" style="display:none;">Remove Latest Version</button>
+                <div style="flex:1;"></div>
                 <button id="version-close-btn" class="btn btn-secondary">Close</button>
             </div>
         </div>

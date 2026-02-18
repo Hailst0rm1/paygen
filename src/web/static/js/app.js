@@ -6,6 +6,7 @@ let selectedRecipe = null;
 let categories = {};
 let activeEffectivenessFilters = new Set();
 let activePlatformFilters = new Set();
+let selectedVersion = null; // Track version for generation (null = latest)
 
 // Notification popup
 function showNotificationPopup(message, type = 'info') {
@@ -430,6 +431,7 @@ async function selectRecipe(category, name) {
         }
         
         selectedRecipe = recipe;
+        selectedVersion = null; // Reset to latest version
     } catch (error) {
         console.error('Failed to fetch recipe details:', error);
         return;
@@ -464,6 +466,9 @@ function renderRecipeDetails(recipe) {
     html += `<div class="recipe-name">${escapeHtml(recipe.name)}</div>`;
     const displayCategory = recipe.category || 'Misc';
     html += `<div class="recipe-category">Category: ${escapeHtml(displayCategory)}</div>`;
+    if (selectedVersion !== null) {
+        html += `<div class="version-badge">Using version ${selectedVersion}</div>`;
+    }
     html += '<div class="separator"></div>';
     
     // Effectiveness
@@ -603,15 +608,8 @@ function renderRecipeDetails(recipe) {
     
     html += '</div>'; // Close recipe-meta
 
-    // Generate button (pinned to bottom) with recipe actions
+    // Generate button (pinned to bottom)
     html += `<div style="flex-shrink:0;">`;
-    html += `<div class="recipe-actions" style="padding: 0.5rem 1rem 0 1rem;">`;
-    html += `<button class="btn btn-secondary btn-sm" onclick="openEditorForEdit()">Edit</button>`;
-    if (recipe.version_count && recipe.version_count > 0) {
-        html += `<button class="btn btn-secondary btn-sm" onclick="openVersionHistory()">Versions (${recipe.version_count})</button>`;
-    }
-    html += `<button class="btn btn-danger btn-sm" onclick="deleteCurrentRecipe()">Delete</button>`;
-    html += `</div>`;
     html += `
         <button class="btn btn-generate" onclick="showParameterForm()">
             <span class="btn-icon">🚀</span> Generate Payload
@@ -620,10 +618,32 @@ function renderRecipeDetails(recipe) {
     html += `</div>`;
     
     panel.innerHTML = html;
-    
+
     // Render Markdown for launch instructions
     if (recipe.launch_instructions) {
         renderLaunchInstructions(recipe.launch_instructions);
+    }
+
+    // Update header action buttons
+    updateRecipeHeaderActions(recipe);
+}
+
+function updateRecipeHeaderActions(recipe) {
+    const actions = document.getElementById('recipe-header-actions');
+    const versionsBtn = document.getElementById('versions-recipe-btn');
+    const versionsBtnLabel = document.getElementById('versions-btn-label');
+    if (!actions) return;
+
+    if (recipe) {
+        actions.style.display = '';
+        if (recipe.version_count && recipe.version_count > 0) {
+            versionsBtn.style.display = '';
+            versionsBtn.title = `Version History (${recipe.version_count})`;
+        } else {
+            versionsBtn.style.display = 'none';
+        }
+    } else {
+        actions.style.display = 'none';
     }
 }
 
@@ -982,8 +1002,10 @@ async function showParameterForm() {
     const outputType = selectedRecipe.output?.type || 'template';
     if (outputType === 'template') {
         const templatePath = selectedRecipe.output?.template || '';
-        const isPS1 = templatePath.toLowerCase().endsWith('.ps1');
-        const isCS = templatePath.toLowerCase().endsWith('.cs');
+        const templateExt = (selectedRecipe.output?.template_ext || '').toLowerCase();
+        // Check template_ext first (inline templates), then fall back to file path
+        const isPS1 = templateExt === '.ps1' || templatePath.toLowerCase().endsWith('.ps1');
+        const isCS = templateExt === '.cs' || templatePath.toLowerCase().endsWith('.cs');
         
         if (isPS1) {
             html += `
@@ -2410,7 +2432,8 @@ async function generatePayload() {
                 recipe: selectedRecipe.name,
                 parameters: parameters,
                 preprocessing_selections: preprocessingSelections,
-                build_options: buildOptions
+                build_options: buildOptions,
+                version: selectedVersion
             })
         });
         
@@ -4244,6 +4267,7 @@ async function deleteCurrentRecipe() {
             await loadRecipes();
             document.getElementById('recipe-details').innerHTML = '<div class="placeholder"><p>Select a recipe to view details</p></div>';
             document.getElementById('code-preview').innerHTML = '<div class="placeholder"><p>Select a recipe to view code</p></div>';
+            updateRecipeHeaderActions(null);
         } else {
             showNotificationPopup(result.error || 'Failed to delete', 'error');
         }
@@ -4272,6 +4296,12 @@ async function openVersionHistory() {
     document.getElementById('version-detail').style.display = 'none';
     document.getElementById('version-detail-actions').style.display = 'none';
     versionSelectedVersion = null;
+
+    // Show remove button only if multiple versions exist
+    const removeBtn = document.getElementById('version-remove-latest-btn');
+    if (removeBtn) {
+        removeBtn.style.display = (selectedRecipe.version_count || 1) > 1 ? '' : 'none';
+    }
 
     try {
         const resp = await fetch(`/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/versions`);
@@ -4332,36 +4362,93 @@ async function selectVersion(cat, name, version, element) {
     }
 }
 
-async function restoreVersion() {
+async function useVersion() {
     if (!selectedRecipe || !versionSelectedVersion) return;
     const cat = selectedRecipe.category || 'Misc';
     const name = selectedRecipe.name;
-    const comment = prompt('Version comment for restore:', `Restored to version ${versionSelectedVersion}`);
-    if (comment === null) return;
+    const totalVersions = selectedRecipe.version_count || 1;
+
+    // If selecting the latest version, just reset to default
+    if (versionSelectedVersion >= totalVersions) {
+        selectedVersion = null;
+        closeModal('version-history-modal');
+        showNotificationPopup('Using latest version', 'info');
+        return;
+    }
 
     try {
-        const resp = await fetch(
-            `/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/versions/${versionSelectedVersion}/restore`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ comment })
-            }
-        );
-        const result = await resp.json();
-        if (resp.ok && result.success) {
-            showNotificationPopup(`Version ${versionSelectedVersion} restored!`, 'success');
-            closeModal('version-history-modal');
-            await loadRecipes();
-            selectRecipe(cat, name);
-        } else {
-            showNotificationPopup(result.error || 'Failed to restore version', 'error');
+        const resp = await fetch(`/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/versions/${versionSelectedVersion}`);
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            showNotificationPopup(data.error || 'Failed to load version', 'error');
+            return;
         }
+
+        // Update selectedRecipe with version-specific data
+        const meta = data.meta || {};
+        const mitre = meta.mitre || {};
+        selectedRecipe = {
+            ...selectedRecipe,
+            name: meta.name || selectedRecipe.name,
+            category: meta.category || selectedRecipe.category,
+            description: meta.description || '',
+            effectiveness: meta.effectiveness || 'low',
+            platform: meta.platform || null,
+            mitre_tactic: mitre.tactic || null,
+            mitre_technique: mitre.technique || null,
+            artifacts: meta.artifacts || [],
+            parameters: data.parameters || [],
+            preprocessing: data.preprocessing || [],
+            output: data.output || {},
+            launch_instructions: (data.output || {}).launch_instructions || null
+        };
+        selectedVersion = versionSelectedVersion;
+
+        closeModal('version-history-modal');
+        renderRecipeDetails(selectedRecipe);
+        showNotificationPopup(`Using version ${versionSelectedVersion}`, 'success');
     } catch (e) {
-        showNotificationPopup('Error restoring version: ' + e.message, 'error');
+        showNotificationPopup('Error loading version: ' + e.message, 'error');
     }
 }
 
+
+async function removeLatestVersion() {
+    if (!selectedRecipe) return;
+    const cat = selectedRecipe.category || 'Misc';
+    const name = selectedRecipe.name;
+    const totalVersions = selectedRecipe.version_count || 1;
+
+    if (totalVersions <= 1) {
+        showNotificationPopup('Cannot remove the only version', 'error');
+        return;
+    }
+
+    if (!confirm(`Remove version ${totalVersions} from "${name}"? This cannot be undone.`)) return;
+
+    try {
+        const resp = await fetch(`/api/recipe/${encodeURIComponent(cat)}/${encodeURIComponent(name)}/versions/latest`, {
+            method: 'DELETE'
+        });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+            showNotificationPopup(data.error || 'Failed to remove version', 'error');
+            return;
+        }
+
+        showNotificationPopup(`Version ${totalVersions} removed`, 'success');
+        closeModal('version-history-modal');
+
+        // Reset version selection and reload
+        selectedVersion = null;
+        await loadRecipes();
+        selectRecipe(cat, name);
+    } catch (e) {
+        showNotificationPopup('Error removing version: ' + e.message, 'error');
+    }
+}
 
 // ===== EDITOR & VERSION EVENT WIRING =====
 
@@ -4369,6 +4456,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Create recipe button
     const createBtn = document.getElementById('create-recipe-btn');
     if (createBtn) createBtn.addEventListener('click', () => openEditor('create', null));
+
+    // Recipe header action buttons (Edit, Versions, Delete)
+    const editBtn = document.getElementById('edit-recipe-btn');
+    if (editBtn) editBtn.addEventListener('click', openEditorForEdit);
+    const versionsBtn = document.getElementById('versions-recipe-btn');
+    if (versionsBtn) versionsBtn.addEventListener('click', openVersionHistory);
+    const deleteBtn = document.getElementById('delete-recipe-btn');
+    if (deleteBtn) deleteBtn.addEventListener('click', deleteCurrentRecipe);
 
     // Editor tab switching
     document.querySelectorAll('.editor-tab').forEach(tab => {
@@ -4399,15 +4494,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveBtn = document.getElementById('editor-save-btn');
     if (saveBtn) saveBtn.addEventListener('click', saveRecipe);
 
-    const validateBtn = document.getElementById('editor-validate-btn');
-    if (validateBtn) validateBtn.addEventListener('click', validateRecipeEditor);
-
     const cancelBtn = document.getElementById('editor-cancel-btn');
     if (cancelBtn) cancelBtn.addEventListener('click', () => closeModal('recipe-editor-modal'));
 
     // Version history
-    const restoreBtn = document.getElementById('version-restore-btn');
-    if (restoreBtn) restoreBtn.addEventListener('click', restoreVersion);
+    const useBtn = document.getElementById('version-use-btn');
+    if (useBtn) useBtn.addEventListener('click', useVersion);
+
+    const removeLatestBtn = document.getElementById('version-remove-latest-btn');
+    if (removeLatestBtn) removeLatestBtn.addEventListener('click', removeLatestVersion);
 
     const versionCloseBtn = document.getElementById('version-close-btn');
     if (versionCloseBtn) versionCloseBtn.addEventListener('click', () => closeModal('version-history-modal'));
