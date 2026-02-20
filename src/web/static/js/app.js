@@ -93,7 +93,12 @@ function setupEventListeners() {
     // Modal close buttons
     document.querySelectorAll('.modal-close').forEach(btn => {
         btn.addEventListener('click', function() {
-            this.closest('.modal').classList.remove('active');
+            const modal = this.closest('.modal');
+            // Reset PS obfuscation modal to main view on close
+            if (modal && modal.id === 'obfuscate-ps-modal') {
+                showPsObfMainView();
+            }
+            modal.classList.remove('active');
         });
     });
     
@@ -127,6 +132,7 @@ function setupEventListeners() {
     const closeObfuscatePsBtn = document.getElementById('close-obfuscate-ps-btn');
     if (closeObfuscatePsBtn) {
         closeObfuscatePsBtn.addEventListener('click', function() {
+            showPsObfMainView();
             document.getElementById('obfuscate-ps-modal').classList.remove('active');
         });
     }
@@ -3407,7 +3413,10 @@ async function showObfuscatePsModal() {
     const loadingDiv = document.getElementById('obfuscate-ps-loading');
     const levelSelect = document.getElementById('obfuscate-ps-level');
     const pathInput = document.getElementById('obfuscate-ps-file-path');
-    
+
+    // Always start at main view
+    showPsObfMainView();
+
     // Reset modal state
     inputTextarea.value = '';
     outputSection.style.display = 'none';
@@ -4578,6 +4587,984 @@ async function removeLatestVersion() {
     }
 }
 
+// ===== SHELLCODE MANAGER =====
+
+let scEditorMode = 'create'; // 'create' or 'edit'
+let scEditorOriginalName = '';
+
+function showShellcodeManager() {
+    const modal = document.getElementById('shellcode-mgr-modal');
+    document.getElementById('shellcode-mgr-title').textContent = 'Shellcode Manager';
+    showScListView();
+    modal.classList.add('active');
+    loadShellcodeList();
+}
+
+async function loadShellcodeList() {
+    const container = document.getElementById('shellcode-mgr-list');
+    container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:2rem;">Loading...</div>';
+
+    try {
+        const resp = await fetch('/api/shellcodes');
+        const data = await resp.json();
+
+        if (!data.shellcodes || data.shellcodes.length === 0) {
+            container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:2rem;">No shellcodes configured. Click "+ New Shellcode" to create one.</div>';
+            return;
+        }
+
+        let html = '';
+        data.shellcodes.forEach(sc => {
+            const paramCount = sc.parameters ? sc.parameters.length : 0;
+            const hasListener = sc.has_listener;
+            html += `
+                <div class="shellcode-mgr-card">
+                    <div class="shellcode-mgr-card-info">
+                        <div class="shellcode-mgr-card-name">${escapeHtml(sc.name)}</div>
+                        <div class="shellcode-mgr-card-meta">
+                            <span>${paramCount} param${paramCount !== 1 ? 's' : ''}</span>
+                            ${hasListener ? '<span style="color:var(--green);">listener</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="shellcode-mgr-card-actions">
+                        <button class="btn btn-primary btn-sm" onclick="openScGenerate('${escapeHtml(sc.name).replace(/'/g, "\\'")}')">Generate</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openScEditor('edit', '${escapeHtml(sc.name).replace(/'/g, "\\'")}')">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteShellcode('${escapeHtml(sc.name).replace(/'/g, "\\'")}')">Delete</button>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--red);text-align:center;padding:2rem;">Error loading shellcodes: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function showScListView() {
+    document.getElementById('shellcode-mgr-list-view').style.display = '';
+    document.getElementById('shellcode-mgr-editor-view').style.display = 'none';
+    document.getElementById('shellcode-mgr-generate-view').style.display = 'none';
+    document.getElementById('shellcode-mgr-title').textContent = 'Shellcode Manager';
+}
+
+function showScEditorView() {
+    document.getElementById('shellcode-mgr-list-view').style.display = 'none';
+    document.getElementById('shellcode-mgr-editor-view').style.display = '';
+    document.getElementById('shellcode-mgr-generate-view').style.display = 'none';
+}
+
+function showScGenerateView() {
+    document.getElementById('shellcode-mgr-list-view').style.display = 'none';
+    document.getElementById('shellcode-mgr-editor-view').style.display = 'none';
+    document.getElementById('shellcode-mgr-generate-view').style.display = '';
+}
+
+// Editor functions
+async function openScEditor(mode, name) {
+    scEditorMode = mode;
+    scEditorOriginalName = mode === 'edit' ? name : '';
+    document.getElementById('shellcode-mgr-title').textContent = mode === 'create' ? 'New Shellcode' : 'Edit Shellcode';
+    clearScEditor();
+
+    if (mode === 'edit' && name) {
+        try {
+            const resp = await fetch(`/api/shellcode/${encodeURIComponent(name)}/raw`);
+            const data = await resp.json();
+            if (data.error) {
+                showNotificationPopup(data.error, 'error');
+                return;
+            }
+            populateScEditor(data);
+        } catch (e) {
+            showNotificationPopup('Error loading shellcode: ' + e.message, 'error');
+            return;
+        }
+    }
+
+    showScEditorView();
+}
+
+function clearScEditor() {
+    document.getElementById('sc-editor-name').value = '';
+    document.getElementById('sc-editor-command').value = '';
+    document.getElementById('sc-editor-listener').value = '';
+    document.getElementById('sc-editor-params-list').innerHTML = '';
+}
+
+function populateScEditor(data) {
+    document.getElementById('sc-editor-name').value = data.name || '';
+    document.getElementById('sc-editor-command').value = data.shellcode || '';
+    document.getElementById('sc-editor-listener').value = data.listener || '';
+
+    const paramsList = document.getElementById('sc-editor-params-list');
+    paramsList.innerHTML = '';
+    (data.parameters || []).forEach(p => addScParamRow(p));
+}
+
+function addScParamRow(param) {
+    const list = document.getElementById('sc-editor-params-list');
+    const div = document.createElement('div');
+    div.className = 'editor-list-item';
+    const p = param || {};
+    div.innerHTML = `
+        <div class="editor-list-item-header">
+            <span class="editor-list-item-title">Parameter</span>
+            <button class="editor-list-remove" onclick="this.closest('.editor-list-item').remove()">&times;</button>
+        </div>
+        <div class="editor-field-row">
+            <div class="editor-field"><label>Name *</label><input type="text" class="param-form-input sc-p-name" value="${escapeHtml(p.name || '')}"></div>
+            <div class="editor-field"><label>Type</label>
+                <select class="param-form-select sc-p-type">
+                    <option value="string" ${p.type==='string'?'selected':''}>string</option>
+                    <option value="ip" ${p.type==='ip'?'selected':''}>ip</option>
+                    <option value="port" ${p.type==='port'?'selected':''}>port</option>
+                    <option value="path" ${p.type==='path'?'selected':''}>path</option>
+                    <option value="file" ${p.type==='file'?'selected':''}>file</option>
+                    <option value="hex" ${p.type==='hex'?'selected':''}>hex</option>
+                    <option value="integer" ${p.type==='integer'?'selected':''}>integer</option>
+                </select>
+            </div>
+        </div>
+        <div class="editor-field"><label>Description</label><input type="text" class="param-form-input sc-p-desc" value="${escapeHtml(p.description || '')}"></div>
+        <div class="editor-field-row">
+            <div class="editor-field"><label>Default</label><input type="text" class="param-form-input sc-p-default" value="${escapeHtml(String(p.default !== undefined ? p.default : ''))}"></div>
+            <div class="editor-field"><label>Required</label>
+                <select class="param-form-select sc-p-required">
+                    <option value="true" ${p.required===true||p.required==='true'?'selected':''}>Yes</option>
+                    <option value="false" ${p.required===false||p.required==='false'||!p.required?'selected':''}>No</option>
+                </select>
+            </div>
+        </div>
+    `;
+    list.appendChild(div);
+}
+
+function collectScEditorData() {
+    const name = document.getElementById('sc-editor-name').value.trim();
+    const shellcode = document.getElementById('sc-editor-command').value.trim();
+    const listener = document.getElementById('sc-editor-listener').value.trim();
+
+    const parameters = [];
+    document.querySelectorAll('#sc-editor-params-list .editor-list-item').forEach(item => {
+        const p = {
+            name: item.querySelector('.sc-p-name').value.trim(),
+            type: item.querySelector('.sc-p-type').value,
+            description: item.querySelector('.sc-p-desc')?.value.trim() || '',
+            required: item.querySelector('.sc-p-required').value === 'true'
+        };
+        const def = item.querySelector('.sc-p-default')?.value.trim();
+        if (def !== '') {
+            if (p.type === 'port' || p.type === 'integer') {
+                p.default = parseInt(def, 10) || def;
+            } else {
+                p.default = def;
+            }
+        }
+        if (p.name) parameters.push(p);
+    });
+
+    const data = { name, parameters, shellcode };
+    if (listener) data.listener = listener;
+    return data;
+}
+
+async function saveShellcode() {
+    const data = collectScEditorData();
+
+    if (!data.name) {
+        showNotificationPopup('Shellcode name is required', 'error');
+        return;
+    }
+    if (!data.shellcode) {
+        showNotificationPopup('Shellcode command is required', 'error');
+        return;
+    }
+
+    try {
+        let resp;
+        if (scEditorMode === 'create') {
+            resp = await fetch('/api/shellcodes/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        } else {
+            resp = await fetch(`/api/shellcode/${encodeURIComponent(scEditorOriginalName)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        }
+
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup(scEditorMode === 'create' ? 'Shellcode created!' : 'Shellcode updated!', 'success');
+            showScListView();
+            loadShellcodeList();
+        } else {
+            showNotificationPopup(result.error || 'Failed to save shellcode', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error saving shellcode: ' + e.message, 'error');
+    }
+}
+
+async function deleteShellcode(name) {
+    if (!confirm(`Delete shellcode "${name}"?`)) return;
+
+    try {
+        const resp = await fetch(`/api/shellcode/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup('Shellcode deleted', 'success');
+            loadShellcodeList();
+        } else {
+            showNotificationPopup(result.error || 'Failed to delete shellcode', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error deleting shellcode: ' + e.message, 'error');
+    }
+}
+
+// Generate functions
+async function openScGenerate(name) {
+    document.getElementById('shellcode-mgr-title').textContent = `Generate: ${name}`;
+    document.getElementById('sc-generate-result').style.display = 'none';
+    document.getElementById('sc-generate-btn').dataset.shellcodeName = name;
+    document.getElementById('sc-generate-btn').disabled = false;
+
+    const container = document.getElementById('sc-generate-params-container');
+    container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:1rem;">Loading parameters...</div>';
+
+    showScGenerateView();
+
+    try {
+        const resp = await fetch(`/api/shellcode/${encodeURIComponent(name)}`);
+        const sc = await resp.json();
+
+        if (sc.error) {
+            container.innerHTML = `<div style="color:var(--red);">${escapeHtml(sc.error)}</div>`;
+            return;
+        }
+
+        let html = '';
+        if (sc.parameters && sc.parameters.length > 0) {
+            sc.parameters.forEach(param => {
+                const isRequired = param.required || false;
+                let defaultVal = param.default !== undefined ? param.default : '';
+                defaultVal = processParameterDefault(String(defaultVal), param.name);
+
+                if (param.name.toLowerCase() === 'lhost') {
+                    const settingsLhost = getDefaultLhost();
+                    if (settingsLhost) defaultVal = settingsLhost;
+                }
+
+                html += `
+                    <div class="param-form-item">
+                        <label class="param-form-label">
+                            ${escapeHtml(param.name)}
+                            ${isRequired ? '<span class="param-required">*</span>' : ''}
+                            <span class="param-type">[${escapeHtml(param.type)}]</span>
+                        </label>
+                        <input type="text"
+                               class="param-form-input"
+                               data-sc-param="${escapeHtml(param.name)}"
+                               data-type="${escapeHtml(param.type)}"
+                               data-required="${isRequired}"
+                               value="${escapeHtml(String(defaultVal))}"
+                               placeholder="${escapeHtml(param.description || '')}">
+                        <div class="param-form-description">${escapeHtml(param.description || '')}</div>
+                    </div>
+                `;
+            });
+        } else {
+            html = '<div style="color:var(--subtext0);padding:1rem;">This shellcode has no parameters.</div>';
+        }
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--red);">Error: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function generateShellcode() {
+    const name = document.getElementById('sc-generate-btn').dataset.shellcodeName;
+    const generateBtn = document.getElementById('sc-generate-btn');
+    generateBtn.disabled = true;
+    generateBtn.textContent = 'Generating...';
+
+    // Collect parameters
+    const parameters = {};
+    document.querySelectorAll('#sc-generate-params-container [data-sc-param]').forEach(input => {
+        parameters[input.dataset.scParam] = input.value.trim();
+    });
+
+    try {
+        const resp = await fetch('/api/shellcodes/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, parameters })
+        });
+
+        const result = await resp.json();
+
+        if (resp.ok && result.success) {
+            document.getElementById('sc-generate-result').style.display = '';
+            document.getElementById('sc-generate-size').textContent = `Size: ${result.size} bytes`;
+            document.getElementById('sc-generate-output-hex').value = result.hex;
+            document.getElementById('sc-generate-save-filename').value = 'shellcode.bin';
+            document.getElementById('sc-generate-save-status').style.display = 'none';
+
+            if (result.listener) {
+                document.getElementById('sc-generate-listener-section').style.display = '';
+                document.getElementById('sc-generate-listener-cmd').value = result.listener;
+            } else {
+                document.getElementById('sc-generate-listener-section').style.display = 'none';
+            }
+        } else {
+            showNotificationPopup(result.error || 'Generation failed', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error generating shellcode: ' + e.message, 'error');
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate';
+    }
+}
+
+async function saveGeneratedShellcode() {
+    const hex = document.getElementById('sc-generate-output-hex').value;
+    const filenameInput = document.getElementById('sc-generate-save-filename');
+    const saveBtn = document.getElementById('sc-generate-save-btn');
+    const statusDiv = document.getElementById('sc-generate-save-status');
+
+    let filename = filenameInput.value.trim();
+    if (!filename) {
+        showNotificationPopup('Please enter a filename', 'error');
+        filenameInput.focus();
+        return;
+    }
+    if (!hex) {
+        showNotificationPopup('No shellcode data to save', 'error');
+        return;
+    }
+
+    saveBtn.disabled = true;
+    statusDiv.style.display = 'none';
+
+    try {
+        const resp = await fetch('/api/shellcodes/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hex, filename })
+        });
+
+        const result = await resp.json();
+
+        if (resp.ok && result.success) {
+            statusDiv.textContent = `Saved to: ${result.path}`;
+            statusDiv.style.display = 'block';
+            statusDiv.style.borderColor = 'var(--teal)';
+            statusDiv.style.color = 'var(--teal)';
+        } else {
+            statusDiv.textContent = `Error: ${result.error}`;
+            statusDiv.style.display = 'block';
+            statusDiv.style.borderColor = 'var(--red)';
+            statusDiv.style.color = 'var(--red)';
+        }
+    } catch (e) {
+        statusDiv.textContent = `Error: ${e.message}`;
+        statusDiv.style.display = 'block';
+        statusDiv.style.borderColor = 'var(--red)';
+        statusDiv.style.color = 'var(--red)';
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
+// ===== PS OBFUSCATION METHOD MANAGER =====
+
+let psObfEditorMode = 'create'; // 'create' or 'edit'
+let psObfEditorOriginalName = '';
+
+function showPsObfMainView() {
+    document.getElementById('ps-obf-main-view').style.display = '';
+    document.getElementById('ps-obf-list-view').style.display = 'none';
+    document.getElementById('ps-obf-editor-view').style.display = 'none';
+    document.getElementById('ps-obf-footer-main').style.display = '';
+    document.getElementById('ps-obf-footer-list').style.display = 'none';
+    document.getElementById('ps-obf-footer-editor').style.display = 'none';
+    document.getElementById('ps-obf-modal-title').textContent = 'PowerShell Obfuscator';
+}
+
+function showPsObfListView() {
+    document.getElementById('ps-obf-main-view').style.display = 'none';
+    document.getElementById('ps-obf-list-view').style.display = '';
+    document.getElementById('ps-obf-editor-view').style.display = 'none';
+    document.getElementById('ps-obf-footer-main').style.display = 'none';
+    document.getElementById('ps-obf-footer-list').style.display = '';
+    document.getElementById('ps-obf-footer-editor').style.display = 'none';
+    document.getElementById('ps-obf-modal-title').textContent = 'Manage Obfuscation Methods';
+    loadPsObfMethodList();
+}
+
+function showPsObfEditorView() {
+    document.getElementById('ps-obf-main-view').style.display = 'none';
+    document.getElementById('ps-obf-list-view').style.display = 'none';
+    document.getElementById('ps-obf-editor-view').style.display = '';
+    document.getElementById('ps-obf-footer-main').style.display = 'none';
+    document.getElementById('ps-obf-footer-list').style.display = 'none';
+    document.getElementById('ps-obf-footer-editor').style.display = '';
+}
+
+async function loadPsObfMethodList() {
+    const container = document.getElementById('ps-obf-method-list');
+    container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:2rem;">Loading...</div>';
+
+    try {
+        const resp = await fetch('/api/ps-obfuscation-methods');
+        const data = await resp.json();
+
+        if (!data.methods || data.methods.length === 0) {
+            container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:2rem;">No obfuscation methods configured. Click "+ New Method" to create one.</div>';
+            return;
+        }
+
+        // Fetch raw data for each method to get command previews
+        let html = '';
+        for (const m of data.methods) {
+            let preview = '';
+            try {
+                const rawResp = await fetch(`/api/ps-obfuscation-method/${encodeURIComponent(m.name)}/raw`);
+                const rawData = await rawResp.json();
+                preview = (rawData.command || '').trim().split('\n')[0];
+                if (preview.length > 80) preview = preview.substring(0, 80) + '...';
+            } catch (e) { /* ignore */ }
+
+            html += `
+                <div class="ps-obf-method-card">
+                    <div class="ps-obf-method-card-info">
+                        <div class="ps-obf-method-card-name">${escapeHtml(m.name)}</div>
+                        <div class="ps-obf-method-card-preview">${escapeHtml(preview)}</div>
+                    </div>
+                    <div class="ps-obf-method-card-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="openPsObfEditor('edit', '${escapeHtml(m.name).replace(/'/g, "\\'")}')">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deletePsObfMethod('${escapeHtml(m.name).replace(/'/g, "\\'")}')">Delete</button>
+                    </div>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--red);text-align:center;padding:2rem;">Error loading methods: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function openPsObfEditor(mode, name) {
+    psObfEditorMode = mode;
+    psObfEditorOriginalName = mode === 'edit' ? name : '';
+    document.getElementById('ps-obf-modal-title').textContent = mode === 'create' ? 'New Obfuscation Method' : 'Edit Obfuscation Method';
+
+    // Clear fields
+    document.getElementById('ps-obf-editor-name').value = '';
+    document.getElementById('ps-obf-editor-command').value = '';
+
+    if (mode === 'edit' && name) {
+        try {
+            const resp = await fetch(`/api/ps-obfuscation-method/${encodeURIComponent(name)}/raw`);
+            const data = await resp.json();
+            if (data.error) {
+                showNotificationPopup(data.error, 'error');
+                return;
+            }
+            document.getElementById('ps-obf-editor-name').value = data.name || '';
+            document.getElementById('ps-obf-editor-command').value = data.command || '';
+        } catch (e) {
+            showNotificationPopup('Error loading method: ' + e.message, 'error');
+            return;
+        }
+    }
+
+    showPsObfEditorView();
+}
+
+async function savePsObfMethod() {
+    const name = document.getElementById('ps-obf-editor-name').value.trim();
+    const command = document.getElementById('ps-obf-editor-command').value.trim();
+
+    if (!name) {
+        showNotificationPopup('Method name is required', 'error');
+        return;
+    }
+    if (!command) {
+        showNotificationPopup('Method command is required', 'error');
+        return;
+    }
+
+    const payload = { name, command };
+
+    try {
+        let resp;
+        if (psObfEditorMode === 'create') {
+            resp = await fetch('/api/ps-obfuscation-methods/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            resp = await fetch(`/api/ps-obfuscation-method/${encodeURIComponent(psObfEditorOriginalName)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup(psObfEditorMode === 'create' ? 'Method created!' : 'Method updated!', 'success');
+            showPsObfListView();
+        } else {
+            showNotificationPopup(result.error || 'Failed to save method', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error saving method: ' + e.message, 'error');
+    }
+}
+
+async function deletePsObfMethod(name) {
+    if (!confirm(`Delete obfuscation method "${name}"?`)) return;
+
+    try {
+        const resp = await fetch(`/api/ps-obfuscation-method/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup('Method deleted', 'success');
+            loadPsObfMethodList();
+        } else {
+            showNotificationPopup(result.error || 'Failed to delete method', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error deleting method: ' + e.message, 'error');
+    }
+}
+
+async function refreshPsObfDropdowns() {
+    // Refresh the obfuscation level dropdown and cradle obfuscation dropdown
+    try {
+        const response = await fetch('/api/ps-obfuscation-methods');
+        const data = await response.json();
+
+        const levelSelect = document.getElementById('obfuscate-ps-level');
+        if (levelSelect) {
+            const currentValue = levelSelect.value;
+            levelSelect.innerHTML = '<option value="">None - No obfuscation</option>' +
+                data.methods.map(m =>
+                    `<option value="${m.name}">${m.name}</option>`
+                ).join('');
+            // Try to restore previous selection
+            if (currentValue) {
+                const exists = Array.from(levelSelect.options).some(o => o.value === currentValue);
+                if (exists) levelSelect.value = currentValue;
+            }
+        }
+
+        const cradleObfSelect = document.getElementById('obfuscate-ps-cradle-obf-method');
+        if (cradleObfSelect) {
+            const currentCradleValue = cradleObfSelect.value;
+            cradleObfSelect.innerHTML = '<option value="">None</option>' +
+                data.methods.map(m =>
+                    `<option value="${m.name}">${m.name}</option>`
+                ).join('');
+            if (currentCradleValue) {
+                const exists = Array.from(cradleObfSelect.options).some(o => o.value === currentCradleValue);
+                if (exists) cradleObfSelect.value = currentCradleValue;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to refresh obfuscation method dropdowns:', error);
+    }
+}
+
+// ===== PS FEATURES MANAGER =====
+
+let psFeatEditorMode = 'create';
+let psFeatEditorOriginalName = '';
+
+const PS_FEAT_TYPE_LABELS = {
+    'amsi': 'AMSI Bypasses',
+    'cradle-ps1': 'PS1 Download Cradles',
+    'cradle-exe': 'EXE Download Cradles',
+    'cradle-dll': 'DLL Download Cradles'
+};
+
+function showPsFeatManager() {
+    const modal = document.getElementById('ps-features-modal');
+    document.getElementById('ps-feat-modal-title').textContent = 'PS Features Manager';
+    showPsFeatListView();
+    modal.classList.add('active');
+    loadPsFeatList();
+}
+
+function showPsFeatListView() {
+    document.getElementById('ps-feat-list-view').style.display = '';
+    document.getElementById('ps-feat-editor-view').style.display = 'none';
+    document.getElementById('ps-feat-generate-view').style.display = 'none';
+    document.getElementById('ps-feat-modal-title').textContent = 'PS Features Manager';
+}
+
+function showPsFeatEditorView() {
+    document.getElementById('ps-feat-list-view').style.display = 'none';
+    document.getElementById('ps-feat-editor-view').style.display = '';
+    document.getElementById('ps-feat-generate-view').style.display = 'none';
+}
+
+function showPsFeatGenerateView() {
+    document.getElementById('ps-feat-list-view').style.display = 'none';
+    document.getElementById('ps-feat-editor-view').style.display = 'none';
+    document.getElementById('ps-feat-generate-view').style.display = '';
+}
+
+async function loadPsFeatList() {
+    const container = document.getElementById('ps-feat-list');
+    container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:2rem;">Loading...</div>';
+
+    try {
+        const resp = await fetch('/api/ps-features');
+        const data = await resp.json();
+
+        if (!data.features) {
+            container.innerHTML = '<div style="color:var(--red);text-align:center;padding:2rem;">Error loading features</div>';
+            return;
+        }
+
+        const typeOrder = ['amsi', 'cradle-ps1', 'cradle-exe', 'cradle-dll'];
+        let html = '';
+        let totalCount = 0;
+
+        for (const ftype of typeOrder) {
+            const items = data.features[ftype] || [];
+            if (items.length === 0) continue;
+            totalCount += items.length;
+
+            html += `<div class="ps-feat-type-group">`;
+            html += `<div class="ps-feat-type-header">${PS_FEAT_TYPE_LABELS[ftype] || ftype} (${items.length})</div>`;
+
+            for (const item of items) {
+                const tags = [];
+                if (item.has_code) tags.push('code');
+                if (item.has_command) tags.push('command');
+                const noObfTag = item.no_obf ? '<span class="ps-feat-tag ps-feat-tag-noobf">no-obf</span>' : '';
+
+                html += `
+                    <div class="ps-feat-card">
+                        <div class="ps-feat-card-info">
+                            <div class="ps-feat-card-name">${escapeHtml(item.name)}</div>
+                            <div class="ps-feat-card-meta">
+                                ${tags.map(t => `<span class="ps-feat-tag">${t}</span>`).join('')}
+                                ${noObfTag}
+                            </div>
+                        </div>
+                        <div class="ps-feat-card-actions">
+                            <button class="btn btn-primary btn-sm" onclick="openPsFeatGenerate('${escapeHtml(item.name).replace(/'/g, "\\'")}')">View</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openPsFeatEditor('edit', '${escapeHtml(item.name).replace(/'/g, "\\'")}')">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deletePsFeat('${escapeHtml(item.name).replace(/'/g, "\\'")}')">Delete</button>
+                        </div>
+                    </div>
+                `;
+            }
+            html += `</div>`;
+        }
+
+        if (totalCount === 0) {
+            container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:2rem;">No PS features configured. Click "+ New Feature" to create one.</div>';
+        } else {
+            container.innerHTML = html;
+        }
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--red);text-align:center;padding:2rem;">Error loading features: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function openPsFeatEditor(mode, name) {
+    psFeatEditorMode = mode;
+    psFeatEditorOriginalName = mode === 'edit' ? name : '';
+    document.getElementById('ps-feat-modal-title').textContent = mode === 'create' ? 'New PS Feature' : 'Edit PS Feature';
+
+    // Clear fields
+    document.getElementById('ps-feat-editor-name').value = '';
+    document.getElementById('ps-feat-editor-type').value = 'amsi';
+    document.getElementById('ps-feat-editor-no-obf').checked = false;
+    document.getElementById('ps-feat-editor-code').value = '';
+    document.getElementById('ps-feat-editor-command').value = '';
+
+    if (mode === 'edit' && name) {
+        try {
+            const resp = await fetch(`/api/ps-feature/${encodeURIComponent(name)}/raw`);
+            const data = await resp.json();
+            if (data.error) {
+                showNotificationPopup(data.error, 'error');
+                return;
+            }
+            document.getElementById('ps-feat-editor-name').value = data.name || '';
+            document.getElementById('ps-feat-editor-type').value = data.type || 'amsi';
+            document.getElementById('ps-feat-editor-no-obf').checked = data['no-obf'] || false;
+            document.getElementById('ps-feat-editor-code').value = data.code || '';
+            document.getElementById('ps-feat-editor-command').value = data.command || '';
+        } catch (e) {
+            showNotificationPopup('Error loading feature: ' + e.message, 'error');
+            return;
+        }
+    }
+
+    showPsFeatEditorView();
+}
+
+async function savePsFeat() {
+    const name = document.getElementById('ps-feat-editor-name').value.trim();
+    const type = document.getElementById('ps-feat-editor-type').value;
+    const noObf = document.getElementById('ps-feat-editor-no-obf').checked;
+    const code = document.getElementById('ps-feat-editor-code').value.trim();
+    const command = document.getElementById('ps-feat-editor-command').value.trim();
+
+    if (!name) {
+        showNotificationPopup('Feature name is required', 'error');
+        return;
+    }
+    if (!code && !command) {
+        showNotificationPopup('Either code or command is required', 'error');
+        return;
+    }
+
+    const payload = { name, type, no_obf: noObf };
+    if (code) payload.code = code;
+    if (command) payload.command = command;
+
+    try {
+        let resp;
+        if (psFeatEditorMode === 'create') {
+            resp = await fetch('/api/ps-features/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            resp = await fetch(`/api/ps-feature/${encodeURIComponent(psFeatEditorOriginalName)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup(psFeatEditorMode === 'create' ? 'Feature created!' : 'Feature updated!', 'success');
+            showPsFeatListView();
+            loadPsFeatList();
+        } else {
+            showNotificationPopup(result.error || 'Failed to save feature', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error saving feature: ' + e.message, 'error');
+    }
+}
+
+async function deletePsFeat(name) {
+    if (!confirm(`Delete PS feature "${name}"?`)) return;
+
+    try {
+        const resp = await fetch(`/api/ps-feature/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+            showNotificationPopup('Feature deleted', 'success');
+            loadPsFeatList();
+        } else {
+            showNotificationPopup(result.error || 'Failed to delete feature', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error deleting feature: ' + e.message, 'error');
+    }
+}
+
+// PS Features generate functions
+
+async function openPsFeatGenerate(name) {
+    document.getElementById('ps-feat-modal-title').textContent = `View: ${name}`;
+    document.getElementById('ps-feat-generate-result').style.display = 'none';
+    document.getElementById('ps-feat-generate-btn').dataset.featureName = name;
+    document.getElementById('ps-feat-generate-btn').disabled = false;
+    document.getElementById('ps-feat-generate-save-status').style.display = 'none';
+
+    const container = document.getElementById('ps-feat-generate-params-container');
+    container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:1rem;">Loading...</div>';
+
+    showPsFeatGenerateView();
+
+    try {
+        const resp = await fetch(`/api/ps-feature/${encodeURIComponent(name)}/info`);
+        const info = await resp.json();
+
+        if (info.error) {
+            container.innerHTML = `<div style="color:var(--red);">${escapeHtml(info.error)}</div>`;
+            return;
+        }
+
+        const hasParams = info.parameters && info.parameters.length > 0;
+        const hasCommand = info.has_command;
+
+        if (!hasParams && !hasCommand) {
+            // No parameters, no command to run — static code, generate immediately
+            container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:1rem;">Generating...</div>';
+            document.getElementById('ps-feat-generate-btn').style.display = 'none';
+            await generatePsFeat();
+            container.innerHTML = '';
+            return;
+        }
+
+        if (!hasParams && hasCommand) {
+            // Command-based but no user parameters needed — still generate immediately
+            container.innerHTML = '<div style="color:var(--subtext0);text-align:center;padding:1rem;">Generating...</div>';
+            document.getElementById('ps-feat-generate-btn').style.display = 'none';
+            await generatePsFeat();
+            container.innerHTML = '';
+            return;
+        }
+
+        // Has parameters — show the form
+        document.getElementById('ps-feat-generate-btn').style.display = '';
+        let html = '';
+        info.parameters.forEach(param => {
+            let defaultVal = param.default || '';
+            // Auto-fill lhost from global settings
+            if (param.name === 'lhost') {
+                const settingsLhost = getDefaultLhost();
+                if (settingsLhost) defaultVal = settingsLhost;
+            }
+            // Auto-fill output_path from global settings
+            if (param.name === 'output_path') {
+                const settingsOutputDir = getDefaultOutputDir();
+                if (settingsOutputDir) defaultVal = settingsOutputDir;
+            }
+
+            const isRequired = param.required || false;
+            html += `
+                <div class="param-form-item">
+                    <label class="param-form-label">
+                        ${escapeHtml(param.label || param.name)}
+                        ${isRequired ? '<span class="param-required">*</span>' : ''}
+                        <span class="param-type">[${escapeHtml(param.type)}]</span>
+                    </label>
+                    <input type="text"
+                           class="param-form-input"
+                           data-ps-feat-param="${escapeHtml(param.name)}"
+                           data-required="${isRequired}"
+                           value="${escapeHtml(String(defaultVal))}"
+                           placeholder="${escapeHtml(param.description || '')}">
+                    <div class="param-form-description">${escapeHtml(param.description || '')}</div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--red);">Error: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+async function generatePsFeat() {
+    const name = document.getElementById('ps-feat-generate-btn').dataset.featureName;
+    const generateBtn = document.getElementById('ps-feat-generate-btn');
+    generateBtn.disabled = true;
+    const origText = generateBtn.textContent;
+    generateBtn.textContent = 'Generating...';
+
+    // Collect parameters
+    const parameters = {};
+    document.querySelectorAll('#ps-feat-generate-params-container [data-ps-feat-param]').forEach(input => {
+        parameters[input.dataset.psFeatParam] = input.value.trim();
+    });
+
+    try {
+        const resp = await fetch('/api/ps-features/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, parameters })
+        });
+
+        const result = await resp.json();
+
+        if (resp.ok && result.success) {
+            document.getElementById('ps-feat-generate-result').style.display = '';
+            document.getElementById('ps-feat-generate-output').value = result.output;
+            document.getElementById('ps-feat-generate-save-status').style.display = 'none';
+
+            // Set default filename based on feature type
+            const ext = result.feature_type === 'amsi' ? 'ps1' : 'ps1';
+            document.getElementById('ps-feat-generate-save-filename').value = `${name.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
+        } else {
+            showNotificationPopup(result.error || 'Generation failed', 'error');
+        }
+    } catch (e) {
+        showNotificationPopup('Error generating feature: ' + e.message, 'error');
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = origText;
+    }
+}
+
+async function savePsFeatOutput() {
+    const content = document.getElementById('ps-feat-generate-output').value;
+    const filenameInput = document.getElementById('ps-feat-generate-save-filename');
+    const saveBtn = document.getElementById('ps-feat-generate-save-btn');
+    const statusDiv = document.getElementById('ps-feat-generate-save-status');
+
+    let filename = filenameInput.value.trim();
+    if (!filename) {
+        showNotificationPopup('Please enter a filename', 'error');
+        filenameInput.focus();
+        return;
+    }
+    if (!content) {
+        showNotificationPopup('No content to save', 'error');
+        return;
+    }
+
+    saveBtn.disabled = true;
+    statusDiv.style.display = 'none';
+
+    try {
+        const resp = await fetch('/api/ps-features/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, filename })
+        });
+
+        const result = await resp.json();
+
+        if (resp.ok && result.success) {
+            statusDiv.textContent = `Saved to: ${result.path}`;
+            statusDiv.style.display = 'block';
+            statusDiv.style.borderColor = 'var(--teal)';
+            statusDiv.style.color = 'var(--teal)';
+        } else {
+            statusDiv.textContent = `Error: ${result.error}`;
+            statusDiv.style.display = 'block';
+            statusDiv.style.borderColor = 'var(--red)';
+            statusDiv.style.color = 'var(--red)';
+        }
+    } catch (e) {
+        statusDiv.textContent = `Error: ${e.message}`;
+        statusDiv.style.display = 'block';
+        statusDiv.style.borderColor = 'var(--red)';
+        statusDiv.style.color = 'var(--red)';
+    } finally {
+        saveBtn.disabled = false;
+    }
+}
+
 // ===== EDITOR & VERSION EVENT WIRING =====
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -4638,8 +5625,99 @@ document.addEventListener('DOMContentLoaded', function() {
     const versionCloseBtn = document.getElementById('version-close-btn');
     if (versionCloseBtn) versionCloseBtn.addEventListener('click', () => closeModal('version-history-modal'));
 
+    // Shellcode manager
+    const scMgrBtn = document.getElementById('shellcode-mgr-btn');
+    if (scMgrBtn) scMgrBtn.addEventListener('click', showShellcodeManager);
+
+    const scCreateBtn = document.getElementById('shellcode-mgr-create-btn');
+    if (scCreateBtn) scCreateBtn.addEventListener('click', () => openScEditor('create'));
+
+    const scEditorSaveBtn = document.getElementById('sc-editor-save-btn');
+    if (scEditorSaveBtn) scEditorSaveBtn.addEventListener('click', saveShellcode);
+
+    const scEditorCancelBtn = document.getElementById('sc-editor-cancel-btn');
+    if (scEditorCancelBtn) scEditorCancelBtn.addEventListener('click', () => { showScListView(); loadShellcodeList(); });
+
+    const scAddParamBtn = document.getElementById('sc-editor-add-param');
+    if (scAddParamBtn) scAddParamBtn.addEventListener('click', () => addScParamRow(null));
+
+    const scGenerateBtn = document.getElementById('sc-generate-btn');
+    if (scGenerateBtn) scGenerateBtn.addEventListener('click', generateShellcode);
+
+    const scGenerateBackBtn = document.getElementById('sc-generate-back-btn');
+    if (scGenerateBackBtn) scGenerateBackBtn.addEventListener('click', () => { showScListView(); });
+
+    const scCopyHexBtn = document.getElementById('sc-generate-copy-hex');
+    if (scCopyHexBtn) scCopyHexBtn.addEventListener('click', () => {
+        const hex = document.getElementById('sc-generate-output-hex').value;
+        navigator.clipboard.writeText(hex).then(() => {
+            showNotificationPopup('Shellcode copied!', 'success');
+        });
+    });
+
+    const scCopyListenerBtn = document.getElementById('sc-generate-copy-listener');
+    if (scCopyListenerBtn) scCopyListenerBtn.addEventListener('click', () => {
+        const cmd = document.getElementById('sc-generate-listener-cmd').value;
+        navigator.clipboard.writeText(cmd).then(() => {
+            showNotificationPopup('Listener command copied!', 'success');
+        });
+    });
+
+    const scSaveBtn = document.getElementById('sc-generate-save-btn');
+    if (scSaveBtn) scSaveBtn.addEventListener('click', saveGeneratedShellcode);
+
+    // PS obfuscation method manager
+    const psObfManageBtn = document.getElementById('ps-obf-manage-btn');
+    if (psObfManageBtn) psObfManageBtn.addEventListener('click', showPsObfListView);
+
+    const psObfCreateBtn = document.getElementById('ps-obf-create-btn');
+    if (psObfCreateBtn) psObfCreateBtn.addEventListener('click', () => openPsObfEditor('create'));
+
+    const psObfListBackBtn = document.getElementById('ps-obf-list-back-btn');
+    if (psObfListBackBtn) psObfListBackBtn.addEventListener('click', () => {
+        showPsObfMainView();
+        // Refresh the method dropdown when coming back from management
+        refreshPsObfDropdowns();
+    });
+
+    const psObfEditorSaveBtn = document.getElementById('ps-obf-editor-save-btn');
+    if (psObfEditorSaveBtn) psObfEditorSaveBtn.addEventListener('click', savePsObfMethod);
+
+    const psObfEditorCancelBtn = document.getElementById('ps-obf-editor-cancel-btn');
+    if (psObfEditorCancelBtn) psObfEditorCancelBtn.addEventListener('click', showPsObfListView);
+
+    // PS features manager
+    const psFeatBtn = document.getElementById('ps-features-btn');
+    if (psFeatBtn) psFeatBtn.addEventListener('click', showPsFeatManager);
+
+    const psFeatCreateBtn = document.getElementById('ps-feat-create-btn');
+    if (psFeatCreateBtn) psFeatCreateBtn.addEventListener('click', () => openPsFeatEditor('create'));
+
+    const psFeatEditorSaveBtn = document.getElementById('ps-feat-editor-save-btn');
+    if (psFeatEditorSaveBtn) psFeatEditorSaveBtn.addEventListener('click', savePsFeat);
+
+    const psFeatEditorCancelBtn = document.getElementById('ps-feat-editor-cancel-btn');
+    if (psFeatEditorCancelBtn) psFeatEditorCancelBtn.addEventListener('click', () => { showPsFeatListView(); loadPsFeatList(); });
+
+    const psFeatGenerateBtn = document.getElementById('ps-feat-generate-btn');
+    if (psFeatGenerateBtn) psFeatGenerateBtn.addEventListener('click', generatePsFeat);
+
+    const psFeatGenerateBackBtn = document.getElementById('ps-feat-generate-back-btn');
+    if (psFeatGenerateBackBtn) psFeatGenerateBackBtn.addEventListener('click', () => { showPsFeatListView(); });
+
+    const psFeatCopyBtn = document.getElementById('ps-feat-generate-copy');
+    if (psFeatCopyBtn) psFeatCopyBtn.addEventListener('click', () => {
+        const output = document.getElementById('ps-feat-generate-output').value;
+        navigator.clipboard.writeText(output).then(() => {
+            showNotificationPopup('Copied to clipboard!', 'success');
+        });
+    });
+
+    const psFeatSaveBtn = document.getElementById('ps-feat-generate-save-btn');
+    if (psFeatSaveBtn) psFeatSaveBtn.addEventListener('click', savePsFeatOutput);
+
     // Modal close buttons for new modals
-    document.querySelectorAll('#recipe-editor-modal .modal-close, #version-history-modal .modal-close').forEach(btn => {
+    document.querySelectorAll('#recipe-editor-modal .modal-close, #version-history-modal .modal-close, #shellcode-mgr-modal .modal-close, #ps-features-modal .modal-close').forEach(btn => {
         btn.addEventListener('click', function() {
             this.closest('.modal').classList.remove('active');
         });

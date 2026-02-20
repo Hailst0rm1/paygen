@@ -1019,6 +1019,465 @@ def get_ps_obfuscation_methods():
     return jsonify({'methods': methods})
 
 
+@app.route('/api/ps-obfuscation-method/<name>/raw')
+def get_ps_obfuscation_method_raw(name):
+    """Get raw ps-obfuscation method data for editing"""
+    for method in ps_obfuscation_methods:
+        if method.get('name') == name:
+            return jsonify(method)
+    return jsonify({'error': f'Method "{name}" not found'}), 404
+
+
+@app.route('/api/ps-obfuscation-methods/create', methods=['POST'])
+def create_ps_obfuscation_method():
+    """Create a new ps-obfuscation method"""
+    global ps_obfuscation_methods
+    try:
+        import yaml
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'Method name is required'}), 400
+        command = data.get('command', '').strip()
+        if not command:
+            return jsonify({'error': 'Method command is required'}), 400
+
+        # Check for duplicate name
+        for m in ps_obfuscation_methods:
+            if m.get('name') == name:
+                return jsonify({'error': f'Method "{name}" already exists'}), 400
+
+        entry = {'name': name, 'command': command}
+        ps_obfuscation_methods.append(entry)
+
+        ps_obf_path = config.ps_obfuscation_yaml
+        ps_obf_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(ps_obf_path, 'w') as f:
+            yaml.dump(ps_obfuscation_methods, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Method "{name}" created'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ps-obfuscation-method/<name>', methods=['PUT'])
+def update_ps_obfuscation_method(name):
+    """Update an existing ps-obfuscation method"""
+    global ps_obfuscation_methods
+    try:
+        import yaml
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return jsonify({'error': 'Method name is required'}), 400
+        command = data.get('command', '').strip()
+        if not command:
+            return jsonify({'error': 'Method command is required'}), 400
+
+        found = False
+        for i, m in enumerate(ps_obfuscation_methods):
+            if m.get('name') == name:
+                # Check if renaming to an existing name
+                if new_name != name:
+                    for other in ps_obfuscation_methods:
+                        if other.get('name') == new_name:
+                            return jsonify({'error': f'Method "{new_name}" already exists'}), 400
+                ps_obfuscation_methods[i] = {'name': new_name, 'command': command}
+                found = True
+                break
+
+        if not found:
+            return jsonify({'error': f'Method "{name}" not found'}), 404
+
+        ps_obf_path = config.ps_obfuscation_yaml
+        with open(ps_obf_path, 'w') as f:
+            yaml.dump(ps_obfuscation_methods, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Method "{new_name}" updated'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ps-obfuscation-method/<name>', methods=['DELETE'])
+def delete_ps_obfuscation_method(name):
+    """Delete a ps-obfuscation method"""
+    global ps_obfuscation_methods
+    try:
+        import yaml
+        original_len = len(ps_obfuscation_methods)
+        ps_obfuscation_methods = [m for m in ps_obfuscation_methods if m.get('name') != name]
+
+        if len(ps_obfuscation_methods) == original_len:
+            return jsonify({'error': f'Method "{name}" not found'}), 404
+
+        ps_obf_path = config.ps_obfuscation_yaml
+        with open(ps_obf_path, 'w') as f:
+            yaml.dump(ps_obfuscation_methods, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Method "{name}" deleted'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ps-features')
+def get_ps_features_list():
+    """Get all ps-features grouped by type"""
+    grouped = {'amsi': [], 'cradle-ps1': [], 'cradle-exe': [], 'cradle-dll': []}
+
+    for f in ps_features:
+        ftype = f.get('type', '')
+        entry = {
+            'name': f.get('name', ''),
+            'type': ftype,
+            'no_obf': f.get('no-obf', False),
+            'has_code': bool(f.get('code')),
+            'has_command': bool(f.get('command'))
+        }
+        if ftype in grouped:
+            grouped[ftype].append(entry)
+
+    return jsonify({'features': grouped})
+
+
+@app.route('/api/ps-feature/<name>/raw')
+def get_ps_feature_raw(name):
+    """Get raw ps-feature data for editing"""
+    for f in ps_features:
+        if f.get('name') == name:
+            return jsonify(f)
+    return jsonify({'error': f'Feature "{name}" not found'}), 404
+
+
+@app.route('/api/ps-features/create', methods=['POST'])
+def create_ps_feature():
+    """Create a new ps-feature"""
+    global ps_features
+    try:
+        import yaml
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'Feature name is required'}), 400
+        ftype = data.get('type', '').strip()
+        if not ftype:
+            return jsonify({'error': 'Feature type is required'}), 400
+
+        code = data.get('code', '').strip()
+        command = data.get('command', '').strip()
+        if not code and not command:
+            return jsonify({'error': 'Either code or command is required'}), 400
+
+        # Check for duplicate name
+        for f in ps_features:
+            if f.get('name') == name:
+                return jsonify({'error': f'Feature "{name}" already exists'}), 400
+
+        entry = {'name': name, 'type': ftype, 'no-obf': data.get('no_obf', False)}
+        if code:
+            entry['code'] = code
+        if command:
+            entry['command'] = command
+
+        ps_features.append(entry)
+
+        ps_feat_path = config.ps_features_yaml
+        ps_feat_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(ps_feat_path, 'w') as f:
+            yaml.dump(ps_features, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Feature "{name}" created'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ps-feature/<name>', methods=['PUT'])
+def update_ps_feature(name):
+    """Update an existing ps-feature"""
+    global ps_features
+    try:
+        import yaml
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return jsonify({'error': 'Feature name is required'}), 400
+        ftype = data.get('type', '').strip()
+        if not ftype:
+            return jsonify({'error': 'Feature type is required'}), 400
+
+        code = data.get('code', '').strip()
+        command = data.get('command', '').strip()
+        if not code and not command:
+            return jsonify({'error': 'Either code or command is required'}), 400
+
+        found = False
+        for i, f in enumerate(ps_features):
+            if f.get('name') == name:
+                if new_name != name:
+                    for other in ps_features:
+                        if other.get('name') == new_name:
+                            return jsonify({'error': f'Feature "{new_name}" already exists'}), 400
+                entry = {'name': new_name, 'type': ftype, 'no-obf': data.get('no_obf', False)}
+                if code:
+                    entry['code'] = code
+                if command:
+                    entry['command'] = command
+                ps_features[i] = entry
+                found = True
+                break
+
+        if not found:
+            return jsonify({'error': f'Feature "{name}" not found'}), 404
+
+        ps_feat_path = config.ps_features_yaml
+        with open(ps_feat_path, 'w') as f:
+            yaml.dump(ps_features, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Feature "{new_name}" updated'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ps-feature/<name>', methods=['DELETE'])
+def delete_ps_feature(name):
+    """Delete a ps-feature"""
+    global ps_features
+    try:
+        import yaml
+        original_len = len(ps_features)
+        ps_features = [f for f in ps_features if f.get('name') != name]
+
+        if len(ps_features) == original_len:
+            return jsonify({'error': f'Feature "{name}" not found'}), 404
+
+        ps_feat_path = config.ps_features_yaml
+        with open(ps_feat_path, 'w') as f:
+            yaml.dump(ps_features, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Feature "{name}" deleted'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ps-feature/<name>/info')
+def get_ps_feature_info(name):
+    """Get ps-feature metadata including detected template variables"""
+    import re
+    for f in ps_features:
+        if f.get('name') == name:
+            code = f.get('code', '') or ''
+            command = f.get('command', '') or ''
+            combined = code + ' ' + command
+
+            # Detect {{ var }} style variables (excluding 'if' and 'fi' keywords)
+            raw_vars = set(re.findall(r'\{\{\s*(\w+)\s*\}\}', combined))
+            raw_vars.discard('if')
+            raw_vars.discard('fi')
+
+            # Known variable metadata
+            var_meta = {
+                'url': {'label': 'URL', 'type': 'string', 'description': 'Full URL (auto-built from lhost/lport if both provided)', 'required': False},
+                'lhost': {'label': 'Listener Host', 'type': 'ip', 'description': 'IP address or hostname', 'required': True},
+                'lport': {'label': 'Listener Port', 'type': 'port', 'description': 'Listener port (80=http, 443=https)', 'required': True, 'default': '80'},
+                'output_file': {'label': 'Output Filename', 'type': 'string', 'description': 'Payload filename for download URL', 'required': True, 'default': 'payload.ps1'},
+                'output_path': {'label': 'Output Path', 'type': 'string', 'description': 'Server-side output directory path', 'required': False},
+                'namespace': {'label': 'Namespace', 'type': 'string', 'description': '.NET namespace for assembly loading', 'required': False},
+                'class': {'label': 'Class', 'type': 'string', 'description': '.NET class name', 'required': False},
+                'entry_point': {'label': 'Entry Point', 'type': 'string', 'description': 'Method/function entry point', 'required': False},
+                'args': {'label': 'Arguments', 'type': 'string', 'description': 'Command-line arguments', 'required': False},
+            }
+
+            # If url is needed, ensure lhost/lport are shown and remove url (auto-built)
+            if 'url' in raw_vars:
+                raw_vars.add('lhost')
+                raw_vars.add('lport')
+                raw_vars.discard('url')
+
+            # Build ordered parameter list
+            param_order = ['lhost', 'lport', 'output_file', 'output_path', 'namespace', 'class', 'entry_point', 'args']
+            parameters = []
+            for vname in param_order:
+                if vname in raw_vars:
+                    meta = var_meta.get(vname, {'label': vname, 'type': 'string', 'description': '', 'required': False})
+                    parameters.append({**meta, 'name': vname})
+
+            # Any remaining vars not in param_order
+            for vname in sorted(raw_vars):
+                if vname not in param_order:
+                    parameters.append({'name': vname, 'label': vname, 'type': 'string', 'description': '', 'required': False})
+
+            return jsonify({
+                'name': f.get('name'),
+                'type': f.get('type'),
+                'no_obf': f.get('no-obf', False),
+                'has_code': bool(f.get('code')),
+                'has_command': bool(f.get('command')),
+                'parameters': parameters
+            })
+
+    return jsonify({'error': f'Feature "{name}" not found'}), 404
+
+
+@app.route('/api/ps-features/generate', methods=['POST'])
+def generate_ps_feature():
+    """Generate/render a ps-feature with given parameters"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'Feature name is required'}), 400
+
+        parameters = data.get('parameters', {})
+
+        # Find the feature
+        feature = None
+        for f in ps_features:
+            if f.get('name') == name:
+                feature = f
+                break
+
+        if not feature:
+            return jsonify({'error': f'Feature "{name}" not found'}), 404
+
+        code_template = feature.get('code', '') or ''
+        command_template = feature.get('command', '') or ''
+
+        # Build URL from lhost/lport if url variable is used
+        lhost = parameters.get('lhost', '')
+        lport_str = parameters.get('lport', '80')
+        try:
+            lport = int(lport_str)
+        except (ValueError, TypeError):
+            lport = 80
+
+        url = parameters.get('url', '')
+        if not url and lhost:
+            if lport == 443:
+                url = f'https://{lhost}'
+            elif lport == 80:
+                url = f'http://{lhost}'
+            else:
+                url = f'http://{lhost}:{lport}'
+
+        variables = {
+            'url': url,
+            'lhost': lhost,
+            'lport': str(lport),
+            'output_file': parameters.get('output_file', ''),
+            'output_path': parameters.get('output_path', ''),
+            'namespace': parameters.get('namespace', ''),
+            'class': parameters.get('class', ''),
+            'entry_point': parameters.get('entry_point', ''),
+            'args': parameters.get('args', ''),
+        }
+        # Merge any extra parameters
+        for k, v in parameters.items():
+            if k not in variables:
+                variables[k] = v
+
+        output = ''
+        command_used = ''
+
+        # Execute command if present
+        if command_template.strip():
+            cmd = command_template.strip()
+            cmd = process_conditional_blocks(cmd, variables)
+            for key, value in variables.items():
+                cmd = cmd.replace('{{ ' + key + ' }}', value)
+                cmd = cmd.replace('{{' + key + '}}', value)
+            command_used = cmd
+
+            try:
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True, timeout=120
+                )
+                if result.returncode == 0:
+                    output = result.stdout.strip()
+                else:
+                    error_msg = result.stderr.strip() if result.stderr else f'Command exited with code {result.returncode}'
+                    return jsonify({'error': f'Command failed: {error_msg}', 'command': cmd}), 500
+            except subprocess.TimeoutExpired:
+                return jsonify({'error': 'Command timed out (120s)', 'command': cmd}), 500
+
+        # Process code template (use as output if no command, or override if both)
+        if code_template.strip():
+            rendered = code_template.strip()
+            rendered = process_conditional_blocks(rendered, variables)
+            for key, value in variables.items():
+                rendered = rendered.replace('{{ ' + key + ' }}', value)
+                rendered = rendered.replace('{{' + key + '}}', value)
+
+            # If command was also run, command output takes precedence (some features use both)
+            if not output:
+                output = rendered
+            # For features with both code and command: command generates, code is the template
+            # Use command output if available, otherwise use rendered code
+
+        if not output:
+            return jsonify({'error': 'No output generated (feature has neither code nor command)'}), 400
+
+        return jsonify({
+            'success': True,
+            'output': output,
+            'command': command_used,
+            'feature_name': name,
+            'feature_type': feature.get('type', '')
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ps-features/save', methods=['POST'])
+def save_ps_feature_output():
+    """Save generated ps-feature output to a file"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        content = data.get('content', '')
+        filename = data.get('filename', '').strip()
+
+        if not content:
+            return jsonify({'error': 'No content to save'}), 400
+        if not filename:
+            return jsonify({'error': 'Filename is required'}), 400
+
+        # Sanitize filename
+        filename = os.path.basename(filename)
+
+        output_dir = config.output_dir if config else Path('/tmp')
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / filename
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return jsonify({
+            'success': True,
+            'path': str(output_path),
+            'filename': filename
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/ps-cradles')
 def get_ps_cradles():
     """Get available PowerShell cradles grouped by type"""
@@ -1444,6 +1903,241 @@ def get_shellcode(name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/shellcode/<name>/raw')
+def get_shellcode_raw(name):
+    """Get raw shellcode data for editing"""
+    try:
+        import yaml
+        shellcodes_path = config.shellcodes_config
+        if not shellcodes_path.exists():
+            return jsonify({'error': 'Shellcodes configuration file not found'}), 404
+
+        with open(shellcodes_path, 'r') as f:
+            shellcodes = yaml.safe_load(f) or []
+
+        for sc in shellcodes:
+            if sc.get('name') == name:
+                return jsonify(sc)
+
+        return jsonify({'error': f'Shellcode "{name}" not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/shellcodes/create', methods=['POST'])
+def create_shellcode():
+    """Create a new shellcode configuration"""
+    try:
+        import yaml
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'Shellcode name is required'}), 400
+        if not data.get('shellcode', '').strip():
+            return jsonify({'error': 'Shellcode command is required'}), 400
+
+        shellcodes_path = config.shellcodes_config
+        if shellcodes_path.exists():
+            with open(shellcodes_path, 'r') as f:
+                shellcodes = yaml.safe_load(f) or []
+        else:
+            shellcodes = []
+
+        # Check for duplicate name
+        for sc in shellcodes:
+            if sc.get('name') == name:
+                return jsonify({'error': f'Shellcode "{name}" already exists'}), 400
+
+        entry = {'name': name, 'parameters': data.get('parameters', []), 'shellcode': data['shellcode'].strip()}
+        listener = data.get('listener', '').strip()
+        if listener:
+            entry['listener'] = listener
+
+        shellcodes.append(entry)
+
+        shellcodes_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(shellcodes_path, 'w') as f:
+            yaml.dump(shellcodes, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Shellcode "{name}" created'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/shellcode/<name>', methods=['PUT'])
+def update_shellcode(name):
+    """Update an existing shellcode configuration"""
+    try:
+        import yaml
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No JSON data provided'}), 400
+
+        new_name = data.get('name', '').strip()
+        if not new_name:
+            return jsonify({'error': 'Shellcode name is required'}), 400
+        if not data.get('shellcode', '').strip():
+            return jsonify({'error': 'Shellcode command is required'}), 400
+
+        shellcodes_path = config.shellcodes_config
+        if not shellcodes_path.exists():
+            return jsonify({'error': 'Shellcodes configuration file not found'}), 404
+
+        with open(shellcodes_path, 'r') as f:
+            shellcodes = yaml.safe_load(f) or []
+
+        found = False
+        for i, sc in enumerate(shellcodes):
+            if sc.get('name') == name:
+                # Check if renaming to an existing name
+                if new_name != name:
+                    for other in shellcodes:
+                        if other.get('name') == new_name:
+                            return jsonify({'error': f'Shellcode "{new_name}" already exists'}), 400
+
+                entry = {'name': new_name, 'parameters': data.get('parameters', []), 'shellcode': data['shellcode'].strip()}
+                listener = data.get('listener', '').strip()
+                if listener:
+                    entry['listener'] = listener
+                shellcodes[i] = entry
+                found = True
+                break
+
+        if not found:
+            return jsonify({'error': f'Shellcode "{name}" not found'}), 404
+
+        with open(shellcodes_path, 'w') as f:
+            yaml.dump(shellcodes, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Shellcode "{new_name}" updated'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/shellcode/<name>', methods=['DELETE'])
+def delete_shellcode(name):
+    """Delete a shellcode configuration"""
+    try:
+        import yaml
+        shellcodes_path = config.shellcodes_config
+        if not shellcodes_path.exists():
+            return jsonify({'error': 'Shellcodes configuration file not found'}), 404
+
+        with open(shellcodes_path, 'r') as f:
+            shellcodes = yaml.safe_load(f) or []
+
+        original_len = len(shellcodes)
+        shellcodes = [sc for sc in shellcodes if sc.get('name') != name]
+
+        if len(shellcodes) == original_len:
+            return jsonify({'error': f'Shellcode "{name}" not found'}), 404
+
+        with open(shellcodes_path, 'w') as f:
+            yaml.dump(shellcodes, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        return jsonify({'success': True, 'message': f'Shellcode "{name}" deleted'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/shellcodes/generate', methods=['POST'])
+def generate_shellcode_standalone():
+    """Generate shellcode by executing its command and return the output"""
+    try:
+        from jinja2 import Environment
+        from src.core.shellcode_loader import ShellcodeLoader
+
+        data = request.json
+        name = data.get('name')
+        parameters = data.get('parameters', {})
+
+        if not name:
+            return jsonify({'error': 'Shellcode name is required'}), 400
+
+        shellcodes_path = config.shellcodes_config
+        if not shellcodes_path.exists():
+            return jsonify({'error': 'Shellcodes configuration file not found'}), 404
+
+        loader = ShellcodeLoader(shellcodes_path)
+        sc = loader.get_shellcode(name)
+        if not sc:
+            return jsonify({'error': f'Shellcode "{name}" not found'}), 404
+
+        # Validate required parameters
+        for param in sc.parameters:
+            if param.get('required') and not parameters.get(param['name']):
+                return jsonify({'error': f'Required parameter "{param["name"]}" is missing'}), 400
+
+        # Render the shellcode command template
+        jinja_env = Environment()
+        command = jinja_env.from_string(sc.shellcode).render(**parameters)
+
+        # Execute the command
+        result = subprocess.run(
+            command, shell=True, capture_output=True, timeout=300
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.decode('utf-8', errors='replace')
+            return jsonify({'error': f'Shellcode generation failed: {stderr}'}), 400
+
+        shellcode_bytes = result.stdout
+        hex_output = shellcode_bytes.hex()
+
+        # Render listener command if present
+        listener_cmd = None
+        if sc.listener:
+            listener_cmd = jinja_env.from_string(sc.listener).render(**parameters)
+
+        return jsonify({
+            'success': True,
+            'size': len(shellcode_bytes),
+            'hex': hex_output,
+            'listener': listener_cmd
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Shellcode generation timed out (300s)'}), 504
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/shellcodes/save', methods=['POST'])
+def save_shellcode_output():
+    """Save generated shellcode bytes to a file in the output directory"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        hex_content = data.get('hex', '')
+        filename = data.get('filename', 'shellcode.bin').strip()
+
+        if not hex_content:
+            return jsonify({'error': 'No shellcode data to save'}), 400
+        if not filename:
+            return jsonify({'error': 'Filename is required'}), 400
+
+        shellcode_bytes = bytes.fromhex(hex_content)
+        output_path = config.output_dir / filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, 'wb') as f:
+            f.write(shellcode_bytes)
+
+        return jsonify({
+            'success': True,
+            'path': str(output_path),
+            'filename': filename,
+            'size': len(shellcode_bytes)
+        })
+    except ValueError:
+        return jsonify({'error': 'Invalid hex data'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/generate', methods=['POST'])
