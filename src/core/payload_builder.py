@@ -721,7 +721,59 @@ class PayloadBuilder:
                 compile_step.status = "success"
                 compile_step.output = command_display
                 self._update_step(compile_step)
-                
+
+                # Step: LoGiC.NET binary obfuscation if enabled (AFTER compilation)
+                if (template_ext.lower() == '.cs' and
+                    self.build_options.get('cs_obfuscate_binary', False)):
+
+                    binary_output = output_path / output_file
+                    if binary_output.exists():
+                        logic_step = BuildStep("Obfuscating binary (LoGiC.NET)", "obfuscation")
+                        self.steps.append(logic_step)
+                        logic_step.status = "running"
+                        self._update_step(logic_step)
+
+                        logic_cmd = f"logic-net {binary_output} Renamer StringEncryption ControlFlow IntEncoding JunkDefs InvalidMetadata ProxyAdder"
+                        protected_output = binary_output.parent / f"protected_{binary_output.name}"
+                        try:
+                            result = subprocess.run(
+                                logic_cmd,
+                                shell=True,
+                                capture_output=True,
+                                text=True,
+                                timeout=300
+                            )
+
+                            if result.returncode == 0:
+                                # LoGiC.NET outputs to protected_<filename>, replace original
+                                if protected_output.exists():
+                                    binary_output.unlink()
+                                    protected_output.rename(binary_output)
+                                logic_step.status = "success"
+                                logic_step.output = f"Command: {logic_cmd}\n\n{result.stdout}" if result.stdout else f"Command: {logic_cmd}\n\nBinary obfuscated successfully"
+                                self._update_step(logic_step)
+                            else:
+                                # Clean up protected_ file on failure
+                                if protected_output.exists():
+                                    protected_output.unlink()
+                                logic_step.status = "failed"
+                                logic_step.error = result.stderr or result.stdout or "LoGiC.NET returned a non-zero exit code"
+                                logic_step.output = f"Command: {logic_cmd}"
+                                self._update_step(logic_step)
+                                return False, "", self.steps
+                        except subprocess.TimeoutExpired:
+                            if protected_output.exists():
+                                protected_output.unlink()
+                            logic_step.status = "failed"
+                            logic_step.error = "LoGiC.NET timed out after 5 minutes"
+                            self._update_step(logic_step)
+                            return False, "", self.steps
+                        except FileNotFoundError:
+                            logic_step.status = "failed"
+                            logic_step.error = "logic-net command not found. Ensure LoGiC.NET is installed and in PATH"
+                            self._update_step(logic_step)
+                            return False, "", self.steps
+
                 # Strip binaries if configured
                 if self.strip_binaries:
                     # The compiled output file path (from output_path and output_file parameters)

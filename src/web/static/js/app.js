@@ -1363,7 +1363,14 @@ async function showParameterForm() {
                     </label>
                     <div class="param-form-description">Replace function and variable names with innocuous identifiers (forest, lake, var1, etc.)</div>
                 </div>
-                
+                <div class="param-form-item" id="cs-obfuscate-binary-container"${selectedRecipe.output?.compile?.enabled ? '' : ' style="display:none;"'}>
+                    <label class="param-form-checkbox-label">
+                        <input type="checkbox" id="cs-obfuscate-binary" class="param-form-checkbox">
+                        Obfuscate compiled binary (LoGiC.NET)
+                    </label>
+                    <div class="param-form-description">Applies renaming, string encryption, control flow, integer encoding, junk definitions, invalid metadata and proxy methods to the compiled binary</div>
+                </div>
+
                 <!-- C# Cradle -->
                 <div class="param-form-item">
                     <label class="param-form-checkbox-label">
@@ -2317,6 +2324,10 @@ async function generatePayload() {
     if (csObfuscateNamesCheckbox) {
         buildOptions.cs_obfuscate_names = csObfuscateNamesCheckbox.checked;
     }
+    const csObfuscateBinaryCheckbox = document.getElementById('cs-obfuscate-binary');
+    if (csObfuscateBinaryCheckbox) {
+        buildOptions.cs_obfuscate_binary = csObfuscateBinaryCheckbox.checked;
+    }
     
     // Collect C# cradle options
     const csCradleCheckbox = document.getElementById('cs-cradle');
@@ -2889,6 +2900,7 @@ async function showHistoryDetail(index) {
                 'obfuscate_cs_names': 'Obfuscate function/variable names',
                 'cs_obfuscate_names': 'Obfuscate function/variable names',
                 'cs_obfuscation_names': 'Obfuscate function/variable names',
+                'cs_obfuscate_binary': 'Obfuscate compiled binary (LoGiC.NET)',
                 'cs_obfuscation_level': 'C# obfuscation level',
                 'cs_cradle': 'Add download cradle',
                 
