@@ -407,6 +407,13 @@
                                 <!-- Cradle output will be displayed here -->
                             </div>
                         </div>
+                        <div id="obfuscate-ps-command-section" class="cmd-info-box" style="display:none;">
+                            <div class="cmd-info-label">
+                                <span>Command Executed</span>
+                                <button class="cmd-copy-btn" id="obfuscate-ps-copy-cmd" title="Copy command">Copy</button>
+                            </div>
+                            <div class="cmd-info-code" id="obfuscate-ps-command"></div>
+                        </div>
                         <div id="obfuscate-ps-output" class="obfuscate-ps-output">
                             <!-- Obfuscated output will be displayed here -->
                         </div>
@@ -659,6 +666,13 @@
                 <div class="modal-body">
                     <div id="sc-generate-params-container"></div>
                     <div id="sc-generate-result" style="display:none;">
+                        <div id="sc-generate-command-section" class="cmd-info-box" style="display:none;">
+                            <div class="cmd-info-label">
+                                <span>Command Executed</span>
+                                <button class="cmd-copy-btn" id="sc-generate-copy-cmd" title="Copy command">Copy</button>
+                            </div>
+                            <div class="cmd-info-code" id="sc-generate-command"></div>
+                        </div>
                         <div class="editor-field">
                             <label>Generated Shellcode</label>
                             <div class="sc-generate-info">
@@ -768,6 +782,13 @@
                         <!-- Dynamic parameter form or direct output -->
                     </div>
                     <div id="ps-feat-generate-result" style="display:none;">
+                        <div id="ps-feat-generate-command-section" class="cmd-info-box" style="display:none;">
+                            <div class="cmd-info-label">
+                                <span>Command Executed</span>
+                                <button class="cmd-copy-btn" id="ps-feat-generate-copy-cmd" title="Copy command">Copy</button>
+                            </div>
+                            <div class="cmd-info-code" id="ps-feat-generate-command"></div>
+                        </div>
                         <div class="editor-field">
                             <label>Output</label>
                             <div class="sc-code-block">

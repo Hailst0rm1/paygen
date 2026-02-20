@@ -3672,7 +3672,15 @@ async function generateObfuscatedPs() {
         // Show output section
         loadingDiv.style.display = 'none';
         outputSection.style.display = 'flex';
-        
+
+        // Show command executed if available
+        if (data.command) {
+            document.getElementById('obfuscate-ps-command-section').style.display = '';
+            document.getElementById('obfuscate-ps-command').textContent = data.command;
+        } else {
+            document.getElementById('obfuscate-ps-command-section').style.display = 'none';
+        }
+
         const methodName = method || 'None';
         const action = method ? 'obfuscated' : 'processed';
         showNotificationPopup(`PowerShell ${action} with ${methodName}!`, 'success');
@@ -4922,6 +4930,13 @@ async function generateShellcode() {
             } else {
                 document.getElementById('sc-generate-listener-section').style.display = 'none';
             }
+
+            if (result.command) {
+                document.getElementById('sc-generate-command-section').style.display = '';
+                document.getElementById('sc-generate-command').textContent = result.command;
+            } else {
+                document.getElementById('sc-generate-command-section').style.display = 'none';
+            }
         } else {
             showNotificationPopup(result.error || 'Generation failed', 'error');
         }
@@ -5504,6 +5519,13 @@ async function generatePsFeat() {
             // Set default filename based on feature type
             const ext = result.feature_type === 'amsi' ? 'ps1' : 'ps1';
             document.getElementById('ps-feat-generate-save-filename').value = `${name.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
+
+            if (result.command) {
+                document.getElementById('ps-feat-generate-command-section').style.display = '';
+                document.getElementById('ps-feat-generate-command').textContent = result.command;
+            } else {
+                document.getElementById('ps-feat-generate-command-section').style.display = 'none';
+            }
         } else {
             showNotificationPopup(result.error || 'Generation failed', 'error');
         }
@@ -5663,6 +5685,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    const scCopyCmdBtn = document.getElementById('sc-generate-copy-cmd');
+    if (scCopyCmdBtn) scCopyCmdBtn.addEventListener('click', () => {
+        const cmd = document.getElementById('sc-generate-command').textContent;
+        navigator.clipboard.writeText(cmd).then(() => {
+            showNotificationPopup('Command copied!', 'success');
+        });
+    });
+
     const scSaveBtn = document.getElementById('sc-generate-save-btn');
     if (scSaveBtn) scSaveBtn.addEventListener('click', saveGeneratedShellcode);
 
@@ -5713,8 +5743,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    const psFeatCopyCmdBtn = document.getElementById('ps-feat-generate-copy-cmd');
+    if (psFeatCopyCmdBtn) psFeatCopyCmdBtn.addEventListener('click', () => {
+        const cmd = document.getElementById('ps-feat-generate-command').textContent;
+        navigator.clipboard.writeText(cmd).then(() => {
+            showNotificationPopup('Command copied!', 'success');
+        });
+    });
+
     const psFeatSaveBtn = document.getElementById('ps-feat-generate-save-btn');
     if (psFeatSaveBtn) psFeatSaveBtn.addEventListener('click', savePsFeatOutput);
+
+    // Obfuscate PS command copy button
+    const obfPsCopyCmdBtn = document.getElementById('obfuscate-ps-copy-cmd');
+    if (obfPsCopyCmdBtn) obfPsCopyCmdBtn.addEventListener('click', () => {
+        const cmd = document.getElementById('obfuscate-ps-command').textContent;
+        navigator.clipboard.writeText(cmd).then(() => {
+            showNotificationPopup('Command copied!', 'success');
+        });
+    });
 
     // Modal close buttons for new modals
     document.querySelectorAll('#recipe-editor-modal .modal-close, #version-history-modal .modal-close, #shellcode-mgr-modal .modal-close, #ps-features-modal .modal-close').forEach(btn => {

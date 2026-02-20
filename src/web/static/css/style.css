@@ -2309,6 +2309,50 @@ code {
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
+.cmd-info-box {
+    padding: 0.5rem 0.75rem;
+    background-color: var(--surface0);
+    border: 1px solid var(--overlay0);
+    border-radius: 4px;
+    color: var(--subtext0);
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+}
+
+.cmd-info-box .cmd-info-label {
+    font-size: 0.75rem;
+    color: var(--overlay1);
+    margin-bottom: 0.35rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.cmd-info-box .cmd-info-label .cmd-copy-btn {
+    background: none;
+    border: 1px solid var(--surface2);
+    color: var(--overlay1);
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cmd-info-box .cmd-info-label .cmd-copy-btn:hover {
+    color: var(--text);
+    border-color: var(--overlay1);
+    background-color: var(--surface1);
+}
+
+.cmd-info-box .cmd-info-code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.8rem;
+    color: var(--subtext1);
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
 /* PS Obfuscation Method Manager */
 #ps-obf-list-view,
 #ps-obf-editor-view {

@@ -2097,7 +2097,8 @@ def generate_shellcode_standalone():
             'success': True,
             'size': len(shellcode_bytes),
             'hex': hex_output,
-            'listener': listener_cmd
+            'listener': listener_cmd,
+            'command': command
         })
     except subprocess.TimeoutExpired:
         return jsonify({'error': 'Shellcode generation timed out (300s)'}), 504
