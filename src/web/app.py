@@ -1518,7 +1518,7 @@ def get_ps_cradles():
 @app.route('/api/recipes')
 def get_recipes():
     """Get all recipes organized by category"""
-    current_recipes = recipe_loader.get_cached_recipes()
+    current_recipes = recipe_loader.load_all_recipes()
     
     # Organize recipes by category
     categories = {}
