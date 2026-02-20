@@ -42,7 +42,7 @@ versions:
           type: "path"
           description: "Output directory"
           required: true
-          default: "{config.output_dir}"
+          default: "{{ global.output_dir }}"
 
       preprocessing:
         - type: "shellcode"

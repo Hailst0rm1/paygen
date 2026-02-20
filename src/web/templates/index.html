@@ -243,13 +243,27 @@
                             Default LHOST
                             <span class="param-type">[string]</span>
                         </label>
-                        <input type="text" 
-                               id="default-lhost" 
-                               class="param-form-input" 
+                        <input type="text"
+                               id="default-lhost"
+                               class="param-form-input"
                                placeholder="e.g., 192.168.1.100"
                                value="">
                         <div class="param-form-description">
                             This value will be used as the default for all LHOST parameters in recipes, shellcodes, and download cradles.
+                        </div>
+                    </div>
+                    <div class="param-form-item">
+                        <label class="param-form-label">
+                            Output Directory
+                            <span class="param-type">[path]</span>
+                        </label>
+                        <input type="text"
+                               id="default-output-dir"
+                               class="param-form-input"
+                               placeholder="e.g., /home/user/payloads"
+                               value="">
+                        <div class="param-form-description">
+                            Default output directory for generated payloads. This value will be used as the default output path in all recipes.
                         </div>
                     </div>
                 </div>
@@ -424,8 +438,13 @@
                         </div>
                         <div class="editor-field">
                             <label>Category *</label>
-                            <input type="text" id="editor-category" list="editor-categories" placeholder="e.g., Process Injection">
-                            <datalist id="editor-categories"></datalist>
+                            <div class="combobox-wrapper" id="category-combobox">
+                                <input type="text" id="editor-category" placeholder="e.g., Process Injection" autocomplete="off">
+                                <button type="button" class="combobox-toggle" tabindex="-1" aria-label="Toggle category list">
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M2 4l4 4 4-4z"/></svg>
+                                </button>
+                                <ul class="combobox-dropdown" id="category-dropdown"></ul>
+                            </div>
                         </div>
                     </div>
                     <div class="editor-field">

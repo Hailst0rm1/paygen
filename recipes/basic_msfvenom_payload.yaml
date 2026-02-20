@@ -51,7 +51,7 @@ versions:
           type: "path"
           description: "Output directory for generated payload"
           required: true
-          default: "{config.output_dir}"
+          default: "{{ global.output_dir }}"
 
       preprocessing: []
 

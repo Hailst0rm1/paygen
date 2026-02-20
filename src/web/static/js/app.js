@@ -2655,6 +2655,12 @@ async function pollBuildStatus(sessionId) {
                         const globalLhost = getDefaultLhost() || '127.0.0.1';
                         instructions = instructions.replace(/\{\{\s*global\.lhost\s*\}\}/g, globalLhost);
                     }
+
+                    // Substitute {{ global.output_dir }} if present
+                    if (instructions.includes('{{ global.output_dir }}') || instructions.includes('{{global.output_dir}}')) {
+                        const globalOutputDir = getDefaultOutputDir() || '/tmp/paygen-output';
+                        instructions = instructions.replace(/\{\{\s*global\.output_dir\s*\}\}/g, globalOutputDir);
+                    }
                     
                     resultContainer.innerHTML += `
                         <div style="margin-top: 1rem; background: var(--surface0); padding: 1rem; border-radius: 4px; border-left: 3px solid var(--blue);">
@@ -3838,26 +3844,47 @@ function showSettings() {
 function loadSettings() {
     const defaultLhost = localStorage.getItem('paygen_default_lhost') || '';
     document.getElementById('default-lhost').value = defaultLhost;
+    const defaultOutputDir = localStorage.getItem('paygen_default_output_dir') || '';
+    document.getElementById('default-output-dir').value = defaultOutputDir;
 }
 
 function saveSettings() {
     const defaultLhost = document.getElementById('default-lhost').value.trim();
-    
+    const defaultOutputDir = document.getElementById('default-output-dir').value.trim();
+
     // Close modal first
     document.getElementById('settings-modal').classList.remove('active');
-    
-    // Save to localStorage and show confirmation with IP
+
+    // Save LHOST
+    const messages = [];
     if (defaultLhost) {
         localStorage.setItem('paygen_default_lhost', defaultLhost);
-        showNotificationPopup(`✓ Default LHOST set to: ${defaultLhost}`, 'success');
+        messages.push(`LHOST: ${defaultLhost}`);
     } else {
         localStorage.removeItem('paygen_default_lhost');
-        showNotificationPopup('✓ Default LHOST cleared', 'success');
+    }
+
+    // Save output directory
+    if (defaultOutputDir) {
+        localStorage.setItem('paygen_default_output_dir', defaultOutputDir);
+        messages.push(`Output dir: ${defaultOutputDir}`);
+    } else {
+        localStorage.removeItem('paygen_default_output_dir');
+    }
+
+    if (messages.length > 0) {
+        showNotificationPopup(`Settings saved - ${messages.join(', ')}`, 'success');
+    } else {
+        showNotificationPopup('Settings cleared', 'success');
     }
 }
 
 function getDefaultLhost() {
     return localStorage.getItem('paygen_default_lhost') || '';
+}
+
+function getDefaultOutputDir() {
+    return localStorage.getItem('paygen_default_output_dir') || '';
 }
 
 function processParameterDefault(defaultValue, paramName) {
@@ -3874,6 +3901,12 @@ function processParameterDefault(defaultValue, paramName) {
         processed = processed.replace(/\{\{\s*global\.lhost\s*\}\}/g, globalLhost);
     }
 
+    // Replace {{ global.output_dir }} with the actual global output directory setting
+    if (processed.includes('{{ global.output_dir }}') || processed.includes('{{global.output_dir}}')) {
+        const globalOutputDir = getDefaultOutputDir() || '/tmp/paygen-output';
+        processed = processed.replace(/\{\{\s*global\.output_dir\s*\}\}/g, globalOutputDir);
+    }
+
     return processed;
 }
 
@@ -3883,6 +3916,109 @@ function processParameterDefault(defaultValue, paramName) {
 let editorMode = 'create'; // 'create' or 'edit'
 let editorOriginalCategory = '';
 let editorOriginalName = '';
+let categoryHighlightIndex = -1;
+
+// Category combobox helpers
+function populateCategoryDropdown(filter) {
+    const dropdown = document.getElementById('category-dropdown');
+    dropdown.innerHTML = '';
+    categoryHighlightIndex = -1;
+    if (!categories) return;
+
+    const cats = Object.keys(categories).sort();
+    const filterLower = (filter || '').toLowerCase();
+    const matched = filterLower
+        ? cats.filter(c => c.toLowerCase().includes(filterLower))
+        : cats;
+
+    if (matched.length === 0) {
+        const li = document.createElement('li');
+        li.classList.add('no-match');
+        li.textContent = filter ? 'No matching categories' : 'No categories yet';
+        dropdown.appendChild(li);
+        return;
+    }
+
+    matched.forEach(cat => {
+        const li = document.createElement('li');
+        li.textContent = cat;
+        li.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // prevent input blur
+            document.getElementById('editor-category').value = cat;
+            closeCategoryDropdown();
+        });
+        dropdown.appendChild(li);
+    });
+}
+
+function openCategoryDropdown() {
+    const wrapper = document.getElementById('category-combobox');
+    wrapper.classList.add('open');
+    const input = document.getElementById('editor-category');
+    populateCategoryDropdown(input.value);
+}
+
+function closeCategoryDropdown() {
+    const wrapper = document.getElementById('category-combobox');
+    wrapper.classList.remove('open');
+    categoryHighlightIndex = -1;
+}
+
+function highlightCategoryItem(index) {
+    const items = document.querySelectorAll('#category-dropdown li:not(.no-match)');
+    items.forEach(li => li.classList.remove('highlighted'));
+    if (index >= 0 && index < items.length) {
+        items[index].classList.add('highlighted');
+        items[index].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+// Set up combobox event listeners (called once on load)
+function initCategoryCombobox() {
+    const input = document.getElementById('editor-category');
+    const toggle = document.querySelector('#category-combobox .combobox-toggle');
+    const wrapper = document.getElementById('category-combobox');
+
+    input.addEventListener('focus', () => openCategoryDropdown());
+    input.addEventListener('blur', () => closeCategoryDropdown());
+    input.addEventListener('input', () => {
+        openCategoryDropdown();
+        populateCategoryDropdown(input.value);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        const items = document.querySelectorAll('#category-dropdown li:not(.no-match)');
+        if (!wrapper.classList.contains('open') || items.length === 0) {
+            if (e.key === 'ArrowDown') openCategoryDropdown();
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            categoryHighlightIndex = Math.min(categoryHighlightIndex + 1, items.length - 1);
+            highlightCategoryItem(categoryHighlightIndex);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            categoryHighlightIndex = Math.max(categoryHighlightIndex - 1, 0);
+            highlightCategoryItem(categoryHighlightIndex);
+        } else if (e.key === 'Enter' && categoryHighlightIndex >= 0) {
+            e.preventDefault();
+            input.value = items[categoryHighlightIndex].textContent;
+            closeCategoryDropdown();
+        } else if (e.key === 'Escape') {
+            closeCategoryDropdown();
+        }
+    });
+
+    toggle.addEventListener('mousedown', (e) => {
+        e.preventDefault(); // prevent stealing focus from input
+        if (wrapper.classList.contains('open')) {
+            closeCategoryDropdown();
+        } else {
+            input.focus();
+        }
+    });
+}
 
 function openEditor(mode, recipeData) {
     editorMode = mode;
@@ -3891,16 +4027,8 @@ function openEditor(mode, recipeData) {
 
     title.textContent = mode === 'create' ? 'Create Recipe' : 'Edit Recipe';
 
-    // Populate category datalist
-    const datalist = document.getElementById('editor-categories');
-    datalist.innerHTML = '';
-    if (categories) {
-        Object.keys(categories).forEach(cat => {
-            const opt = document.createElement('option');
-            opt.value = cat;
-            datalist.appendChild(opt);
-        });
-    }
+    // Populate category combobox dropdown
+    populateCategoryDropdown();
 
     if (recipeData) {
         populateEditor(recipeData);
@@ -4489,6 +4617,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add preprocessing
     const addPreproc = document.getElementById('editor-add-preproc');
     if (addPreproc) addPreproc.addEventListener('click', () => addPreprocRow(null));
+
+    // Category combobox
+    initCategoryCombobox();
 
     // Save/Validate/Cancel
     const saveBtn = document.getElementById('editor-save-btn');
