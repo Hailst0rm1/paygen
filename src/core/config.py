@@ -11,7 +11,6 @@ class ConfigManager:
     
     DEFAULT_CONFIG = {
         'recipes_dir': '~/Documents/Tools/paygen/recipes',
-        'templates_dir': '~/Documents/Tools/paygen/templates',
         'preprocessors_dir': '~/Documents/Tools/paygen/preprocessors',
         'output_dir': '~/Documents/Tools/paygen/output',
         'ps_obfuscation_yaml': '~/Documents/Tools/paygen/ps-obfuscation.yaml',
@@ -66,7 +65,7 @@ class ConfigManager:
     
     def _validate_paths(self) -> None:
         """Validate and expand paths in configuration"""
-        path_keys = ['recipes_dir', 'templates_dir', 'preprocessors_dir', 'output_dir',
+        path_keys = ['recipes_dir', 'preprocessors_dir', 'output_dir',
                      'ps_obfuscation_yaml', 'ps_features_yaml', 'shellcodes_config']
         
         for key in path_keys:
@@ -123,8 +122,12 @@ class ConfigManager:
     
     @property
     def templates_dir(self) -> Path:
-        """Get templates directory path (used for AMSI bypasses and legacy templates)"""
-        return self.get_path('templates_dir')
+        """Get templates directory path (legacy fallback, templates are now inline in recipes)"""
+        val = self.get('templates_dir')
+        if val:
+            return Path(val).expanduser().absolute()
+        # Fallback to recipes_dir for legacy code paths
+        return self.recipes_dir
 
     @property
     def preprocessors_dir(self) -> Path:
